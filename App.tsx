@@ -117,8 +117,14 @@ const App: React.FC = () => {
 
     const handleAddTransaction = async (transaction: Omit<Transaction, 'id'>) => {
         if (!activeUserId) return;
-        const updatedUser = await db.addTransaction(activeUserId, transaction);
-        updateUserState(updatedUser);
+        const { updatedPayer, updatedReceivers } = await db.addTransaction(activeUserId, transaction, team.members);
+        
+        // Update all affected users in state
+        const updatedUsersMap = new Map<string, User>();
+        updatedUsersMap.set(updatedPayer.id, updatedPayer);
+        updatedReceivers.forEach(user => updatedUsersMap.set(user.id, user));
+
+        setUsers(currentUsers => currentUsers.map(u => updatedUsersMap.get(u.id) || u));
     };
 
     const handleTransfer = async (toUserId: string, amount: number) => {
@@ -246,7 +252,11 @@ const App: React.FC = () => {
                             onDrawCosmicCard={handleDrawCosmicCard}
                         />;
             case 'statement':
-                return <FinancialStatementComponent statement={activeUser.financialStatement} />;
+                return <FinancialStatementComponent 
+                            statement={activeUser.financialStatement} 
+                            user={activeUser}
+                            teamMates={users.filter(u => u.id !== activeUser.id)}
+                        />;
             case 'coach':
                  return <AICoach statement={activeUser.financialStatement} />;
             case 'portfolio':
@@ -320,11 +330,13 @@ const App: React.FC = () => {
                 </div>
             </main>
             
-            <AddTransactionModal 
+            {activeUser && <AddTransactionModal 
                 isOpen={isAddTransactionModalOpen} 
                 onClose={() => setAddTransactionModalOpen(false)} 
-                onAddTransaction={handleAddTransaction} 
-            />
+                onAddTransaction={handleAddTransaction}
+                currentUser={activeUser}
+                teamMembers={team.members}
+            />}
              {activeUser && (
                 <TransferModal
                     isOpen={isTransferModalOpen}

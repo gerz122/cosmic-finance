@@ -1,6 +1,6 @@
-import { collection, getDocs, doc, setDoc, writeBatch, getDoc, deleteDoc } from "firebase/firestore";
+// FIX: Remove v9 firestore imports as they are replaced by v8 namespaced API.
 import { firestore } from './services/firebase';
-import type { User, Transaction, Asset, Liability, EventOutcome } from './types';
+import type { User, Transaction, Asset, Liability, EventOutcome, Share } from './types';
 import { TransactionType, AssetType } from './types';
 
 
@@ -53,9 +53,11 @@ const initialUsers: User[] = [
 
 const seedInitialData = async () => {
     console.log("Seeding initial data to Firestore...");
-    const batch = writeBatch(firestore);
+    // FIX: Use Firebase v8 batch syntax
+    const batch = firestore.batch();
     initialUsers.forEach(user => {
-        const userRef = doc(firestore, "users", user.id);
+        // FIX: Use Firebase v8 doc reference syntax
+        const userRef = firestore.collection("users").doc(user.id);
         batch.set(userRef, user);
     });
     await batch.commit();
@@ -65,8 +67,9 @@ const seedInitialData = async () => {
 
 export const db = {
     getUsers: async (): Promise<User[]> => {
-        const usersCol = collection(firestore, 'users');
-        const userSnapshot = await getDocs(usersCol);
+        // FIX: Use Firebase v8 collection and get syntax
+        const usersCol = firestore.collection('users');
+        const userSnapshot = await usersCol.get();
 
         if (userSnapshot.empty) {
             // If the database is empty, seed it with initial data
@@ -77,54 +80,92 @@ export const db = {
         return userList;
     },
     
-    addTransaction: async (userId: string, transaction: Omit<Transaction, 'id'>): Promise<User> => {
-        const userRef = doc(firestore, 'users', userId);
-        const userSnap = await getDoc(userRef);
-
-        if (!userSnap.exists()) {
-            throw new Error("User not found");
-        }
+    addTransaction: async (
+        activeUserId: string, 
+        transaction: Omit<Transaction, 'id'>, 
+        teamMembers: User[]
+    ): Promise<{ updatedPayer: User, updatedReceivers: User[] }> => {
         
-        const user = userSnap.data() as User;
-
         const newTransaction: Transaction = {
             ...transaction,
             id: `t${new Date().getTime()}`,
         };
 
-        user.financialStatement.transactions.push(newTransaction);
+        // FIX: Use Firebase v8 batch syntax
+        const batch = firestore.batch();
+
+        const payerId = newTransaction.isShared ? newTransaction.payerId! : activeUserId;
         
-        let cashAsset = user.financialStatement.assets.find(a => a.type === AssetType.CASH);
-        if (cashAsset) {
-            if (newTransaction.type === TransactionType.INCOME) {
-                cashAsset.value += newTransaction.amount;
-            } else {
-                cashAsset.value -= newTransaction.amount;
-            }
+        // --- Process Payer ---
+        // FIX: Use Firebase v8 doc reference and get syntax
+        const payerRef = firestore.collection('users').doc(payerId);
+        const payerSnap = await payerRef.get();
+        if (!payerSnap.exists) throw new Error("Payer not found");
+        const payer = payerSnap.data() as User;
+        
+        const payerCash = payer.financialStatement.assets.find(a => a.type === AssetType.CASH);
+        
+        // Adjust payer's cash by the FULL transaction amount
+        if (newTransaction.type === TransactionType.INCOME) {
+            if (payerCash) payerCash.value += newTransaction.amount;
+            else payer.financialStatement.assets.push({ id: `a-cash-${new Date().getTime()}`, name: 'Cash', type: AssetType.CASH, value: newTransaction.amount, monthlyCashflow: 0 });
+        } else { // Expense
+            if (!payerCash || payerCash.value < newTransaction.amount) throw new Error("Payer has insufficient funds.");
+            payerCash.value -= newTransaction.amount;
+        }
+
+        // --- Process all involved users (for shared transactions) ---
+        let involvedUserIds: Set<string>;
+        if (newTransaction.isShared && newTransaction.shares) {
+            involvedUserIds = new Set(newTransaction.shares.map(s => s.userId));
         } else {
-             user.financialStatement.assets.push({
-                 id: `a${new Date().getTime()}`,
-                 name: 'Cash',
-                 type: AssetType.CASH,
-                 value: newTransaction.type === TransactionType.INCOME ? newTransaction.amount : -newTransaction.amount,
-                 monthlyCashflow: 0
-             });
+            involvedUserIds = new Set([activeUserId]);
         }
         
-        await setDoc(userRef, user);
-        return user;
+        const updatedReceivers: User[] = [];
+
+        for (const userId of involvedUserIds) {
+            let user: User;
+            // If the current user is the payer, we already have their data.
+            if(userId === payer.id) {
+                user = payer;
+            } else {
+                // FIX: Use Firebase v8 doc reference and get syntax
+                const userRef = firestore.collection('users').doc(userId);
+                const userSnap = await userRef.get();
+                if (!userSnap.exists) continue; // Skip if user not found
+                user = userSnap.data() as User;
+            }
+
+            // Add the transaction to everyone's statement for record-keeping
+            user.financialStatement.transactions.push(newTransaction);
+            // FIX: Use Firebase v8 batch set syntax with doc reference
+            const userDocRef = firestore.collection('users').doc(user.id);
+            batch.set(userDocRef, user);
+            if(user.id !== payer.id) updatedReceivers.push(user);
+        }
+        
+        // Make sure the payer is also updated in the batch, especially if they are the only one involved.
+        batch.set(payerRef, payer);
+
+        await batch.commit();
+
+        return { updatedPayer: payer, updatedReceivers };
     },
 
     performTransfer: async (fromUserId: string, toUserId: string, amount: number): Promise<{fromUser: User, toUser: User}> => {
-        const fromUserRef = doc(firestore, 'users', fromUserId);
-        const toUserRef = doc(firestore, 'users', toUserId);
+        // FIX: Use Firebase v8 doc reference syntax
+        const fromUserRef = firestore.collection('users').doc(fromUserId);
+        const toUserRef = firestore.collection('users').doc(toUserId);
         
-        const batch = writeBatch(firestore);
+        // FIX: Use Firebase v8 batch syntax
+        const batch = firestore.batch();
 
-        const fromUserSnap = await getDoc(fromUserRef);
-        const toUserSnap = await getDoc(toUserRef);
+        // FIX: Use Firebase v8 get syntax on doc reference
+        const fromUserSnap = await fromUserRef.get();
+        const toUserSnap = await toUserRef.get();
 
-        if (!fromUserSnap.exists() || !toUserSnap.exists()) {
+        if (!fromUserSnap.exists || !toUserSnap.exists) {
             throw new Error("User not found");
         }
 
@@ -181,9 +222,10 @@ export const db = {
     },
     
     addStock: async (userId: string, stockData: Omit<Asset, 'id' | 'type' | 'value' | 'monthlyCashflow'>): Promise<User> => {
-        const userRef = doc(firestore, 'users', userId);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) throw new Error("User not found");
+        // FIX: Use Firebase v8 doc reference and get syntax
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
         const user = userSnap.data() as User;
 
         const cost = (stockData.shares || 0) * (stockData.purchasePrice || 0);
@@ -212,14 +254,16 @@ export const db = {
         };
         user.financialStatement.transactions.push(purchaseTransaction);
         
-        await setDoc(userRef, user);
+        // FIX: Use Firebase v8 set syntax
+        await userRef.set(user);
         return user;
     },
 
     updateStock: async (userId: string, assetId: string, stockData: Partial<Asset>): Promise<User> => {
-        const userRef = doc(firestore, 'users', userId);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) throw new Error("User not found");
+        // FIX: Use Firebase v8 doc reference and get syntax
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
         const user = userSnap.data() as User;
 
         const assetIndex = user.financialStatement.assets.findIndex(a => a.id === assetId);
@@ -231,14 +275,16 @@ export const db = {
             ...stockData
         };
 
-        await setDoc(userRef, user);
+        // FIX: Use Firebase v8 set syntax
+        await userRef.set(user);
         return user;
     },
 
     deleteStock: async (userId: string, assetId: string): Promise<User> => {
-        const userRef = doc(firestore, 'users', userId);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) throw new Error("User not found");
+        // FIX: Use Firebase v8 doc reference and get syntax
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
         const user = userSnap.data() as User;
 
         const assetIndex = user.financialStatement.assets.findIndex(a => a.id === assetId);
@@ -267,14 +313,16 @@ export const db = {
         };
         user.financialStatement.transactions.push(saleTransaction);
 
-        await setDoc(userRef, user);
+        // FIX: Use Firebase v8 set syntax
+        await userRef.set(user);
         return user;
     },
 
     logDividend: async (userId: string, assetId: string, amount: number): Promise<User> => {
-        const userRef = doc(firestore, 'users', userId);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) throw new Error("User not found");
+        // FIX: Use Firebase v8 doc reference and get syntax
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
         const user = userSnap.data() as User;
 
         const stock = user.financialStatement.assets.find(a => a.id === assetId);
@@ -301,15 +349,17 @@ export const db = {
         };
         user.financialStatement.transactions.push(dividendTransaction);
 
-        await setDoc(userRef, user);
+        // FIX: Use Firebase v8 set syntax
+        await userRef.set(user);
         return user;
     },
 
     applyEventOutcome: async (userId: string, outcome: EventOutcome): Promise<User> => {
-        const userRef = doc(firestore, 'users', userId);
-        const userSnap = await getDoc(userRef);
+        // FIX: Use Firebase v8 doc reference and get syntax
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
 
-        if (!userSnap.exists()) {
+        if (!userSnap.exists) {
             throw new Error("User not found");
         }
 
@@ -372,7 +422,8 @@ export const db = {
              statement.transactions.push(eventTransaction);
         }
 
-        await setDoc(userRef, user);
+        // FIX: Use Firebase v8 set syntax
+        await userRef.set(user);
         return user;
     }
 };

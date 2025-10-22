@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import type { FinancialStatement, Asset } from '../types';
 import { AssetType } from '../types';
@@ -60,7 +61,8 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
                                 <th scope="col" className="px-6 py-3">Live Price</th>
                                 <th scope="col" className="px-6 py-3">Day's Change</th>
                                 <th scope="col" className="px-6 py-3">P/L ($)</th>
-                                <th scope="col" className="px-6 py-3">P/L (%)</th>
+                                <th scope="col" className="px-6 py-3">Take Profit</th>
+                                <th scope="col" className="px-6 py-3">Stop Loss</th>
                                 <th scope="col" className="px-6 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -77,7 +79,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
                             ))}
                              {stocks.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="text-center py-4">No stocks in portfolio.</td>
+                                    <td colSpan={9} className="text-center py-4">No stocks in portfolio.</td>
                                 </tr>
                             )}
                         </tbody>

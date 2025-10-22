@@ -3,15 +3,26 @@ export enum TransactionType {
   EXPENSE = 'EXPENSE',
 }
 
+export interface Share {
+  userId: string;
+  amount: number; // The absolute amount of the share
+}
+
 export interface Transaction {
   id: string;
   description: string;
-  amount: number;
+  amount: number; // Total amount of the transaction
   type: TransactionType;
   category: string;
   date: string;
   isPassive?: boolean;
+
+  // For shared transactions
+  isShared?: boolean;
+  payerId?: string; // The user who paid the full amount
+  shares?: Share[]; // How the amount is split among users
 }
+
 
 export enum AssetType {
   STOCK = 'STOCK',
@@ -32,6 +43,7 @@ export interface Asset {
   purchasePrice?: number;
   takeProfit?: number; // Optional TP price
   stopLoss?: number;   // Optional SL price
+  strategy?: string;   // Optional user-defined strategy or notes
 }
 
 

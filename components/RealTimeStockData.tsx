@@ -1,15 +1,10 @@
-import React, { useEffect, useRef, memo } from 'react';
-
-declare global {
-    interface Window {
-        TradingView: any;
-    }
-}
+import React, { useEffect, memo } from 'react';
+import { getLiveStockData } from '../services/geminiService';
 
 export interface LiveStockData {
-    price: number;
-    dayChange: number;
-    dayChangePercent: number;
+    price: number | null;
+    dayChange: number | null;
+    dayChangePercent: number | null;
 }
 
 interface StockPriceProviderProps {
@@ -18,56 +13,29 @@ interface StockPriceProviderProps {
 }
 
 export const StockPriceProvider: React.FC<StockPriceProviderProps> = memo(({ ticker, onDataUpdate }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const lastReportedPrice = useRef<number | null>(null);
-
+    
     useEffect(() => {
         if (!ticker) return;
 
-        const script = document.createElement('script');
-        script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js';
-        script.async = true;
-        script.innerHTML = JSON.stringify({
-            "symbol": ticker,
-            "width": "100%",
-            "locale": "en",
-            "colorTheme": "dark",
-            "isTransparent": true
-        });
-
-        const currentContainer = containerRef.current;
-        if (currentContainer) {
-            currentContainer.innerHTML = '';
-            currentContainer.appendChild(script);
-        }
-
-        const observer = new MutationObserver(() => {
-            if (!currentContainer) return;
-
-            const priceElement = currentContainer.querySelector('.tv-symbol-price-quote__value span:first-child');
-            const changeElement = currentContainer.querySelector('.tv-symbol-price-quote__change-value');
-            
-            if (priceElement?.textContent && changeElement?.textContent) {
-                const price = parseFloat(priceElement.textContent.replace(/,/g, ''));
-
-                const changeContent = changeElement.textContent;
-                const changeParts = changeContent.split(/\s+/);
-                const dayChange = parseFloat(changeParts[0]);
-                const dayChangePercent = parseFloat(changeParts[1]?.replace(/[()%]/g, ''));
-
-                if (!isNaN(price) && !isNaN(dayChange) && !isNaN(dayChangePercent) && price !== lastReportedPrice.current) {
-                    lastReportedPrice.current = price;
-                    onDataUpdate({ price, dayChange, dayChangePercent });
-                }
-            }
-        });
+        let isMounted = true;
         
-        if (currentContainer) {
-            observer.observe(currentContainer, { childList: true, subtree: true, characterData: true });
-        }
+        const fetchData = async () => {
+            const data = await getLiveStockData(ticker);
+            if (isMounted && data) {
+                onDataUpdate(data);
+            }
+        };
 
-        return () => observer.disconnect();
+        fetchData(); // Fetch immediately on mount
+
+        const intervalId = setInterval(fetchData, 30000); // Refresh every 30 seconds
+
+        return () => {
+            isMounted = false;
+            clearInterval(intervalId);
+        };
     }, [ticker, onDataUpdate]);
     
-    return <div ref={containerRef} style={{ display: 'none' }} />;
+    // This component no longer needs to render anything to the DOM.
+    return null; 
 });

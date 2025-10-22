@@ -16,11 +16,22 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
     const [liveData, setLiveData] = useState<LiveStockData | null>(null);
     const [priceChangeIndicator, setPriceChangeIndicator] = useState<'up' | 'down' | 'none'>('none');
 
+    // CRITICAL FIX: Prevent crash if a stock in the DB is missing a ticker.
+    if (!stock.ticker) {
+        console.warn("Stock asset is missing a ticker:", stock);
+        return null; 
+    }
+
     const handleDataUpdate = useCallback((data: LiveStockData) => {
+        if (data.price === null) {
+            setLiveData(d => d ? {...d, price: null} : null); // Keep old data but nullify price if fetch fails
+            return;
+        }
+
         setLiveData(prevData => {
-            if (prevData && data.price > prevData.price) {
+            if (prevData && prevData.price && data.price > prevData.price) {
                 setPriceChangeIndicator('up');
-            } else if (prevData && data.price < prevData.price) {
+            } else if (prevData && prevData.price && data.price < prevData.price) {
                 setPriceChangeIndicator('down');
             }
             return data;
@@ -38,13 +49,13 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
     const toggleRow = () => setIsExpanded(prev => !prev);
 
     const { plValue, plPercent, plColor, dayChangeColor } = (() => {
-        if (liveData === null || !stock.purchasePrice || !stock.shares) {
+        if (liveData === null || liveData.price === null || !stock.purchasePrice || !stock.shares) {
             return { plValue: 0, plPercent: 0, plColor: 'text-cosmic-text-secondary', dayChangeColor: 'text-cosmic-text-secondary' };
         }
         const value = (liveData.price - stock.purchasePrice) * stock.shares;
         const percent = stock.purchasePrice > 0 ? ((liveData.price - stock.purchasePrice) / stock.purchasePrice) * 100 : 0;
         const pColor = value >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
-        const dColor = liveData.dayChange >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
+        const dColor = liveData.dayChange && liveData.dayChange >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
         return { plValue: value, plPercent: percent, plColor: pColor, dayChangeColor: dColor };
     })();
     
@@ -52,7 +63,7 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
 
     return (
         <React.Fragment>
-            <StockPriceProvider ticker={stock.ticker!} onDataUpdate={handleDataUpdate} />
+            <StockPriceProvider ticker={stock.ticker} onDataUpdate={handleDataUpdate} />
             
             <tr 
                 className="border-b border-cosmic-border hover:bg-cosmic-bg cursor-pointer"
@@ -62,10 +73,10 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
                 <td className="px-6 py-4">{stock.shares}</td>
                 <td className="px-6 py-4">${stock.purchasePrice?.toFixed(2)}</td>
                 <td className={`px-6 py-4 font-bold text-cosmic-text-primary transition-colors duration-300 ${priceIndicatorClass}`}>
-                     {liveData ? `$${liveData.price.toFixed(2)}` : <span className="text-xs">Loading...</span>}
+                     {liveData?.price ? `$${liveData.price.toFixed(2)}` : <span className="text-xs">Loading...</span>}
                 </td>
                 <td className="px-6 py-4">
-                    {liveData ? (
+                    {liveData?.dayChange !== null && liveData?.dayChangePercent !== null ? (
                         <div className={dayChangeColor}>
                             <p className="font-semibold">{liveData.dayChange >= 0 ? '+' : ''}{liveData.dayChange.toFixed(2)}</p>
                             <p className="text-xs">({liveData.dayChangePercent.toFixed(2)}%)</p>
@@ -73,12 +84,14 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
                     ) : <span className="text-xs">Loading...</span>}
                 </td>
                 <td className={`px-6 py-4 font-bold ${plColor}`}>
-                    {liveData ? `${plValue >= 0 ? '+' : ''}${plValue.toFixed(2)}` : <span className="text-xs">Loading...</span>}
+                    {liveData?.price ? `${plValue >= 0 ? '+' : ''}${plValue.toFixed(2)}` : <span className="text-xs">Loading...</span>}
                 </td>
-                <td className={`px-6 py-4 font-bold ${plColor}`}>
-                    {liveData ? `${plPercent.toFixed(2)}%` : <span className="text-xs">Loading...</span>}
+                <td className="px-6 py-4 text-green-400">
+                    {stock.takeProfit ? `$${stock.takeProfit.toFixed(2)}` : '---'}
                 </td>
-
+                <td className="px-6 py-4 text-red-400">
+                    {stock.stopLoss ? `$${stock.stopLoss.toFixed(2)}` : '---'}
+                </td>
                 <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => onLogDividend(stock)} className="font-medium text-green-500 hover:underline">Dividend</button>
                     <button onClick={() => onEditStock(stock)} className="font-medium text-yellow-500 hover:underline">Edit</button>
@@ -87,9 +100,9 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
             </tr>
             {isExpanded && (
                 <tr className="bg-cosmic-bg">
-                    <td colSpan={8} className="p-0">
-                         <div className="p-4">
-                            <EmbeddedStockChart ticker={stock.ticker!} />
+                    <td colSpan={9} className="p-0">
+                         <div className="p-4" style={{ height: '400px' }}>
+                            <EmbeddedStockChart ticker={stock.ticker} />
                             <div className="text-right mt-2">
                                 <button
                                     onClick={() => onOpenLargeChart(stock.ticker!)}

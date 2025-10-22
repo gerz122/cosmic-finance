@@ -9,9 +9,10 @@ interface ChartData {
 interface DoughnutChartProps {
     data: ChartData[];
     size?: number;
+    centerLabel?: string;
 }
 
-export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200 }) => {
+export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, centerLabel = "Total" }) => {
     const total = data.reduce((sum, item) => sum + item.value, 0);
     if (total === 0) {
         return <div className="text-cosmic-text-secondary flex items-center justify-center" style={{ width: size, height: size }}>No data</div>;
@@ -56,7 +57,7 @@ export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200 }
                 ))}
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                 <span className="text-cosmic-text-secondary text-sm">Total</span>
+                 <span className="text-cosmic-text-secondary text-sm">{centerLabel}</span>
                  <span className="text-2xl font-bold text-cosmic-text-primary">${total.toLocaleString()}</span>
             </div>
         </div>

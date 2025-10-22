@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+// FIX: Use Firebase v8 compat imports to resolve the 'initializeApp' export error.
+import firebase from "firebase/app";
+import "firebase/firestore";
 
 // Your web app's Firebase configuration from your prompt
 const firebaseConfig = {
@@ -13,7 +14,11 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// FIX: Use v8 initialization syntax. Added a check to prevent re-initialization.
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
 // Initialize Cloud Firestore and get a reference to the service
-export const firestore = getFirestore(app);
+// FIX: Use v8 syntax to get firestore instance.
+export const firestore = firebase.firestore();

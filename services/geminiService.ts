@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { FinancialStatement, CosmicEvent } from '../types';
+import type { LiveStockData } from '../components/RealTimeStockData';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -175,5 +176,46 @@ export const searchTickers = async (query: string): Promise<{ticker: string, nam
     } catch (error) {
         console.error("Error searching for tickers:", error);
         return [];
+    }
+};
+
+export const getLiveStockData = async (ticker: string): Promise<LiveStockData> => {
+    const fallbackData: LiveStockData = { price: null, dayChange: null, dayChangePercent: null };
+    if (!ticker) return fallbackData;
+
+    const prompt = `
+      You are an API that provides stock data. Your data source is Google Finance.
+      For the ticker symbol: ${ticker}, provide the latest market data.
+      Respond ONLY with the specified JSON format.
+      If Google Finance does not recognize the ticker or no data is available, return nulls for all values.
+    `;
+    const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+            price: { type: Type.NUMBER, nullable: true },
+            dayChange: { type: Type.NUMBER, nullable: true, description: "The change in price for the day." },
+            dayChangePercent: { type: Type.NUMBER, nullable: true, description: "The percentage change for the day." }
+        }
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema
+            }
+        });
+        const result = JSON.parse(response.text) as LiveStockData;
+        if (result.price === null) {
+            console.warn(`Could not fetch live data for ticker from Google Finance: ${ticker}`);
+            return fallbackData;
+        }
+        return result;
+
+    } catch (error) {
+        console.error(`Error fetching live stock data for ${ticker}:`, error);
+        return fallbackData;
     }
 };

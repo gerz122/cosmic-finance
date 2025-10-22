@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Asset } from '../types';
 import { XIcon } from './icons';
-import { searchTickers } from '../services/geminiService';
+import { searchTickers, getLiveStockData } from '../services/geminiService';
 
 interface AddStockModalProps {
     isOpen: boolean;
@@ -12,7 +12,8 @@ interface AddStockModalProps {
 
 // A simple debounce function
 const debounce = (func: (...args: any[]) => void, delay: number) => {
-    let timeoutId: NodeJS.Timeout;
+    // FIX: Use ReturnType<typeof setTimeout> for portability between node and browser environments.
+    let timeoutId: ReturnType<typeof setTimeout>;
     return (...args: any[]) => {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
@@ -29,6 +30,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
     const [purchasePrice, setPurchasePrice] = useState('');
     const [takeProfit, setTakeProfit] = useState('');
     const [stopLoss, setStopLoss] = useState('');
+    const [strategy, setStrategy] = useState('');
     
     const [searchResults, setSearchResults] = useState<{ticker: string, name: string}[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -44,6 +46,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
                 setPurchasePrice(String(stockToEdit.purchasePrice || ''));
                 setTakeProfit(String(stockToEdit.takeProfit || ''));
                 setStopLoss(String(stockToEdit.stopLoss || ''));
+                setStrategy(stockToEdit.strategy || '');
             } else {
                 // Reset form for adding new
                 setTicker('');
@@ -52,6 +55,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
                 setPurchasePrice('');
                 setTakeProfit('');
                 setStopLoss('');
+                setStrategy('');
             }
             setSearchResults([]);
             setIsSearching(false);
@@ -72,15 +76,21 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
     const debouncedSearch = useCallback(debounce(handleTickerSearch, 500), []);
 
     const handleTickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const query = e.target.value;
+        const query = e.target.value.toUpperCase();
         setTicker(query);
         debouncedSearch(query);
     };
     
-    const handleSelectTicker = (result: {ticker: string, name: string}) => {
+    const handleSelectTicker = async (result: {ticker: string, name: string}) => {
         setTicker(result.ticker);
         setName(result.name);
         setSearchResults([]);
+        
+        // New: Fetch live price and pre-fill
+        const liveData = await getLiveStockData(result.ticker);
+        if (liveData && liveData.price) {
+            setPurchasePrice(liveData.price.toFixed(2));
+        }
     }
 
     if (!isOpen) return null;
@@ -95,6 +105,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
             purchasePrice: parseFloat(purchasePrice) || 0,
             takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
             stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
+            strategy: strategy || undefined,
         };
         
         // Basic validation
@@ -109,7 +120,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
 
     return (
         <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
-            <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-md shadow-2xl p-6 m-4 animate-slide-in-up" onClick={e => e.stopPropagation()}>
+            <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-lg shadow-2xl p-6 m-4 animate-slide-in-up" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold text-cosmic-text-primary">{isEditing ? 'Edit Stock' : 'Add Stock to Portfolio'}</h2>
                     <button onClick={onClose} className="text-cosmic-text-secondary hover:text-cosmic-text-primary">
@@ -150,7 +161,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-cosmic-text-secondary mb-2">Alerts (Optional)</p>
+                        <p className="text-sm font-medium text-cosmic-text-secondary mb-2">Alerts & Strategy (Optional)</p>
                          <div className="grid grid-cols-2 gap-4">
                              <div>
                                 <label htmlFor="takeProfit" className="block text-xs font-medium text-cosmic-text-secondary mb-1">Take Profit Price</label>
@@ -160,6 +171,10 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
                                 <label htmlFor="stopLoss" className="block text-xs font-medium text-cosmic-text-secondary mb-1">Stop Loss Price</label>
                                 <input type="number" id="stopLoss" value={stopLoss} onChange={e => setStopLoss(e.target.value)} min="0" step="any" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" />
                             </div>
+                        </div>
+                        <div className="mt-2">
+                             <label htmlFor="strategy" className="block text-xs font-medium text-cosmic-text-secondary mb-1">Strategy / Notes</label>
+                             <textarea id="strategy" value={strategy} onChange={e => setStrategy(e.target.value)} rows={2} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" placeholder="e.g., Long-term hold for dividend growth..."></textarea>
                         </div>
                     </div>
 

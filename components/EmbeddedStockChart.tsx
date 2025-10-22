@@ -1,4 +1,4 @@
-import React, { useEffect, memo } from 'react';
+import React, { useEffect, memo, useRef } from 'react';
 
 declare global {
     interface Window {
@@ -11,13 +11,21 @@ interface EmbeddedStockChartProps {
 }
 
 const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker }) => {
-    const containerId = `tv-advanced-chart-container-${ticker}-${Math.random()}`;
+    const containerRef = useRef<HTMLDivElement>(null);
+    const widgetLoaded = useRef(false);
 
     useEffect(() => {
-        if (window.TradingView && document.getElementById(containerId)) {
+        if (widgetLoaded.current || !containerRef.current || !window.TradingView) {
+            return;
+        }
+
+        const createWidget = () => {
+            if (!containerRef.current) return;
+            
+            // Clear container and create widget
+            containerRef.current.innerHTML = '';
             new window.TradingView.widget({
-                "width": "100%",
-                "height": 400,
+                "autosize": true,
                 "symbol": ticker,
                 "interval": "D",
                 "timezone": "Etc/UTC",
@@ -26,7 +34,7 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker }) => {
                 "locale": "en",
                 "toolbar_bg": "#f1f3f6",
                 "enable_publishing": false,
-                "hide_side_toolbar": false,
+                "hide_side_toolbar": true,
                 "allow_symbol_change": true,
                 "details": true,
                 "studies": [
@@ -35,14 +43,20 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker }) => {
                     "RSI@tv-basicstudies",
                     "Volume@tv-basicstudies"
                 ],
-                "container_id": containerId
+                "container_id": containerRef.current.id
             });
-        }
-    }, [ticker, containerId]);
+            widgetLoaded.current = true;
+        };
+        
+        createWidget();
+
+    }, [ticker]);
+
+    const containerId = `tv-advanced-chart-container-${ticker}-${Math.random().toString(36).substring(7)}`;
 
     return (
-        <div className="tradingview-widget-container" style={{ height: 400, width: '100%' }}>
-            <div id={containerId} style={{ height: '100%', width: '100%' }} />
+        <div className="tradingview-widget-container" style={{ height: '400px', width: '100%' }}>
+            <div id={containerId} ref={containerRef} style={{ height: '100%', width: '100%' }} />
         </div>
     );
 };
