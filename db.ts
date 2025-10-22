@@ -1,6 +1,6 @@
 import { collection, getDocs, doc, setDoc, writeBatch, getDoc } from "firebase/firestore";
 import { firestore } from './services/firebase';
-import type { User, Transaction, Asset, Liability } from './types';
+import type { User, Transaction, Asset, Liability, EventOutcome } from './types';
 import { TransactionType, AssetType } from './types';
 
 
@@ -178,5 +178,76 @@ export const db = {
         await batch.commit();
 
         return { fromUser, toUser };
+    },
+
+    applyEventOutcome: async (userId: string, outcome: EventOutcome): Promise<User> => {
+        const userRef = doc(firestore, 'users', userId);
+        const userSnap = await getDoc(userRef);
+
+        if (!userSnap.exists()) {
+            throw new Error("User not found");
+        }
+
+        const user = userSnap.data() as User;
+        const statement = user.financialStatement;
+        
+        // 1. Apply cash change
+        if (outcome.cashChange) {
+            let cashAsset = statement.assets.find(a => a.type === AssetType.CASH);
+            if (cashAsset) {
+                if(cashAsset.value + outcome.cashChange < 0) {
+                    throw new Error("Operation failed: Not enough cash for this event.");
+                }
+                cashAsset.value += outcome.cashChange;
+            } else if (outcome.cashChange > 0) {
+                statement.assets.push({
+                    id: `a${new Date().getTime()}`, name: 'Cash', type: AssetType.CASH,
+                    value: outcome.cashChange, monthlyCashflow: 0
+                });
+            } else {
+                 throw new Error("Operation failed: Not enough cash for this event.");
+            }
+        }
+        
+        // 2. Add new asset
+        if (outcome.newAsset) {
+            const newAsset: Asset = {
+                ...outcome.newAsset,
+                id: `a${new Date().getTime()}`,
+            };
+            statement.assets.push(newAsset);
+            
+            // If the new asset generates passive income, add a recurring transaction
+            if (newAsset.monthlyCashflow > 0) {
+                 const newTransaction: Transaction = {
+                    id: `t-passive-${new Date().getTime()}`,
+                    description: `${newAsset.name} Cashflow`,
+                    amount: newAsset.monthlyCashflow,
+                    type: TransactionType.INCOME,
+                    category: 'Investment',
+                    date: new Date().toISOString().split('T')[0],
+                    isPassive: true
+                };
+                statement.transactions.push(newTransaction);
+            }
+        }
+        
+        // Add a transaction to log the event
+        const eventTransaction: Transaction = {
+            id: `t-event-${new Date().getTime()}`,
+            description: outcome.message.split('!')[0], // a summary of the message
+            amount: Math.abs(outcome.cashChange || 0),
+            type: (outcome.cashChange || 0) < 0 ? TransactionType.EXPENSE : TransactionType.INCOME,
+            category: 'Cosmic Event',
+            date: new Date().toISOString().split('T')[0],
+        };
+
+        // only add if there was a cash change
+        if(outcome.cashChange && outcome.cashChange !== 0){
+             statement.transactions.push(eventTransaction);
+        }
+
+        await setDoc(userRef, user);
+        return user;
     }
 };

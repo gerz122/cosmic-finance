@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { View, User, Team, Transaction } from './types';
-import { db } from './db'; // Import our new mock DB
+import type { View, User, Team, Transaction, CosmicEvent, EventOutcome } from './types';
+import { db } from './db'; 
+import { getCosmicEvent } from './services/geminiService';
 import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
@@ -9,6 +10,7 @@ import { Portfolio } from './components/Portfolio';
 import { Teams } from './components/Teams';
 import { AddTransactionModal } from './components/AddTransactionModal';
 import { TransferModal } from './components/TransferModal';
+import { CosmicEventModal } from './components/CosmicEventModal';
 
 // Mock Team Data (can be expanded later)
 const mockTeam: Team = {
@@ -44,6 +46,12 @@ const App: React.FC = () => {
     const [isTransferModalOpen, setTransferModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // State for Cosmic Event Feature
+    const [isCosmicEventModalOpen, setCosmicEventModalOpen] = useState(false);
+    const [isGeneratingCosmicEvent, setIsGeneratingCosmicEvent] = useState(false);
+    const [currentCosmicEvent, setCurrentCosmicEvent] = useState<CosmicEvent | null>(null);
+
 
     useEffect(() => {
         const loadData = async () => {
@@ -111,6 +119,27 @@ const App: React.FC = () => {
             alert((error as Error).message);
         }
     };
+    
+    const handleDrawCosmicCard = async () => {
+        if (!activeUser) return;
+        setIsGeneratingCosmicEvent(true);
+        setCosmicEventModalOpen(true);
+        setCurrentCosmicEvent(null);
+        
+        const event = await getCosmicEvent(activeUser.financialStatement);
+        setCurrentCosmicEvent(event);
+        setIsGeneratingCosmicEvent(false);
+    };
+
+    const handleCosmicEventResolution = async (outcome: EventOutcome) => {
+        if (!activeUserId) return;
+        try {
+            const updatedUser = await db.applyEventOutcome(activeUserId, outcome);
+            setUsers(currentUsers => currentUsers.map(u => u.id === activeUserId ? updatedUser : u));
+        } catch (error) {
+            alert((error as Error).message);
+        }
+    };
 
 
     const renderView = () => {
@@ -141,7 +170,12 @@ const App: React.FC = () => {
 
         switch (activeView) {
             case 'dashboard':
-                return <Dashboard user={activeUser} onAddTransactionClick={() => setAddTransactionModalOpen(true)} onTransferClick={() => setTransferModalOpen(true)} />;
+                return <Dashboard 
+                            user={activeUser} 
+                            onAddTransactionClick={() => setAddTransactionModalOpen(true)} 
+                            onTransferClick={() => setTransferModalOpen(true)}
+                            onDrawCosmicCard={handleDrawCosmicCard}
+                        />;
             case 'statement':
                 return <FinancialStatementComponent statement={activeUser.financialStatement} />;
             case 'coach':
@@ -151,7 +185,12 @@ const App: React.FC = () => {
             case 'teams':
                 return <Teams team={team} />;
             default:
-                return <Dashboard user={activeUser} onAddTransactionClick={() => setAddTransactionModalOpen(true)} onTransferClick={() => setTransferModalOpen(true)} />;
+                return <Dashboard 
+                            user={activeUser} 
+                            onAddTransactionClick={() => setAddTransactionModalOpen(true)} 
+                            onTransferClick={() => setTransferModalOpen(true)}
+                            onDrawCosmicCard={handleDrawCosmicCard}
+                        />;
         }
     };
     
@@ -219,6 +258,13 @@ const App: React.FC = () => {
                     otherUsers={users.filter(u => u.id !== activeUserId)}
                 />
             )}
+            <CosmicEventModal 
+                isOpen={isCosmicEventModalOpen}
+                isGenerating={isGeneratingCosmicEvent}
+                event={currentCosmicEvent}
+                onClose={() => setCosmicEventModalOpen(false)}
+                onResolve={handleCosmicEventResolution}
+            />
         </div>
     );
 };

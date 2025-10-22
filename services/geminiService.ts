@@ -1,5 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
-import type { FinancialStatement } from '../types';
+import { GoogleGenAI, Type } from "@google/genai";
+import type { FinancialStatement, CosmicEvent } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -14,15 +14,15 @@ function formatFinancialDataForPrompt(statement: FinancialStatement): string {
         .filter(t => t.type === 'EXPENSE')
         .reduce((sum, t) => sum + t.amount, 0);
     const netWorth = statement.assets.reduce((sum, a) => sum + a.value, 0) - statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
+    const cash = statement.assets.find(a => a.type === 'CASH')?.value || 0;
 
     return `
       Current Financial Snapshot:
       - Monthly Active Income: $${totalIncome.toFixed(2)}
       - Monthly Passive Income: $${passiveIncome.toFixed(2)}
       - Monthly Expenses: $${totalExpenses.toFixed(2)}
-      - Total Assets: $${statement.assets.reduce((sum, a) => sum + a.value, 0).toFixed(2)}
-      - Total Liabilities: $${statement.liabilities.reduce((sum, l) => sum + l.balance, 0).toFixed(2)}
       - Net Worth: $${netWorth.toFixed(2)}
+      - Available Cash: $${cash.toFixed(2)}
       The user is playing a financial game where the goal is for passive income to exceed total expenses.
     `;
 }
@@ -49,5 +49,93 @@ export const getFinancialAdvice = async (prompt: string, statement: FinancialSta
   } catch (error) {
     console.error("Error fetching financial advice:", error);
     return "The stars are a bit cloudy right now... I couldn't get a signal. Please try asking again in a moment.";
+  }
+};
+
+
+export const getCosmicEvent = async (statement: FinancialStatement): Promise<CosmicEvent> => {
+  const financialContext = formatFinancialDataForPrompt(statement);
+  const availableCash = statement.assets.find(a => a.type === 'CASH')?.value || 0;
+
+  const prompt = `
+    You are the Game Master for 'Cosmic Cashflow'. Generate a random financial event for a player. The event should be a choice between two options. It could be an investment opportunity, a business venture, or an unexpected financial situation.
+    
+    - The theme is cosmic/space. Use creative names like 'Asteroid Mining Corp' or 'Martian Real Estate'.
+    - One choice should be a risk/reward action, and the other a safe/neutral action.
+    - The risk/reward action cost should be realistic for the player, ideally less than 50% of their available cash ($${availableCash.toFixed(2)}).
+    - Provide the response ONLY in the specified JSON format.
+    
+    Player's situation:
+    ${financialContext}
+  `;
+
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING },
+      description: { type: Type.STRING },
+      choices: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            text: { type: Type.STRING },
+            outcome: {
+              type: Type.OBJECT,
+              properties: {
+                message: { type: Type.STRING },
+                cashChange: { type: Type.NUMBER, description: "A negative number for costs, positive for gains." },
+                newAsset: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    type: { type: Type.STRING, enum: ['STOCK', 'REAL_ESTATE'] },
+                    value: { type: Type.NUMBER },
+                    monthlyCashflow: { type: Type.NUMBER },
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  try {
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema,
+        }
+    });
+
+    const eventJson = JSON.parse(response.text);
+
+    // Basic validation to ensure we have two choices.
+    if (!eventJson.choices || eventJson.choices.length !== 2) {
+      throw new Error("AI did not generate two choices.");
+    }
+    
+    return eventJson as CosmicEvent;
+  } catch (error) {
+    console.error("Error generating cosmic event:", error);
+    // Fallback event in case of AI error
+    return {
+      title: "Signal Lost",
+      description: "A solar flare interrupted our transmission from the opportunities quadrant! For now, the cosmos is quiet.",
+      choices: [
+        {
+          text: "Stay Put",
+          outcome: { message: "You decide to wait for the solar flare to pass. No changes to your finances." }
+        },
+        {
+          text: "Continue Scanning",
+          outcome: { message: "You use some energy to scan again, but find nothing new." }
+        }
+      ]
+    };
   }
 };

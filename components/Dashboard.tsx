@@ -1,12 +1,13 @@
 import React, { useMemo } from 'react';
 import type { User, FinancialStatement, Transaction } from '../types';
 import { TransactionType } from '../types';
-import { StarIcon, PlusIcon } from './icons';
+import { StarIcon, PlusIcon, SparklesIcon } from './icons';
 
 interface DashboardProps {
     user: User;
     onAddTransactionClick: () => void;
     onTransferClick: () => void;
+    onDrawCosmicCard: () => void;
 }
 
 const StatCard: React.FC<{ title: string; value: string; subtitle?: string; color: string; }> = ({ title, value, subtitle, color }) => (
@@ -31,7 +32,7 @@ const ProgressBar: React.FC<{ value: number; max: number; }> = ({ value, max }) 
     );
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, onAddTransactionClick, onTransferClick }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, onAddTransactionClick, onTransferClick, onDrawCosmicCard }) => {
 
     const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions } = useMemo(() => {
         const statement = user.financialStatement;
@@ -53,7 +54,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onAddTransactionClic
                     <h1 className="text-3xl font-bold text-cosmic-text-primary">Welcome back, {user.name}!</h1>
                     <p className="text-cosmic-text-secondary">Here's your "Cosmic Tournament" summary.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                    <button onClick={onDrawCosmicCard} className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg hover:shadow-indigo-500/50 transition-shadow">
+                        <SparklesIcon className="w-5 h-5" />
+                        Explorar el Cosmos
+                    </button>
                     <button onClick={onTransferClick} className="flex items-center gap-2 bg-cosmic-surface text-cosmic-primary font-bold py-2 px-4 rounded-lg border border-cosmic-primary hover:bg-cosmic-border transition-colors">
                         Transfer Money
                     </button>

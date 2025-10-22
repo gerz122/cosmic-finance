@@ -62,3 +62,22 @@ export interface Team {
 }
 
 export type View = 'dashboard' | 'statement' | 'portfolio' | 'teams' | 'coach';
+
+// Types for the new Cosmic Event feature
+export interface EventOutcome {
+    message: string;
+    cashChange?: number;
+    newAsset?: Omit<Asset, 'id'>;
+    // Future outcomes like new liabilities, etc., can be added here
+}
+
+export interface EventChoice {
+    text: string;
+    outcome: EventOutcome;
+}
+
+export interface CosmicEvent {
+    title: string;
+    description: string;
+    choices: EventChoice[];
+}
