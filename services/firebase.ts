@@ -2,16 +2,14 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Your web app's Firebase configuration from your prompt
 const firebaseConfig = {
-  apiKey: "AIzaSyDtJ21sMk1mnxNZ0GfnB2axMGxIANjd_J4",
-  authDomain: "cosmic-finance.firebaseapp.com",
-  projectId: "cosmic-finance",
-  storageBucket: "cosmic-finance.firebasestorage.app",
-  messagingSenderId: "544529485599",
-  appId: "1:544529485599:web:67c3eebcc2db50ad47aa2a",
-  measurementId: "G-7W0PKC3ZQW"
+  apiKey: "AIzaSyDfXlr7wEvXR4bMyd_DeTC-5NLgiRBdPfw",
+  authDomain: "finanz-10bcd.firebaseapp.com",
+  projectId: "finanz-10bcd",
+  storageBucket: "finanz-10bcd.firebasestorage.app",
+  messagingSenderId: "196366472563",
+  appId: "1:196366472563:web:a46437b52c118102032106"
 };
 
 // Initialize Firebase
