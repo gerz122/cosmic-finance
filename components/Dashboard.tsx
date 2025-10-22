@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import type { User, FinancialStatement, Transaction } from '../types';
-import { TransactionType } from '../types';
+import { TransactionType, AssetType } from '../types';
 import { StarIcon, PlusIcon, SparklesIcon } from './icons';
+import { PortfolioLivePL } from './PortfolioLivePL';
 
 interface DashboardProps {
     user: User;
@@ -10,11 +11,11 @@ interface DashboardProps {
     onDrawCosmicCard: () => void;
 }
 
-const StatCard: React.FC<{ title: string; value: string; subtitle?: string; color: string; }> = ({ title, value, subtitle, color }) => (
+const StatCard: React.FC<{ title: string; value: React.ReactNode; subtitle?: string; color: string; }> = ({ title, value, subtitle, color }) => (
     <div className="bg-cosmic-surface p-6 rounded-xl border border-cosmic-border flex flex-col justify-between hover:border-cosmic-primary transition-all duration-300 transform hover:-translate-y-1">
         <div>
             <h3 className="text-cosmic-text-secondary font-medium">{title}</h3>
-            <p className={`text-4xl font-bold ${color}`}>{value}</p>
+            <div className={`text-4xl font-bold ${color}`}>{value}</div>
         </div>
         {subtitle && <p className="text-sm text-cosmic-text-secondary mt-2">{subtitle}</p>}
     </div>
@@ -34,7 +35,7 @@ const ProgressBar: React.FC<{ value: number; max: number; }> = ({ value, max }) 
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, onAddTransactionClick, onTransferClick, onDrawCosmicCard }) => {
 
-    const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions } = useMemo(() => {
+    const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks } = useMemo(() => {
         const statement = user.financialStatement;
         const passiveIncome = statement.transactions.filter(t => t.type === TransactionType.INCOME && t.isPassive).reduce((sum, t) => sum + t.amount, 0);
         const totalExpenses = statement.transactions.filter(t => t.type === TransactionType.EXPENSE).reduce((sum, t) => sum + t.amount, 0);
@@ -42,7 +43,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onAddTransactionClic
         const netWorth = statement.assets.reduce((sum, a) => sum + a.value, 0) - statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
         const monthlyCashflow = totalIncome - totalExpenses;
         const recentTransactions = [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
-        return { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions };
+        const stocks = statement.assets.filter(a => a.type === AssetType.STOCK);
+        return { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks };
     }, [user.financialStatement]);
 
     const freedomPercentage = totalExpenses > 0 ? Math.round((passiveIncome / totalExpenses) * 100) : 100;
@@ -69,10 +71,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onAddTransactionClic
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="Net Worth" value={`$${netWorth.toLocaleString('en-US', { maximumFractionDigits: 0 })}`} subtitle="Your total 'score'" color="text-white" />
                 <StatCard title="Monthly Cash Flow" value={`$${monthlyCashflow.toFixed(2)}`} subtitle="Your 'attack' power" color={monthlyCashflow >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'} />
                 <StatCard title="Passive Income" value={`$${passiveIncome.toFixed(2)}`} subtitle="Your 'freedom goals'" color="text-cosmic-primary" />
+                 <StatCard title="Portfolio P/L (Live)" value={<PortfolioLivePL stocks={stocks} />} subtitle="Today's stock performance" color="text-white" />
             </div>
 
             <div className="bg-cosmic-surface p-6 rounded-xl border border-cosmic-border space-y-4">

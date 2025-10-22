@@ -13,6 +13,7 @@ import { TransferModal } from './components/TransferModal';
 import { CosmicEventModal } from './components/CosmicEventModal';
 import { AddStockModal } from './components/AddStockModal';
 import { LogDividendModal } from './components/LogDividendModal';
+import { LargeChartModal } from './components/LargeChartModal';
 
 // Mock Team Data (can be expanded later)
 const mockTeam: Team = {
@@ -59,6 +60,8 @@ const App: React.FC = () => {
     const [stockToEdit, setStockToEdit] = useState<Asset | null>(null);
     const [isLogDividendModalOpen, setLogDividendModalOpen] = useState(false);
     const [stockForDividend, setStockForDividend] = useState<Asset | null>(null);
+    const [largeChartModalTicker, setLargeChartModalTicker] = useState<string | null>(null);
+
 
     useEffect(() => {
         const loadData = async () => {
@@ -80,6 +83,7 @@ const App: React.FC = () => {
         loadData();
     }, []);
 
+    // FIX: Corrected typo from usememo to useMemo
     const activeUser = useMemo(() => users.find(u => u.id === activeUserId), [users, activeUserId]);
     
      // Update team data when users change
@@ -202,6 +206,9 @@ const App: React.FC = () => {
             alert((e as Error).message);
         }
     };
+    
+    const openLargeChartModal = (ticker: string) => setLargeChartModalTicker(ticker);
+    const closeLargeChartModal = () => setLargeChartModalTicker(null);
 
 
     const renderView = () => {
@@ -249,6 +256,7 @@ const App: React.FC = () => {
                             onEditStock={handleOpenEditStockModal}
                             onDeleteStock={handleDeleteStock}
                             onLogDividend={handleOpenLogDividendModal}
+                            onOpenLargeChart={openLargeChartModal}
                         />;
             case 'teams':
                 return <Teams team={team} />;
@@ -345,6 +353,12 @@ const App: React.FC = () => {
                     onClose={() => { setLogDividendModalOpen(false); setStockForDividend(null); }}
                     onLogDividend={handleLogDividend}
                     stock={stockForDividend}
+                />
+            )}
+            {largeChartModalTicker && (
+                <LargeChartModal
+                    ticker={largeChartModalTicker}
+                    onClose={closeLargeChartModal}
                 />
             )}
         </div>

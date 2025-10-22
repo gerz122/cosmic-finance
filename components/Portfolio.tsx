@@ -1,10 +1,8 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import type { FinancialStatement, Asset } from '../types';
 import { AssetType } from '../types';
-import { RealTimeStockData } from './RealTimeStockData';
-// FIX: Module '"./EmbeddedStockChart"' has no exported member 'EmbeddedStockChart'. Did you mean to use 'import EmbeddedStockChart from "./EmbeddedStockChart"' instead?
-import EmbeddedStockChart from './EmbeddedStockChart';
+import { StockTableRow } from './StockTableRow';
 
 interface PortfolioProps {
     statement: FinancialStatement;
@@ -12,6 +10,7 @@ interface PortfolioProps {
     onEditStock: (stock: Asset) => void;
     onDeleteStock: (stockId: string) => void;
     onLogDividend: (stock: Asset) => void;
+    onOpenLargeChart: (ticker: string) => void;
 }
 
 const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ title, value, color }) => (
@@ -21,7 +20,7 @@ const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ 
     </div>
 );
 
-export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onEditStock, onDeleteStock, onLogDividend }) => {
+export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onEditStock, onDeleteStock, onLogDividend, onOpenLargeChart }) => {
     const { assets, liabilities } = statement;
     const stocks = assets.filter(a => a.type === AssetType.STOCK);
     const otherAssets = assets.filter(a => a.type !== AssetType.STOCK);
@@ -30,15 +29,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
     const totalOtherAssetsValue = otherAssets.reduce((sum, a) => sum + a.value, 0);
     const totalLiabilities = liabilities.reduce((sum, l) => sum + l.balance, 0);
 
-    const [expandedStockId, setExpandedStockId] = useState<string | null>(null);
-
-    const toggleStockRow = (stockId: string) => {
-        setExpandedStockId(currentId => (currentId === stockId ? null : stockId));
-    };
-
     return (
         <div className="animate-fade-in space-y-8">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-cosmic-text-primary">Portfolio</h1>
                     <p className="text-cosmic-text-secondary">Manage your assets and liabilities.</p>
@@ -64,47 +57,27 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
                                 <th scope="col" className="px-6 py-3">Ticker</th>
                                 <th scope="col" className="px-6 py-3">Shares</th>
                                 <th scope="col" className="px-6 py-3">Cost Basis</th>
-                                <th scope="col" className="px-6 py-3" style={{width: '200px'}}>Live Market Data</th>
-                                <th scope="col" className="px-6 py-3" style={{width: '200px'}}>Profit / Loss</th>
+                                <th scope="col" className="px-6 py-3">Live Price</th>
+                                <th scope="col" className="px-6 py-3">Day's Change</th>
+                                <th scope="col" className="px-6 py-3">P/L ($)</th>
+                                <th scope="col" className="px-6 py-3">P/L (%)</th>
                                 <th scope="col" className="px-6 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {stocks.map(stock => (
-                                <React.Fragment key={stock.id}>
-                                    <tr 
-                                        className="border-b border-cosmic-border hover:bg-cosmic-bg cursor-pointer"
-                                        onClick={() => toggleStockRow(stock.id)}
-                                    >
-                                        <td className="px-6 py-4 font-medium text-cosmic-text-primary whitespace-nowrap">{stock.ticker}</td>
-                                        <td className="px-6 py-4">{stock.shares}</td>
-                                        <td className="px-6 py-4">${stock.purchasePrice?.toFixed(2)}</td>
-                                        <td className="px-6 py-4 font-semibold text-cosmic-text-primary">
-                                            <RealTimeStockData stock={stock} isPriceOnly={true} />
-                                        </td>
-                                        <td className="px-6 py-4 font-semibold text-cosmic-text-primary">
-                                            <RealTimeStockData stock={stock} isPriceOnly={false} />
-                                        </td>
-                                        <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                            <button onClick={() => onLogDividend(stock)} className="font-medium text-green-500 hover:underline">Dividend</button>
-                                            <button onClick={() => onEditStock(stock)} className="font-medium text-yellow-500 hover:underline">Edit</button>
-                                            <button onClick={() => onDeleteStock(stock.id)} className="font-medium text-red-500 hover:underline">Sell</button>
-                                        </td>
-                                    </tr>
-                                    {expandedStockId === stock.id && (
-                                        <tr className="bg-cosmic-bg">
-                                            <td colSpan={6} className="p-0">
-                                                 <div className="p-4">
-                                                    <EmbeddedStockChart ticker={stock.ticker!} />
-                                                 </div>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </React.Fragment>
+                                <StockTableRow 
+                                    key={stock.id}
+                                    stock={stock}
+                                    onEditStock={onEditStock}
+                                    onDeleteStock={onDeleteStock}
+                                    onLogDividend={onLogDividend}
+                                    onOpenLargeChart={onOpenLargeChart}
+                                />
                             ))}
                              {stocks.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="text-center py-4">No stocks in portfolio.</td>
+                                    <td colSpan={8} className="text-center py-4">No stocks in portfolio.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -123,6 +96,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
                                 <span className="font-semibold">${asset.value.toLocaleString()}</span>
                             </div>
                         ))}
+                         {otherAssets.length === 0 && <p className="text-xs text-cosmic-text-secondary">No other assets.</p>}
                      </div>
                 </div>
                  <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
@@ -134,6 +108,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
                                 <span className="font-semibold text-cosmic-danger">-${lia.balance.toLocaleString()}</span>
                             </div>
                         ))}
+                        {liabilities.length === 0 && <p className="text-xs text-cosmic-text-secondary">No liabilities.</p>}
                      </div>
                 </div>
             </div>

@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState, memo } from 'react';
-import type { Asset } from '../types';
+import React, { useEffect, useRef, memo } from 'react';
 
 declare global {
     interface Window {
@@ -7,83 +6,68 @@ declare global {
     }
 }
 
-interface RealTimeStockDataProps {
-    stock: Asset;
-    isPriceOnly?: boolean;
+export interface LiveStockData {
+    price: number;
+    dayChange: number;
+    dayChangePercent: number;
 }
 
-export const RealTimeStockData: React.FC<RealTimeStockDataProps> = memo(({ stock, isPriceOnly = false }) => {
+interface StockPriceProviderProps {
+    ticker: string;
+    onDataUpdate: (data: LiveStockData) => void;
+}
+
+export const StockPriceProvider: React.FC<StockPriceProviderProps> = memo(({ ticker, onDataUpdate }) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const [pl, setPl] = useState<{ value: number; percent: number } | null>(null);
-    const widgetId = `tradingview-widget-${stock.id}-${isPriceOnly ? 'price' : 'pl'}-${Math.random()}`;
+    const lastReportedPrice = useRef<number | null>(null);
 
     useEffect(() => {
+        if (!ticker) return;
+
         const script = document.createElement('script');
         script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js';
         script.async = true;
         script.innerHTML = JSON.stringify({
-            "symbol": stock.ticker,
+            "symbol": ticker,
             "width": "100%",
             "locale": "en",
             "colorTheme": "dark",
             "isTransparent": true
         });
 
-        if (containerRef.current) {
-            containerRef.current.innerHTML = ''; // Clear previous widget
-            containerRef.current.appendChild(script);
+        const currentContainer = containerRef.current;
+        if (currentContainer) {
+            currentContainer.innerHTML = '';
+            currentContainer.appendChild(script);
         }
 
-        const observer = new MutationObserver((mutationsList) => {
-            for (const mutation of mutationsList) {
-                if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                    const priceElement = containerRef.current?.querySelector('.tv-symbol-price-quote__value span:first-child');
-                    if (priceElement) {
-                        const priceText = priceElement.textContent;
-                        if (priceText) {
-                            const currentPrice = parseFloat(priceText.replace(/,/g, ''));
-                            if (!isNaN(currentPrice) && stock.purchasePrice && stock.shares) {
-                                const pValue = (currentPrice - stock.purchasePrice) * stock.shares;
-                                const pPercent = ((currentPrice - stock.purchasePrice) / stock.purchasePrice) * 100;
-                                setPl({ value: pValue, percent: pPercent });
-                                // No need to disconnect, we want live updates
-                            }
-                        }
-                    }
+        const observer = new MutationObserver(() => {
+            if (!currentContainer) return;
+
+            const priceElement = currentContainer.querySelector('.tv-symbol-price-quote__value span:first-child');
+            const changeElement = currentContainer.querySelector('.tv-symbol-price-quote__change-value');
+            
+            if (priceElement?.textContent && changeElement?.textContent) {
+                const price = parseFloat(priceElement.textContent.replace(/,/g, ''));
+
+                const changeContent = changeElement.textContent;
+                const changeParts = changeContent.split(/\s+/);
+                const dayChange = parseFloat(changeParts[0]);
+                const dayChangePercent = parseFloat(changeParts[1]?.replace(/[()%]/g, ''));
+
+                if (!isNaN(price) && !isNaN(dayChange) && !isNaN(dayChangePercent) && price !== lastReportedPrice.current) {
+                    lastReportedPrice.current = price;
+                    onDataUpdate({ price, dayChange, dayChangePercent });
                 }
             }
         });
         
-        if (containerRef.current && !isPriceOnly) {
-            observer.observe(containerRef.current, { childList: true, subtree: true, characterData: true });
+        if (currentContainer) {
+            observer.observe(currentContainer, { childList: true, subtree: true, characterData: true });
         }
 
-        return () => {
-            observer.disconnect();
-            if (containerRef.current) {
-                containerRef.current.innerHTML = '';
-            }
-        };
-    }, [stock, isPriceOnly]);
-
-    if (isPriceOnly) {
-        return <div ref={containerRef} id={widgetId} style={{ height: '40px', pointerEvents: 'none' }} />;
-    }
-
-    if (!pl) {
-        return <span className="text-xs text-cosmic-text-secondary">Loading P/L...</span>;
-    }
+        return () => observer.disconnect();
+    }, [ticker, onDataUpdate]);
     
-    const plColor = pl.value >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
-
-    return (
-        <div>
-            <p className={`font-bold ${plColor}`}>
-                {pl.value >= 0 ? '+' : ''}${pl.value.toFixed(2)}
-            </p>
-            <p className={`text-xs ${plColor}`}>
-                ({pl.percent.toFixed(2)}%)
-            </p>
-        </div>
-    );
+    return <div ref={containerRef} style={{ display: 'none' }} />;
 });
