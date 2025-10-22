@@ -139,3 +139,41 @@ export const getCosmicEvent = async (statement: FinancialStatement): Promise<Cos
     };
   }
 };
+
+export const searchTickers = async (query: string): Promise<{ticker: string, name: string}[]> => {
+    if (!query || query.length < 1) {
+        return [];
+    }
+
+    const prompt = `
+        Based on the search query "${query}", find up to 5 relevant stock tickers and their company names.
+        Provide the response ONLY in the specified JSON format.
+        If you can't find anything, return an empty array.
+    `;
+    const responseSchema = {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                ticker: { type: Type.STRING },
+                name: { type: Type.STRING }
+            }
+        }
+    };
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema
+            }
+        });
+        const results = JSON.parse(response.text);
+        return results;
+
+    } catch (error) {
+        console.error("Error searching for tickers:", error);
+        return [];
+    }
+};

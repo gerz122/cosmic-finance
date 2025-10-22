@@ -1,4 +1,3 @@
-
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
@@ -24,9 +23,17 @@ export interface Asset {
   id: string;
   name: string;
   type: AssetType;
-  value: number;
+  value: number; // Current market value
   monthlyCashflow: number;
+  
+  // Stock specific fields
+  ticker?: string;
+  shares?: number;
+  purchasePrice?: number;
+  takeProfit?: number; // Optional TP price
+  stopLoss?: number;   // Optional SL price
 }
+
 
 export interface Liability {
   id:string;

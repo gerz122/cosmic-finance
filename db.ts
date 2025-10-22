@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, setDoc, writeBatch, getDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, writeBatch, getDoc, deleteDoc } from "firebase/firestore";
 import { firestore } from './services/firebase';
 import type { User, Transaction, Asset, Liability, EventOutcome } from './types';
 import { TransactionType, AssetType } from './types';
@@ -19,7 +19,7 @@ const initialUsers: User[] = [
             ],
             assets: [
                 { id: 'a1', name: 'Rental Property', type: AssetType.REAL_ESTATE, value: 120000, monthlyCashflow: 600 },
-                { id: 'a2', name: 'Stock Portfolio', type: AssetType.STOCK, value: 25000, monthlyCashflow: 100 },
+                { id: 'a2', name: 'Galactic Holdings Inc.', type: AssetType.STOCK, value: 25000, monthlyCashflow: 100, ticker: 'GHI', shares: 100, purchasePrice: 250 },
                 { id: 'a3', name: 'Cash', type: AssetType.CASH, value: 10000, monthlyCashflow: 0 },
             ],
             liabilities: [
@@ -40,7 +40,7 @@ const initialUsers: User[] = [
             ],
             assets: [
                 { id: 'a1-u2', name: 'Emergency Fund', type: AssetType.CASH, value: 15000, monthlyCashflow: 0 },
-                { id: 'a2-u2', name: '401k', type: AssetType.STOCK, value: 32000, monthlyCashflow: 0 },
+                { id: 'a2-u2', name: 'Nebula Corp', type: AssetType.STOCK, value: 32000, monthlyCashflow: 0, ticker: 'NBLA', shares: 200, purchasePrice: 160 },
             ],
             liabilities: [
                  { id: 'l1-u2', name: 'Student Loan', balance: 25000, interestRate: 6.0, monthlyPayment: 400 },
@@ -178,6 +178,131 @@ export const db = {
         await batch.commit();
 
         return { fromUser, toUser };
+    },
+    
+    addStock: async (userId: string, stockData: Omit<Asset, 'id' | 'type' | 'value' | 'monthlyCashflow'>): Promise<User> => {
+        const userRef = doc(firestore, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("User not found");
+        const user = userSnap.data() as User;
+
+        const cost = (stockData.shares || 0) * (stockData.purchasePrice || 0);
+        const cash = user.financialStatement.assets.find(a => a.type === AssetType.CASH);
+        if (!cash || cash.value < cost) throw new Error("Insufficient cash to purchase this stock.");
+        
+        cash.value -= cost;
+
+        const newStock: Asset = {
+            id: `a-stock-${new Date().getTime()}`,
+            ...stockData,
+            name: stockData.name || stockData.ticker || 'Unknown Stock',
+            type: AssetType.STOCK,
+            value: cost, // Initial value is the purchase cost
+            monthlyCashflow: 0, // Assuming stocks don't provide monthly cashflow unless dividends are logged
+        };
+        user.financialStatement.assets.push(newStock);
+
+        const purchaseTransaction: Transaction = {
+            id: `t-buy-${new Date().getTime()}`,
+            description: `Buy ${stockData.shares} of ${newStock.name} (${newStock.ticker})`,
+            amount: cost,
+            type: TransactionType.EXPENSE,
+            category: 'Investment',
+            date: new Date().toISOString().split('T')[0],
+        };
+        user.financialStatement.transactions.push(purchaseTransaction);
+        
+        await setDoc(userRef, user);
+        return user;
+    },
+
+    updateStock: async (userId: string, assetId: string, stockData: Partial<Asset>): Promise<User> => {
+        const userRef = doc(firestore, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("User not found");
+        const user = userSnap.data() as User;
+
+        const assetIndex = user.financialStatement.assets.findIndex(a => a.id === assetId);
+        if (assetIndex === -1) throw new Error("Asset not found");
+
+        // Merge new data into existing asset
+        user.financialStatement.assets[assetIndex] = {
+            ...user.financialStatement.assets[assetIndex],
+            ...stockData
+        };
+
+        await setDoc(userRef, user);
+        return user;
+    },
+
+    deleteStock: async (userId: string, assetId: string): Promise<User> => {
+        const userRef = doc(firestore, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("User not found");
+        const user = userSnap.data() as User;
+
+        const assetIndex = user.financialStatement.assets.findIndex(a => a.id === assetId);
+        if (assetIndex === -1) throw new Error("Asset not found");
+
+        const [stockToSell] = user.financialStatement.assets.splice(assetIndex, 1);
+        const sellValue = stockToSell.value; // Assume selling at current market value
+
+        const cash = user.financialStatement.assets.find(a => a.type === AssetType.CASH);
+        if (cash) {
+            cash.value += sellValue;
+        } else {
+             user.financialStatement.assets.push({
+                 id: `a-cash-${new Date().getTime()}`, name: 'Cash', type: AssetType.CASH,
+                 value: sellValue, monthlyCashflow: 0
+             });
+        }
+        
+        const saleTransaction: Transaction = {
+            id: `t-sell-${new Date().getTime()}`,
+            description: `Sell ${stockToSell.name} (${stockToSell.ticker})`,
+            amount: sellValue,
+            type: TransactionType.INCOME,
+            category: 'Investment',
+            date: new Date().toISOString().split('T')[0],
+        };
+        user.financialStatement.transactions.push(saleTransaction);
+
+        await setDoc(userRef, user);
+        return user;
+    },
+
+    logDividend: async (userId: string, assetId: string, amount: number): Promise<User> => {
+        const userRef = doc(firestore, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("User not found");
+        const user = userSnap.data() as User;
+
+        const stock = user.financialStatement.assets.find(a => a.id === assetId);
+        if (!stock) throw new Error("Stock asset not found");
+
+        const cash = user.financialStatement.assets.find(a => a.type === AssetType.CASH);
+        if (cash) {
+            cash.value += amount;
+        } else {
+             user.financialStatement.assets.push({
+                 id: `a-cash-${new Date().getTime()}`, name: 'Cash', type: AssetType.CASH,
+                 value: amount, monthlyCashflow: 0
+             });
+        }
+
+        const dividendTransaction: Transaction = {
+            id: `t-div-${new Date().getTime()}`,
+            description: `Dividend from ${stock.name} (${stock.ticker})`,
+            amount: amount,
+            type: TransactionType.INCOME,
+            category: 'Investment',
+            date: new Date().toISOString().split('T')[0],
+            isPassive: true, // Dividends are passive income
+        };
+        user.financialStatement.transactions.push(dividendTransaction);
+
+        await setDoc(userRef, user);
+        return user;
     },
 
     applyEventOutcome: async (userId: string, outcome: EventOutcome): Promise<User> => {

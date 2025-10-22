@@ -1,0 +1,174 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import type { Asset } from '../types';
+import { XIcon } from './icons';
+import { searchTickers } from '../services/geminiService';
+
+interface AddStockModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (stockData: Partial<Asset>) => void;
+    stockToEdit: Asset | null;
+}
+
+// A simple debounce function
+const debounce = (func: (...args: any[]) => void, delay: number) => {
+    let timeoutId: NodeJS.Timeout;
+    return (...args: any[]) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            func(...args);
+        }, delay);
+    };
+};
+
+
+export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onSave, stockToEdit }) => {
+    const [ticker, setTicker] = useState('');
+    const [name, setName] = useState('');
+    const [shares, setShares] = useState('');
+    const [purchasePrice, setPurchasePrice] = useState('');
+    const [takeProfit, setTakeProfit] = useState('');
+    const [stopLoss, setStopLoss] = useState('');
+    
+    const [searchResults, setSearchResults] = useState<{ticker: string, name: string}[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    const isEditing = !!stockToEdit;
+
+    useEffect(() => {
+        if (isOpen) {
+            if (isEditing) {
+                setTicker(stockToEdit.ticker || '');
+                setName(stockToEdit.name || '');
+                setShares(String(stockToEdit.shares || ''));
+                setPurchasePrice(String(stockToEdit.purchasePrice || ''));
+                setTakeProfit(String(stockToEdit.takeProfit || ''));
+                setStopLoss(String(stockToEdit.stopLoss || ''));
+            } else {
+                // Reset form for adding new
+                setTicker('');
+                setName('');
+                setShares('');
+                setPurchasePrice('');
+                setTakeProfit('');
+                setStopLoss('');
+            }
+            setSearchResults([]);
+            setIsSearching(false);
+        }
+    }, [isOpen, stockToEdit, isEditing]);
+
+    const handleTickerSearch = async (query: string) => {
+        if (query.length > 0) {
+            setIsSearching(true);
+            const results = await searchTickers(query);
+            setSearchResults(results);
+            setIsSearching(false);
+        } else {
+            setSearchResults([]);
+        }
+    };
+
+    const debouncedSearch = useCallback(debounce(handleTickerSearch, 500), []);
+
+    const handleTickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const query = e.target.value;
+        setTicker(query);
+        debouncedSearch(query);
+    };
+    
+    const handleSelectTicker = (result: {ticker: string, name: string}) => {
+        setTicker(result.ticker);
+        setName(result.name);
+        setSearchResults([]);
+    }
+
+    if (!isOpen) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const stockData: Partial<Asset> = {
+            ticker: ticker.toUpperCase(),
+            name: name || ticker.toUpperCase(), // Default name to ticker if empty
+            shares: parseFloat(shares) || 0,
+            purchasePrice: parseFloat(purchasePrice) || 0,
+            takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
+            stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
+        };
+        
+        // Basic validation
+        if (!stockData.ticker || !stockData.shares || stockData.shares <= 0 || !stockData.purchasePrice || stockData.purchasePrice <= 0) {
+            alert('Please fill in Ticker, Shares, and Purchase Price.');
+            return;
+        }
+
+        onSave(stockData);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+            <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-md shadow-2xl p-6 m-4 animate-slide-in-up" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold text-cosmic-text-primary">{isEditing ? 'Edit Stock' : 'Add Stock to Portfolio'}</h2>
+                    <button onClick={onClose} className="text-cosmic-text-secondary hover:text-cosmic-text-primary">
+                        <XIcon className="w-6 h-6" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                         <div className="relative">
+                            <label htmlFor="ticker" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Ticker Symbol</label>
+                            <input type="text" id="ticker" value={ticker} onChange={handleTickerChange} autoComplete="off" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" required />
+                             { (isSearching || searchResults.length > 0) &&
+                                <div className="absolute z-10 w-full mt-1 bg-cosmic-bg border border-cosmic-border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                    {isSearching && <div className="p-2 text-xs text-cosmic-text-secondary">Searching...</div>}
+                                    {searchResults.map(res => (
+                                        <div key={res.ticker} onClick={() => handleSelectTicker(res)} className="p-2 hover:bg-cosmic-border cursor-pointer">
+                                            <p className="font-bold text-sm text-cosmic-text-primary">{res.ticker}</p>
+                                            <p className="text-xs text-cosmic-text-secondary">{res.name}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                             }
+                        </div>
+                        <div>
+                            <label htmlFor="name" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Stock Name</label>
+                            <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} placeholder={ticker} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" />
+                        </div>
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                         <div>
+                            <label htmlFor="shares" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Number of Shares</label>
+                            <input type="number" id="shares" value={shares} onChange={e => setShares(e.target.value)} min="0" step="any" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" required />
+                        </div>
+                        <div>
+                            <label htmlFor="purchasePrice" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Purchase Price / Share</label>
+                            <input type="number" id="purchasePrice" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} min="0" step="any" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" required />
+                        </div>
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-cosmic-text-secondary mb-2">Alerts (Optional)</p>
+                         <div className="grid grid-cols-2 gap-4">
+                             <div>
+                                <label htmlFor="takeProfit" className="block text-xs font-medium text-cosmic-text-secondary mb-1">Take Profit Price</label>
+                                <input type="number" id="takeProfit" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} min="0" step="any" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" />
+                            </div>
+                            <div>
+                                <label htmlFor="stopLoss" className="block text-xs font-medium text-cosmic-text-secondary mb-1">Stop Loss Price</label>
+                                <input type="number" id="stopLoss" value={stopLoss} onChange={e => setStopLoss(e.target.value)} min="0" step="any" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border transition-colors">Cancel</button>
+                        <button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400 transition-colors">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};

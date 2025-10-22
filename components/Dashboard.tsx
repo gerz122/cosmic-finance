@@ -57,7 +57,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onAddTransactionClic
                 <div className="flex gap-2 flex-wrap">
                     <button onClick={onDrawCosmicCard} className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg hover:shadow-indigo-500/50 transition-shadow">
                         <SparklesIcon className="w-5 h-5" />
-                        Explorar el Cosmos
+                        Explore Cosmos
                     </button>
                     <button onClick={onTransferClick} className="flex items-center gap-2 bg-cosmic-surface text-cosmic-primary font-bold py-2 px-4 rounded-lg border border-cosmic-primary hover:bg-cosmic-border transition-colors">
                         Transfer Money
@@ -88,7 +88,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onAddTransactionClic
             </div>
 
              <div className="bg-cosmic-surface p-6 rounded-xl border border-cosmic-border">
-                <h2 className="text-xl font-bold text-cosmic-text-primary mb-4">Recent "Plays" (Transactions)</h2>
+                <h2 className="text-xl font-bold text-cosmic-text-primary mb-4">Recent Plays (Transactions)</h2>
                 <div className="space-y-3">
                     {recentTransactions.length === 0 && <p className="text-cosmic-text-secondary">No recent transactions.</p>}
                     {recentTransactions.map(tx => (

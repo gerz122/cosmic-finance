@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { View, User, Team, Transaction, CosmicEvent, EventOutcome } from './types';
+import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset } from './types';
 import { db } from './db'; 
 import { getCosmicEvent } from './services/geminiService';
 import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon } from './components/icons';
@@ -11,6 +11,8 @@ import { Teams } from './components/Teams';
 import { AddTransactionModal } from './components/AddTransactionModal';
 import { TransferModal } from './components/TransferModal';
 import { CosmicEventModal } from './components/CosmicEventModal';
+import { AddStockModal } from './components/AddStockModal';
+import { LogDividendModal } from './components/LogDividendModal';
 
 // Mock Team Data (can be expanded later)
 const mockTeam: Team = {
@@ -52,6 +54,11 @@ const App: React.FC = () => {
     const [isGeneratingCosmicEvent, setIsGeneratingCosmicEvent] = useState(false);
     const [currentCosmicEvent, setCurrentCosmicEvent] = useState<CosmicEvent | null>(null);
 
+    // State for Stock Management
+    const [isAddStockModalOpen, setAddStockModalOpen] = useState(false);
+    const [stockToEdit, setStockToEdit] = useState<Asset | null>(null);
+    const [isLogDividendModalOpen, setLogDividendModalOpen] = useState(false);
+    const [stockForDividend, setStockForDividend] = useState<Asset | null>(null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -99,11 +106,15 @@ const App: React.FC = () => {
             }));
         }
     }, [users]);
+    
+    const updateUserState = (updatedUser: User) => {
+        setUsers(currentUsers => currentUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
+    };
 
     const handleAddTransaction = async (transaction: Omit<Transaction, 'id'>) => {
         if (!activeUserId) return;
         const updatedUser = await db.addTransaction(activeUserId, transaction);
-        setUsers(currentUsers => currentUsers.map(u => u.id === activeUserId ? updatedUser : u));
+        updateUserState(updatedUser);
     };
 
     const handleTransfer = async (toUserId: string, amount: number) => {
@@ -135,9 +146,60 @@ const App: React.FC = () => {
         if (!activeUserId) return;
         try {
             const updatedUser = await db.applyEventOutcome(activeUserId, outcome);
-            setUsers(currentUsers => currentUsers.map(u => u.id === activeUserId ? updatedUser : u));
+            updateUserState(updatedUser);
         } catch (error) {
             alert((error as Error).message);
+        }
+    };
+
+    // --- Stock Handlers ---
+    const handleOpenAddStockModal = () => {
+        setStockToEdit(null);
+        setAddStockModalOpen(true);
+    };
+
+    const handleOpenEditStockModal = (stock: Asset) => {
+        setStockToEdit(stock);
+        setAddStockModalOpen(true);
+    };
+    
+    const handleSaveStock = async (stockData: Partial<Asset>) => {
+        if (!activeUserId) return;
+        try {
+            let updatedUser;
+            if (stockToEdit) { // Editing existing stock
+                updatedUser = await db.updateStock(activeUserId, stockToEdit.id, stockData);
+            } else { // Adding new stock
+                updatedUser = await db.addStock(activeUserId, stockData as any);
+            }
+            updateUserState(updatedUser);
+        } catch(e) {
+            alert((e as Error).message);
+        }
+    };
+    
+    const handleDeleteStock = async (stockId: string) => {
+        if (!activeUserId || !window.confirm("Are you sure you want to sell this stock? This action cannot be undone.")) return;
+        try {
+            const updatedUser = await db.deleteStock(activeUserId, stockId);
+            updateUserState(updatedUser);
+        } catch (e) {
+            alert((e as Error).message);
+        }
+    };
+
+    const handleOpenLogDividendModal = (stock: Asset) => {
+        setStockForDividend(stock);
+        setLogDividendModalOpen(true);
+    };
+
+    const handleLogDividend = async (amount: number) => {
+        if (!activeUserId || !stockForDividend) return;
+        try {
+            const updatedUser = await db.logDividend(activeUserId, stockForDividend.id, amount);
+            updateUserState(updatedUser);
+        } catch (e) {
+            alert((e as Error).message);
         }
     };
 
@@ -181,7 +243,13 @@ const App: React.FC = () => {
             case 'coach':
                  return <AICoach statement={activeUser.financialStatement} />;
             case 'portfolio':
-                return <Portfolio statement={activeUser.financialStatement} />;
+                return <Portfolio 
+                            statement={activeUser.financialStatement} 
+                            onAddStock={handleOpenAddStockModal}
+                            onEditStock={handleOpenEditStockModal}
+                            onDeleteStock={handleDeleteStock}
+                            onLogDividend={handleOpenLogDividendModal}
+                        />;
             case 'teams':
                 return <Teams team={team} />;
             default:
@@ -265,6 +333,20 @@ const App: React.FC = () => {
                 onClose={() => setCosmicEventModalOpen(false)}
                 onResolve={handleCosmicEventResolution}
             />
+            <AddStockModal
+                isOpen={isAddStockModalOpen}
+                onClose={() => setAddStockModalOpen(false)}
+                onSave={handleSaveStock}
+                stockToEdit={stockToEdit}
+            />
+            {stockForDividend && (
+                <LogDividendModal
+                    isOpen={isLogDividendModalOpen}
+                    onClose={() => { setLogDividendModalOpen(false); setStockForDividend(null); }}
+                    onLogDividend={handleLogDividend}
+                    stock={stockForDividend}
+                />
+            )}
         </div>
     );
 };
