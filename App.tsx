@@ -43,16 +43,24 @@ const App: React.FC = () => {
     const [isAddTransactionModalOpen, setAddTransactionModalOpen] = useState(false);
     const [isTransferModalOpen, setTransferModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const loadData = async () => {
             setIsLoading(true);
-            const fetchedUsers = await db.getUsers();
-            setUsers(fetchedUsers);
-            if (fetchedUsers.length > 0) {
-                setActiveUserId(fetchedUsers[0].id);
+            setError(null);
+            try {
+                const fetchedUsers = await db.getUsers();
+                setUsers(fetchedUsers);
+                if (fetchedUsers.length > 0) {
+                    setActiveUserId(fetchedUsers[0].id);
+                }
+            } catch (e) {
+                console.error("Failed to load data:", e);
+                setError("Failed to connect to the cosmos (database). Please check your Firebase setup and security rules. The app won't work until this is resolved.");
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
         };
         loadData();
     }, []);
@@ -106,9 +114,31 @@ const App: React.FC = () => {
 
 
     const renderView = () => {
-        if (isLoading || !activeUser) {
-            return <div className="flex items-center justify-center h-full"><p>Loading Cosmic Data...</p></div>;
+        if (isLoading) {
+             return (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                    <p className="text-lg font-semibold text-cosmic-text-primary animate-pulse-fast">Connecting to the Cosmos...</p>
+                    <p className="text-cosmic-text-secondary">Loading player data.</p>
+                </div>
+            );
         }
+        if (error) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full text-center bg-cosmic-surface p-8 rounded-lg border border-cosmic-danger">
+                    <p className="text-xl font-bold text-cosmic-danger mb-4">Connection Error</p>
+                    <p className="text-cosmic-text-primary max-w-md">{error}</p>
+                </div>
+            );
+        }
+        if (!activeUser) {
+             return (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                    <p className="text-lg font-semibold text-cosmic-text-primary">No Players Found</p>
+                    <p className="text-cosmic-text-secondary">Could not find any player data in the database.</p>
+                </div>
+            );
+        }
+
         switch (activeView) {
             case 'dashboard':
                 return <Dashboard user={activeUser} onAddTransactionClick={() => setAddTransactionModalOpen(true)} onTransferClick={() => setTransferModalOpen(true)} />;

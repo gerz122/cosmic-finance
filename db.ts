@@ -1,8 +1,11 @@
+import { collection, getDocs, doc, setDoc, writeBatch, getDoc } from "firebase/firestore";
+import { firestore } from './services/firebase';
 import type { User, Transaction, Asset, Liability } from './types';
 import { TransactionType, AssetType } from './types';
 
-// Initial Mock Data for a multi-user setup
-const users: User[] = [
+
+// --- Initial Mock Data for Seeding ---
+const initialUsers: User[] = [
     {
         id: 'user1',
         name: 'Star Player',
@@ -46,38 +49,52 @@ const users: User[] = [
     }
 ];
 
-// Simulate API delay
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+// --- API Functions using Firebase ---
 
-
-// --- API Functions ---
+const seedInitialData = async () => {
+    console.log("Seeding initial data to Firestore...");
+    const batch = writeBatch(firestore);
+    initialUsers.forEach(user => {
+        const userRef = doc(firestore, "users", user.id);
+        batch.set(userRef, user);
+    });
+    await batch.commit();
+    console.log("Seeding complete.");
+    return initialUsers;
+};
 
 export const db = {
     getUsers: async (): Promise<User[]> => {
-        await delay(100);
-        return JSON.parse(JSON.stringify(users)); // Deep copy to prevent mutation
-    },
+        const usersCol = collection(firestore, 'users');
+        const userSnapshot = await getDocs(usersCol);
 
-    getUser: async (userId: string): Promise<User | undefined> => {
-        await delay(50);
-        const user = users.find(u => u.id === userId);
-        return user ? JSON.parse(JSON.stringify(user)) : undefined;
+        if (userSnapshot.empty) {
+            // If the database is empty, seed it with initial data
+            return await seedInitialData();
+        }
+
+        const userList = userSnapshot.docs.map(doc => doc.data() as User);
+        return userList;
     },
     
     addTransaction: async (userId: string, transaction: Omit<Transaction, 'id'>): Promise<User> => {
-        await delay(100);
-        const userIndex = users.findIndex(u => u.id === userId);
-        if (userIndex === -1) throw new Error("User not found");
+        const userRef = doc(firestore, 'users', userId);
+        const userSnap = await getDoc(userRef);
+
+        if (!userSnap.exists()) {
+            throw new Error("User not found");
+        }
+        
+        const user = userSnap.data() as User;
 
         const newTransaction: Transaction = {
             ...transaction,
             id: `t${new Date().getTime()}`,
         };
 
-        users[userIndex].financialStatement.transactions.push(newTransaction);
+        user.financialStatement.transactions.push(newTransaction);
         
-        // If it's an expense, reduce cash. If income, increase cash.
-        const cashAsset = users[userIndex].financialStatement.assets.find(a => a.type === AssetType.CASH);
+        let cashAsset = user.financialStatement.assets.find(a => a.type === AssetType.CASH);
         if (cashAsset) {
             if (newTransaction.type === TransactionType.INCOME) {
                 cashAsset.value += newTransaction.amount;
@@ -85,8 +102,7 @@ export const db = {
                 cashAsset.value -= newTransaction.amount;
             }
         } else {
-            // If no cash asset, create one.
-             users[userIndex].financialStatement.assets.push({
+             user.financialStatement.assets.push({
                  id: `a${new Date().getTime()}`,
                  name: 'Cash',
                  type: AssetType.CASH,
@@ -95,30 +111,38 @@ export const db = {
              });
         }
         
-        return JSON.parse(JSON.stringify(users[userIndex]));
+        await setDoc(userRef, user);
+        return user;
     },
 
     performTransfer: async (fromUserId: string, toUserId: string, amount: number): Promise<{fromUser: User, toUser: User}> => {
-        await delay(150);
-        const fromUserIndex = users.findIndex(u => u.id === fromUserId);
-        const toUserIndex = users.findIndex(u => u.id === toUserId);
+        const fromUserRef = doc(firestore, 'users', fromUserId);
+        const toUserRef = doc(firestore, 'users', toUserId);
+        
+        const batch = writeBatch(firestore);
 
-        if (fromUserIndex === -1 || toUserIndex === -1) throw new Error("User not found");
+        const fromUserSnap = await getDoc(fromUserRef);
+        const toUserSnap = await getDoc(toUserRef);
 
-        const fromUser = users[fromUserIndex];
-        const toUser = users[toUserIndex];
+        if (!fromUserSnap.exists() || !toUserSnap.exists()) {
+            throw new Error("User not found");
+        }
+
+        const fromUser = fromUserSnap.data() as User;
+        const toUser = toUserSnap.data() as User;
 
         const fromCash = fromUser.financialStatement.assets.find(a => a.type === AssetType.CASH);
-        const toCash = toUser.financialStatement.assets.find(a => a.type === AssetType.CASH);
-
-        if (!fromCash || fromCash.value < amount) throw new Error("Insufficient funds for transfer");
+        
+        if (!fromCash || fromCash.value < amount) {
+            throw new Error("Insufficient funds for transfer");
+        }
 
         fromCash.value -= amount;
         
+        const toCash = toUser.financialStatement.assets.find(a => a.type === AssetType.CASH);
         if (toCash) {
             toCash.value += amount;
         } else {
-            // Create cash asset for recipient if they don't have one
             toUser.financialStatement.assets.push({
                 id: `a${new Date().getTime()}`,
                 name: 'Cash',
@@ -128,7 +152,6 @@ export const db = {
             });
         }
         
-        // Add a transaction record for both users
         const transferTransactionOut: Transaction = {
             id: `t-out-${new Date().getTime()}`,
             description: `Transfer to ${toUser.name}`,
@@ -137,9 +160,9 @@ export const db = {
             category: 'Transfer',
             date: new Date().toISOString().split('T')[0]
         };
-         fromUser.financialStatement.transactions.push(transferTransactionOut);
+        fromUser.financialStatement.transactions.push(transferTransactionOut);
          
-         const transferTransactionIn: Transaction = {
+        const transferTransactionIn: Transaction = {
             id: `t-in-${new Date().getTime()}`,
             description: `Transfer from ${fromUser.name}`,
             amount: amount,
@@ -147,12 +170,13 @@ export const db = {
             category: 'Transfer',
             date: new Date().toISOString().split('T')[0]
         };
-         toUser.financialStatement.transactions.push(transferTransactionIn);
+        toUser.financialStatement.transactions.push(transferTransactionIn);
 
+        batch.set(fromUserRef, fromUser);
+        batch.set(toUserRef, toUser);
+        
+        await batch.commit();
 
-        return {
-            fromUser: JSON.parse(JSON.stringify(fromUser)),
-            toUser: JSON.parse(JSON.stringify(toUser))
-        };
+        return { fromUser, toUser };
     }
 };
