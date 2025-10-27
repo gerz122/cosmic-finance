@@ -8,23 +8,57 @@ declare global {
 
 interface EmbeddedStockChartProps {
     ticker: string;
+    height?: string;
+    takeProfit?: number;
+    stopLoss?: number;
 }
 
-const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker }) => {
+const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height = '400px', takeProfit, stopLoss }) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const widgetLoaded = useRef(false);
+    const widgetRef = useRef<any>(null); // To hold the widget instance
 
     useEffect(() => {
-        if (widgetLoaded.current || !containerRef.current || !window.TradingView) {
-            return;
-        }
-
         const createWidget = () => {
-            if (!containerRef.current) return;
-            
-            // Clear container and create widget
+            if (!containerRef.current || !window.TradingView) return;
+
+            // Clear previous widget if it exists
             containerRef.current.innerHTML = '';
-            new window.TradingView.widget({
+
+            // FIX: Explicitly type 'studies' as any[] to allow pushing objects into it.
+            const studies: any[] = [
+                "MAExp@tv-basicstudies",
+                "MACD@tv-basicstudies",
+                "RSI@tv-basicstudies",
+                "Volume@tv-basicstudies"
+            ];
+
+            if (takeProfit) {
+                studies.push({
+                    id: "hline@tv-basicstudies",
+                    description: "Take Profit",
+                    inputs: { price: takeProfit },
+                    styles: { "hline.linecolor": "#22c55e", "hline.linestyle": 2, "hline.linewidth": 2 },
+                    // Not a standard feature, but some widget versions might support it
+                    // @ts-ignore
+                    priceAxisProperties: {
+                        "color": "#22c55e"
+                    }
+                });
+            }
+            if (stopLoss) {
+                studies.push({
+                    id: "hline@tv-basicstudies",
+                    description: "Stop Loss",
+                    inputs: { price: stopLoss },
+                    styles: { "hline.linecolor": "#ef4444", "hline.linestyle": 2, "hline.linewidth": 2 },
+                     // @ts-ignore
+                    priceAxisProperties: {
+                        "color": "#ef4444"
+                    }
+                });
+            }
+            
+            widgetRef.current = new window.TradingView.widget({
                 "autosize": true,
                 "symbol": ticker,
                 "interval": "D",
@@ -32,30 +66,40 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker }) => {
                 "theme": "dark",
                 "style": "1",
                 "locale": "en",
-                "toolbar_bg": "#f1f3f6",
+                "toolbar_bg": "#161B22",
                 "enable_publishing": false,
                 "hide_side_toolbar": true,
                 "allow_symbol_change": true,
                 "details": true,
-                "studies": [
-                    "MAExp@tv-basicstudies",
-                    "MACD@tv-basicstudies",
-                    "RSI@tv-basicstudies",
-                    "Volume@tv-basicstudies"
-                ],
-                "container_id": containerRef.current.id
+                "studies": studies,
+                "container_id": containerRef.current.id,
+                "backgroundColor": "rgba(13, 17, 23, 1)",
+                "gridColor": "rgba(48, 54, 61, 0.5)",
             });
-            widgetLoaded.current = true;
         };
         
-        createWidget();
+        // Use a timeout to ensure the TradingView script has loaded
+        const scriptCheck = setInterval(() => {
+            if (window.TradingView) {
+                clearInterval(scriptCheck);
+                createWidget();
+            }
+        }, 100);
 
-    }, [ticker]);
+        return () => {
+            clearInterval(scriptCheck);
+            if (widgetRef.current && typeof widgetRef.current.remove === 'function') {
+                widgetRef.current.remove();
+                widgetRef.current = null;
+            }
+        };
+
+    }, [ticker, takeProfit, stopLoss]);
 
     const containerId = `tv-advanced-chart-container-${ticker}-${Math.random().toString(36).substring(7)}`;
 
     return (
-        <div className="tradingview-widget-container" style={{ height: '400px', width: '100%' }}>
+        <div className="tradingview-widget-container" style={{ height: height, width: '100%' }}>
             <div id={containerId} ref={containerRef} style={{ height: '100%', width: '100%' }} />
         </div>
     );

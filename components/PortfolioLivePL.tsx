@@ -7,7 +7,7 @@ interface PortfolioLivePLProps {
 }
 
 export const PortfolioLivePL: React.FC<PortfolioLivePLProps> = ({ stocks }) => {
-    const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+    const [livePrices, setLivePrices] = useState<Record<string, number | null>>({});
     const [pricesLoaded, setPricesLoaded] = useState<Set<string>>(new Set());
 
     const handleDataUpdate = (stockId: string, data: LiveStockData) => {
@@ -18,21 +18,21 @@ export const PortfolioLivePL: React.FC<PortfolioLivePLProps> = ({ stocks }) => {
     const totalPL = useMemo(() => {
         return stocks.reduce((acc, stock) => {
             const livePrice = livePrices[stock.id];
-            if (livePrice && stock.purchasePrice && stock.shares) {
-                const pl = (livePrice - stock.purchasePrice) * stock.shares;
+            // FIX: Use numberOfShares for calculation
+            if (livePrice && stock.purchasePrice && stock.numberOfShares) {
+                const pl = (livePrice - stock.purchasePrice) * stock.numberOfShares;
                 return acc + pl;
             }
             return acc;
         }, 0);
     }, [livePrices, stocks]);
     
-    // Render hidden providers for each stock
     const dataProviders = stocks.map(stock => (
-        <StockPriceProvider 
+        stock.ticker ? <StockPriceProvider 
             key={stock.id} 
-            ticker={stock.ticker!} 
+            ticker={stock.ticker} 
             onDataUpdate={(data) => handleDataUpdate(stock.id, data)}
-        />
+        /> : null
     ));
 
     if (stocks.length === 0) {

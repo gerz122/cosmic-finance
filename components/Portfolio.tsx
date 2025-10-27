@@ -1,17 +1,19 @@
-
-
 import React from 'react';
-import type { FinancialStatement, Asset } from '../types';
+import type { User, Asset, Team } from '../types';
 import { AssetType } from '../types';
 import { StockTableRow } from './StockTableRow';
+import { PlusIcon } from './icons';
 
 interface PortfolioProps {
-    statement: FinancialStatement;
+    user: User;
+    teams: Team[];
     onAddStock: () => void;
+    onAddAsset: () => void;
+    onAddLiability: () => void;
     onEditStock: (stock: Asset) => void;
     onDeleteStock: (stockId: string) => void;
     onLogDividend: (stock: Asset) => void;
-    onOpenLargeChart: (ticker: string) => void;
+    onOpenLargeChart: (stock: Asset) => void;
 }
 
 const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ title, value, color }) => (
@@ -21,36 +23,48 @@ const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ 
     </div>
 );
 
-export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onEditStock, onDeleteStock, onLogDividend, onOpenLargeChart }) => {
-    const { assets, liabilities } = statement;
-    const stocks = assets.filter(a => a.type === AssetType.STOCK);
-    const otherAssets = assets.filter(a => a.type !== AssetType.STOCK);
+export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, onAddAsset, onAddLiability, onEditStock, onDeleteStock, onLogDividend, onOpenLargeChart }) => {
     
-    const totalStockValue = stocks.reduce((sum, s) => sum + s.value, 0);
-    const totalOtherAssetsValue = otherAssets.reduce((sum, a) => sum + a.value, 0);
-    const totalLiabilities = liabilities.reduce((sum, l) => sum + l.balance, 0);
+    const assets = user.financialStatement?.assets || [];
+    const liabilities = user.financialStatement?.liabilities || [];
+    
+    const personalStocks = assets.filter(a => a.type === AssetType.STOCK && !a.teamId);
+    const personalOtherAssets = assets.filter(a => a.type !== AssetType.STOCK && !a.teamId);
+    const personalLiabilities = liabilities.filter(l => !l.teamId);
+    
+    const totalStockValue = personalStocks.reduce((sum, s) => sum + s.value, 0);
+    const totalOtherAssetsValue = personalOtherAssets.reduce((sum, a) => sum + a.value, 0);
+    const totalLiabilitiesValue = personalLiabilities.reduce((sum, l) => sum + l.balance, 0);
 
     return (
         <div className="animate-fade-in space-y-8">
             <div className="flex justify-between items-center flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-cosmic-text-primary">Portfolio</h1>
-                    <p className="text-cosmic-text-secondary">Manage your assets and liabilities.</p>
+                    <p className="text-cosmic-text-secondary">Manage your personal and team assets and liabilities.</p>
                 </div>
-                 <button onClick={onAddStock} className="bg-cosmic-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-400 transition-colors">
-                    Add Stock
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={onAddLiability} className="flex items-center gap-2 bg-cosmic-surface text-cosmic-secondary font-bold py-2 px-4 rounded-lg border border-cosmic-secondary hover:bg-cosmic-border transition-colors">
+                        <PlusIcon className="w-5 h-5" /> Add Liability
+                    </button>
+                     <button onClick={onAddAsset} className="flex items-center gap-2 bg-cosmic-surface text-cosmic-primary font-bold py-2 px-4 rounded-lg border border-cosmic-primary hover:bg-cosmic-border transition-colors">
+                        <PlusIcon className="w-5 h-5" /> Add Asset
+                    </button>
+                    <button onClick={onAddStock} className="flex items-center gap-2 bg-cosmic-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-400 transition-colors">
+                        <PlusIcon className="w-5 h-5" /> Add Stock
+                    </button>
+                </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard title="Stock Portfolio Value" value={`$${totalStockValue.toLocaleString()}`} color="text-cosmic-success" />
-                <StatCard title="Other Assets Value" value={`$${totalOtherAssetsValue.toLocaleString()}`} color="text-cosmic-primary" />
-                <StatCard title="Total Liabilities" value={`-$${totalLiabilities.toLocaleString()}`} color="text-cosmic-danger" />
+                <StatCard title="Personal Stock Value" value={`$${totalStockValue.toLocaleString()}`} color="text-cosmic-success" />
+                <StatCard title="Personal Assets Value" value={`$${totalOtherAssetsValue.toLocaleString()}`} color="text-cosmic-primary" />
+                <StatCard title="Personal Liabilities" value={`-$${totalLiabilitiesValue.toLocaleString()}`} color="text-cosmic-danger" />
             </div>
 
             {/* Stocks Section */}
             <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
-                <h2 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Stock Investments</h2>
+                <h2 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Personal Stock Investments</h2>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-cosmic-text-secondary">
                         <thead className="text-xs text-cosmic-text-secondary uppercase bg-cosmic-bg">
@@ -67,7 +81,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
                             </tr>
                         </thead>
                         <tbody>
-                            {stocks.map(stock => (
+                            {personalStocks.map(stock => (
                                 <StockTableRow 
                                     key={stock.id}
                                     stock={stock}
@@ -77,9 +91,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
                                     onOpenLargeChart={onOpenLargeChart}
                                 />
                             ))}
-                             {stocks.length === 0 && (
+                             {personalStocks.length === 0 && (
                                 <tr>
-                                    <td colSpan={9} className="text-center py-4">No stocks in portfolio.</td>
+                                    <td colSpan={9} className="text-center py-4">No personal stocks in portfolio.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -87,33 +101,58 @@ export const Portfolio: React.FC<PortfolioProps> = ({ statement, onAddStock, onE
                 </div>
             </div>
             
-            {/* Other Assets and Liabilities */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                  <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
-                     <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Other Assets</h3>
+                     <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Personal Assets</h3>
                      <div className="p-4 space-y-2">
-                        {otherAssets.map(asset => (
-                             <div key={asset.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
-                                <span>{asset.name} ({asset.type})</span>
-                                <span className="font-semibold">${asset.value.toLocaleString()}</span>
-                            </div>
-                        ))}
-                         {otherAssets.length === 0 && <p className="text-xs text-cosmic-text-secondary">No other assets.</p>}
+                        {personalOtherAssets.map(asset => ( <div key={asset.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1"><span>{asset.name} ({asset.type})</span><span className="font-semibold">${asset.value.toLocaleString()}</span></div>))}
+                        {personalOtherAssets.length === 0 && <p className="text-xs text-cosmic-text-secondary">No other personal assets.</p>}
                      </div>
                 </div>
                  <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
-                     <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Liabilities</h3>
+                     <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Personal Liabilities</h3>
                      <div className="p-4 space-y-2">
-                        {liabilities.map(lia => (
-                             <div key={lia.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
-                                <span>{lia.name}</span>
-                                <span className="font-semibold text-cosmic-danger">-${lia.balance.toLocaleString()}</span>
-                            </div>
-                        ))}
-                        {liabilities.length === 0 && <p className="text-xs text-cosmic-text-secondary">No liabilities.</p>}
+                        {personalLiabilities.map(lia => ( <div key={lia.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1"><span>{lia.name}</span><span className="font-semibold text-cosmic-danger">-${lia.balance.toLocaleString()}</span></div>))}
+                        {personalLiabilities.length === 0 && <p className="text-xs text-cosmic-text-secondary">No personal liabilities.</p>}
                      </div>
                 </div>
             </div>
+
+            {teams.map(team => {
+                const userShare = 1 / team.memberIds.length;
+                return (
+                <div key={team.id} className="bg-cosmic-surface rounded-lg border border-cosmic-border">
+                    <h2 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Team Portfolio: {team.name}</h2>
+                     <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div>
+                            <h3 className="font-bold text-cosmic-primary mb-2">Team Assets</h3>
+                            {team.financialStatement.assets.map(asset => (
+                            <div key={asset.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
+                                <span>{asset.name} ({asset.type})</span>
+                                <div className="text-right">
+                                    <span className="font-semibold">${asset.value.toLocaleString()}</span>
+                                    <span className="text-xs text-cosmic-text-secondary ml-2">(Your share: ${(asset.value * userShare).toLocaleString()})</span>
+                                </div>
+                            </div>
+                            ))}
+                            {team.financialStatement.assets.length === 0 && <p className="text-xs text-cosmic-text-secondary">No assets for this team.</p>}
+                          </div>
+                           <div>
+                            <h3 className="font-bold text-cosmic-secondary mb-2">Team Liabilities</h3>
+                            {team.financialStatement.liabilities.map(lia => (
+                            <div key={lia.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
+                                <span>{lia.name}</span>
+                                <div className="text-right">
+                                    <span className="font-semibold text-cosmic-danger">-${lia.balance.toLocaleString()}</span>
+                                     <span className="text-xs text-cosmic-text-secondary ml-2">(Your share: -${(lia.balance * userShare).toLocaleString()})</span>
+                                </div>
+                            </div>
+                            ))}
+                            {team.financialStatement.liabilities.length === 0 && <p className="text-xs text-cosmic-text-secondary">No liabilities for this team.</p>}
+                          </div>
+                     </div>
+                </div>
+            )})}
 
         </div>
     );

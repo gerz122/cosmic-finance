@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 // FIX: Use Firebase v8 compat imports to resolve the 'initializeApp' export error.
-import firebase from "firebase/app";
-import "firebase/firestore";
+import firebase from "firebase/compat/app";
+import "firebase/compat/firestore";
 
 // Your web app's Firebase configuration from your prompt
 const firebaseConfig = {

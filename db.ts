@@ -1,429 +1,407 @@
-// FIX: Remove v9 firestore imports as they are replaced by v8 namespaced API.
 import { firestore } from './services/firebase';
-import type { User, Transaction, Asset, Liability, EventOutcome, Share } from './types';
-import { TransactionType, AssetType } from './types';
+import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, PaymentShare, ExpenseShare } from './types';
+import { TransactionType, AssetType, AccountType } from './types';
 
 
-// --- Initial Mock Data for Seeding ---
-const initialUsers: User[] = [
-    {
-        id: 'user1',
-        name: 'Star Player',
-        avatar: 'https://i.pravatar.cc/150?u=user1',
-        financialStatement: {
-            transactions: [
-                { id: 't1', description: 'Salary', amount: 5000, type: TransactionType.INCOME, category: 'Job', date: '2023-10-01', isPassive: false },
-                { id: 't2', description: 'Rental Income', amount: 600, type: TransactionType.INCOME, category: 'Real Estate', date: '2023-10-05', isPassive: true },
-                { id: 't3', description: 'Rent', amount: 1500, type: TransactionType.EXPENSE, category: 'Housing', date: '2023-10-01' },
-                { id: 't4', description: 'Groceries', amount: 400, type: TransactionType.EXPENSE, category: 'Food', date: '2023-10-03' },
+const initialData = {
+    users: [
+        {
+            id: 'user1',
+            name: 'Star Player',
+            avatar: 'https://i.pravatar.cc/150?u=user1',
+            teamIds: ['team1', 'team2'],
+        },
+        {
+            id: 'user2',
+            name: 'Cosmic Partner',
+            avatar: 'https://i.pravatar.cc/150?u=user2',
+            teamIds: ['team1', 'team2'],
+        },
+        {
+            id: 'user3',
+            name: 'Nova Investor',
+            avatar: 'https://i.pravatar.cc/150?u=user3',
+            teamIds: ['team2'],
+        }
+    ],
+    accounts: [
+        // User 1
+        { id: 'acc1-u1', name: 'Personal Checking', type: AccountType.CHECKING, balance: 10000, ownerIds: ['user1'] },
+        { id: 'acc2-u1', name: 'Galaxy Brokerage', type: AccountType.INVESTMENT, balance: 0, ownerIds: ['user1'] },
+        // User 2
+        { id: 'acc1-u2', name: 'Partner Checking', type: AccountType.CHECKING, balance: 15000, ownerIds: ['user2'] },
+        // User 3
+        { id: 'acc1-u3', name: 'Investor Savings', type: AccountType.SAVINGS, balance: 50000, ownerIds: ['user3'] },
+        { id: 'acc2-u3', name: 'Trading Account', type: AccountType.INVESTMENT, balance: 0, ownerIds: ['user3'] },
+    ],
+    teams: [
+        {
+            id: 'team1',
+            name: 'Family Finances',
+            memberIds: ['user1', 'user2'],
+            goals: [{ description: 'Save for Vacation', current: 500, target: 5000 }],
+            accounts: [
+                { id: 'acc-team1-1', name: 'Household Expenses', type: AccountType.CHECKING, balance: 3000, ownerIds: [], teamId: 'team1' },
             ],
+            financialStatement: {
+                transactions: [
+                     { id: 't-team1-1', description: 'Groceries', amount: 400, type: TransactionType.EXPENSE, category: 'Food', date: '2023-10-05', teamId: 'team1', paymentShares: [{ userId: 'user1', accountId: 'acc-team1-1', amount: 400 }], expenseShares: [{ userId: 'user1', amount: 200 }, { userId: 'user2', amount: 200 }] },
+                     { id: 't-team1-2', description: 'Electricity Bill', amount: 150, type: TransactionType.EXPENSE, category: 'Utilities', date: '2023-10-06', teamId: 'team1', paymentShares: [{ userId: 'user2', accountId: 'acc-team1-1', amount: 150 }], expenseShares: [{ userId: 'user1', amount: 75 }, { userId: 'user2', amount: 75 }] },
+                     { id: 't-team1-3', description: 'Internet Bill', amount: 80, type: TransactionType.EXPENSE, category: 'Utilities', date: '2023-10-10', teamId: 'team1', paymentShares: [{ userId: 'user1', accountId: 'acc-team1-1', amount: 80 }], expenseShares: [{ userId: 'user1', amount: 40 }, { userId: 'user2', amount: 40 }] }
+                ],
+                assets: [
+                    { id: 'a-team1-1', name: 'Family Home', type: AssetType.REAL_ESTATE, value: 400000, monthlyCashflow: 0, teamId: 'team1' },
+                ],
+                liabilities: [
+                    { id: 'l-team1-1', name: 'Mortgage', balance: 250000, interestRate: 3.5, monthlyPayment: 1800, teamId: 'team1' },
+                ]
+            }
+        },
+        {
+            id: 'team2',
+            name: 'Startup Project',
+            memberIds: ['user1', 'user2', 'user3'],
+            goals: [{ description: 'Launch MVP', current: 1000, target: 10000 }],
+            accounts: [
+                { id: 'acc-team2-1', name: 'Startup Checking', type: AccountType.CHECKING, balance: 5000, ownerIds: [], teamId: 'team2' }
+            ],
+            financialStatement: { 
+                transactions: [
+                    { id: 't-team2-1', description: 'Server Costs', amount: 100, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-12', teamId: 'team2', paymentShares: [{ userId: 'user1', accountId: 'acc-team2-1', amount: 100 }], expenseShares: [{ userId: 'user1', amount: 50 }, { userId: 'user2', amount: 50 }] },
+                    { id: 't-team2-2', description: 'Software License', amount: 300, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-15', teamId: 'team2', paymentShares: [{ userId: 'user3', accountId: 'acc-team2-1', amount: 300 }], expenseShares: [{ userId: 'user1', amount: 100 }, { userId: 'user2', amount: 100 }, { userId: 'user3', amount: 100 }] },
+                    { id: 't-team2-3', description: 'Client Pre-payment', amount: 2000, type: TransactionType.INCOME, category: 'Business Income', date: '2023-10-20', teamId: 'team2', isPassive: false, paymentShares: [{ userId: 'user1', accountId: 'acc-team2-1', amount: 2000 }] },
+                ], 
+                assets: [
+                     { id: 'a-team2-1', name: 'Software IP', type: AssetType.BUSINESS, value: 25000, monthlyCashflow: 0, teamId: 'team2' },
+                ], 
+                liabilities: [
+                    { id: 'l-team2-1', name: 'Angel Investor Loan', balance: 10000, interestRate: 8.0, monthlyPayment: 200, teamId: 'team2' },
+                ] 
+            }
+        }
+    ],
+    baseStatements: {
+        user1: {
             assets: [
-                { id: 'a1', name: 'Rental Property', type: AssetType.REAL_ESTATE, value: 120000, monthlyCashflow: 600 },
-                { id: 'a2', name: 'Galactic Holdings Inc.', type: AssetType.STOCK, value: 25000, monthlyCashflow: 100, ticker: 'GHI', shares: 100, purchasePrice: 250 },
-                { id: 'a3', name: 'Cash', type: AssetType.CASH, value: 10000, monthlyCashflow: 0 },
+                { id: 'a2', name: 'Galactic Holdings Inc.', type: AssetType.STOCK, value: 15000, monthlyCashflow: 50, ticker: 'GHI', numberOfShares: 100, purchasePrice: 150 },
+                { id: 'a3', name: 'Tesla', type: AssetType.STOCK, value: 10000, monthlyCashflow: 0, ticker: 'TSLA', numberOfShares: 40, purchasePrice: 250 },
             ],
             liabilities: [
-                { id: 'l1', name: 'Mortgage', balance: 95000, interestRate: 3.5, monthlyPayment: 450 },
                 { id: 'l2', name: 'Car Loan', balance: 12000, interestRate: 5.0, monthlyPayment: 350 },
             ],
-        },
-    },
-    {
-        id: 'user2',
-        name: 'Cosmic Partner',
-        avatar: 'https://i.pravatar.cc/150?u=user2',
-        financialStatement: {
             transactions: [
-                 { id: 't1-u2', description: 'Freelance Work', amount: 3500, type: TransactionType.INCOME, category: 'Job', date: '2023-10-01', isPassive: false },
-                 { id: 't2-u2', description: 'Student Loan', amount: 400, type: TransactionType.EXPENSE, category: 'Loan', date: '2023-10-05' },
-                 { id: 't3-u2', description: 'Groceries', amount: 350, type: TransactionType.EXPENSE, category: 'Food', date: '2023-10-03' },
-            ],
-            assets: [
-                { id: 'a1-u2', name: 'Emergency Fund', type: AssetType.CASH, value: 15000, monthlyCashflow: 0 },
-                { id: 'a2-u2', name: 'Nebula Corp', type: AssetType.STOCK, value: 32000, monthlyCashflow: 0, ticker: 'NBLA', shares: 200, purchasePrice: 160 },
+                { id: 't1-u1', description: 'Salary', amount: 5000, type: TransactionType.INCOME, category: 'Job', date: '2023-10-01', isPassive: false, paymentShares: [{ userId: 'user1', accountId: 'acc1-u1', amount: 5000 }] },
+                { id: 't2-u1', description: 'Dinner with Partner', amount: 120, type: TransactionType.EXPENSE, category: 'Food', date: '2023-10-02', paymentShares: [{ userId: 'user1', accountId: 'acc1-u1', amount: 120 }], expenseShares: [{ userId: 'user1', amount: 60 }, { userId: 'user2', amount: 60 }] },
+                { id: 't3-u1', description: 'Movie Night', amount: 50, type: TransactionType.EXPENSE, category: 'Entertainment', date: '2023-10-08', paymentShares: [{ userId: 'user1', accountId: 'acc1-u1', amount: 50 }], expenseShares: [{ userId: 'user1', amount: 25 }, { userId: 'user3', amount: 25 }] },
+                { id: 't4-u1', description: 'GHI Dividend', amount: 50, type: TransactionType.INCOME, category: 'Investment', date: '2023-10-15', isPassive: true, paymentShares: [{ userId: 'user1', accountId: 'acc1-u1', amount: 50 }] },
+            ]
+        },
+        user2: {
+             assets: [
+                { id: 'a2-u2', name: 'Nebula Corp', type: AssetType.STOCK, value: 32000, monthlyCashflow: 0, ticker: 'NBLA', numberOfShares: 200, purchasePrice: 160 },
             ],
             liabilities: [
                  { id: 'l1-u2', name: 'Student Loan', balance: 25000, interestRate: 6.0, monthlyPayment: 400 },
             ],
+            transactions: [
+                 { id: 't1-u2', description: 'Freelance Work', amount: 3500, type: TransactionType.INCOME, category: 'Job', date: '2023-10-01', isPassive: false, paymentShares: [{ userId: 'user2', accountId: 'acc1-u2', amount: 3500 }] },
+                 { id: 't2-u2', description: 'Lunch with Investor', amount: 90, type: TransactionType.EXPENSE, category: 'Food', date: '2023-10-18', paymentShares: [{ userId: 'user2', accountId: 'acc1-u2', amount: 90 }], expenseShares: [{ userId: 'user2', amount: 45 }, { userId: 'user3', amount: 45 }] },
+            ]
         },
+        user3: {
+             assets: [
+                { id: 'a1-u3', name: 'Apple Inc.', type: AssetType.STOCK, value: 50000, monthlyCashflow: 100, ticker: 'AAPL', numberOfShares: 300, purchasePrice: 140 },
+             ],
+            liabilities: [],
+            transactions: [
+                 { id: 't1-u3', description: 'Consulting Gig', amount: 6000, type: TransactionType.INCOME, category: 'Job', date: '2023-10-03', isPassive: false, paymentShares: [{ userId: 'user3', accountId: 'acc1-u3', amount: 6000 }] },
+                 { id: 't2-u3', description: 'AAPL Dividend', amount: 100, type: TransactionType.INCOME, category: 'Investment', date: '2023-10-20', isPassive: true, paymentShares: [{ userId: 'user3', accountId: 'acc1-u3', amount: 100 }] },
+            ]
+        }
     }
-];
+};
 
-// --- API Functions using Firebase ---
 
 const seedInitialData = async () => {
-    console.log("Seeding initial data to Firestore...");
-    // FIX: Use Firebase v8 batch syntax
+    console.log("Seeding initial, extensive data to Firestore...");
     const batch = firestore.batch();
-    initialUsers.forEach(user => {
-        // FIX: Use Firebase v8 doc reference syntax
+
+    // Create combined user objects
+    const finalUsers: User[] = initialData.users.map(u => {
+        const userAccounts = initialData.accounts.filter(acc => acc.ownerIds.includes(u.id));
+        const baseStatement = initialData.baseStatements[u.id as keyof typeof initialData.baseStatements] || { assets: [], liabilities: [], transactions: [] };
+        return {
+            ...u,
+            accounts: userAccounts,
+            financialStatement: {
+                assets: baseStatement.assets,
+                liabilities: baseStatement.liabilities,
+                transactions: baseStatement.transactions,
+            }
+        };
+    });
+
+    finalUsers.forEach(user => {
         const userRef = firestore.collection("users").doc(user.id);
         batch.set(userRef, user);
     });
+
+    initialData.teams.forEach(team => {
+        const teamRef = firestore.collection("teams").doc(team.id);
+        batch.set(teamRef, team);
+    });
+
     await batch.commit();
     console.log("Seeding complete.");
-    return initialUsers;
+    return finalUsers;
 };
+
+const sanitizeUser = (user: any): User => ({
+    ...user,
+    accounts: user.accounts || [],
+    teamIds: user.teamIds || [],
+    financialStatement: {
+        transactions: user.financialStatement?.transactions || [],
+        assets: user.financialStatement?.assets || [],
+        liabilities: user.financialStatement?.liabilities || [],
+    },
+});
 
 export const db = {
     getUsers: async (): Promise<User[]> => {
-        // FIX: Use Firebase v8 collection and get syntax
         const usersCol = firestore.collection('users');
         const userSnapshot = await usersCol.get();
+        if (userSnapshot.empty) return await seedInitialData();
+        return userSnapshot.docs.map(doc => sanitizeUser(doc.data()));
+    },
 
-        if (userSnapshot.empty) {
-            // If the database is empty, seed it with initial data
-            return await seedInitialData();
-        }
-
-        const userList = userSnapshot.docs.map(doc => doc.data() as User);
-        return userList;
+    getTeamsForUser: async(userId: string): Promise<Team[]> => {
+        const teamsCol = firestore.collection('teams');
+        const teamSnapshot = await teamsCol.where('memberIds', 'array-contains', userId).get();
+        if(teamSnapshot.empty) return [];
+        return teamSnapshot.docs.map(doc => doc.data() as Team);
     },
     
-    addTransaction: async (
-        activeUserId: string, 
-        transaction: Omit<Transaction, 'id'>, 
-        teamMembers: User[]
-    ): Promise<{ updatedPayer: User, updatedReceivers: User[] }> => {
-        
-        const newTransaction: Transaction = {
-            ...transaction,
-            id: `t${new Date().getTime()}`,
+    createTeam: async(name: string, memberIds: string[]): Promise<Team> => {
+        const teamRef = firestore.collection('teams').doc();
+        const newTeam: Team = {
+            id: teamRef.id,
+            name,
+            memberIds,
+            accounts: [],
+            financialStatement: { transactions: [], assets: [], liabilities: [] },
+            goals: [{ description: `Achieve Net Worth of $100,000`, current: 0, target: 100000 }]
         };
+        await teamRef.set(newTeam);
+        return newTeam;
+    },
 
-        // FIX: Use Firebase v8 batch syntax
+    addAccount: async (userId: string, accountData: Omit<Account, 'id' | 'ownerIds'>): Promise<User> => {
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        const newAccount: Account = { ...accountData, id: `acc-${new Date().getTime()}`, ownerIds: [userId] };
+        user.accounts.push(newAccount);
+        await userRef.set(user);
+        return user;
+    },
+
+    addTransaction: async (activeUserId: string, transaction: Omit<Transaction, 'id'>, allUsers: User[]): Promise<User[]> => {
         const batch = firestore.batch();
+        const usersToUpdate = new Map<string, User>();
+        const newTransaction: Transaction = { ...transaction, id: `t-${new Date().getTime()}` };
 
-        const payerId = newTransaction.isShared ? newTransaction.payerId! : activeUserId;
-        
-        // --- Process Payer ---
-        // FIX: Use Firebase v8 doc reference and get syntax
-        const payerRef = firestore.collection('users').doc(payerId);
-        const payerSnap = await payerRef.get();
-        if (!payerSnap.exists) throw new Error("Payer not found");
-        const payer = payerSnap.data() as User;
-        
-        const payerCash = payer.financialStatement.assets.find(a => a.type === AssetType.CASH);
-        
-        // Adjust payer's cash by the FULL transaction amount
-        if (newTransaction.type === TransactionType.INCOME) {
-            if (payerCash) payerCash.value += newTransaction.amount;
-            else payer.financialStatement.assets.push({ id: `a-cash-${new Date().getTime()}`, name: 'Cash', type: AssetType.CASH, value: newTransaction.amount, monthlyCashflow: 0 });
-        } else { // Expense
-            if (!payerCash || payerCash.value < newTransaction.amount) throw new Error("Payer has insufficient funds.");
-            payerCash.value -= newTransaction.amount;
+        // Helper to get a user, prioritizing already modified ones
+        const getUser = (id: string) => usersToUpdate.get(id) || allUsers.find(u => u.id === id);
+
+        // 1. Process payments (debit/credit accounts)
+        for (const payment of newTransaction.paymentShares) {
+            const payer = getUser(payment.userId);
+            if (!payer) throw new Error(`User ${payment.userId} not found.`);
+            const account = payer.accounts.find(a => a.id === payment.accountId);
+            if (!account) throw new Error(`Account ${payment.accountId} not found for user ${payer.name}.`);
+
+            if (newTransaction.type === TransactionType.INCOME) account.balance += payment.amount;
+            else account.balance -= payment.amount;
+            
+            usersToUpdate.set(payer.id, sanitizeUser(payer));
         }
 
-        // --- Process all involved users (for shared transactions) ---
-        let involvedUserIds: Set<string>;
-        if (newTransaction.isShared && newTransaction.shares) {
-            involvedUserIds = new Set(newTransaction.shares.map(s => s.userId));
-        } else {
-            involvedUserIds = new Set([activeUserId]);
-        }
-        
-        const updatedReceivers: User[] = [];
+        // 2. Add transaction to relevant financial statements
+        const involvedUserIds = new Set<string>(
+            newTransaction.type === TransactionType.EXPENSE && newTransaction.expenseShares
+                ? newTransaction.expenseShares.map(s => s.userId)
+                : newTransaction.paymentShares.map(s => s.userId)
+        );
 
         for (const userId of involvedUserIds) {
-            let user: User;
-            // If the current user is the payer, we already have their data.
-            if(userId === payer.id) {
-                user = payer;
-            } else {
-                // FIX: Use Firebase v8 doc reference and get syntax
-                const userRef = firestore.collection('users').doc(userId);
-                const userSnap = await userRef.get();
-                if (!userSnap.exists) continue; // Skip if user not found
-                user = userSnap.data() as User;
-            }
-
-            // Add the transaction to everyone's statement for record-keeping
+            const user = getUser(userId);
+            if (!user) throw new Error(`User ${userId} not found.`);
             user.financialStatement.transactions.push(newTransaction);
-            // FIX: Use Firebase v8 batch set syntax with doc reference
-            const userDocRef = firestore.collection('users').doc(user.id);
-            batch.set(userDocRef, user);
-            if(user.id !== payer.id) updatedReceivers.push(user);
+            usersToUpdate.set(user.id, sanitizeUser(user));
         }
         
-        // Make sure the payer is also updated in the batch, especially if they are the only one involved.
-        batch.set(payerRef, payer);
+        // 3. Commit all changes
+        for (const user of usersToUpdate.values()) {
+            const userRef = firestore.collection('users').doc(user.id);
+            batch.set(userRef, user);
+        }
 
         await batch.commit();
-
-        return { updatedPayer: payer, updatedReceivers };
+        return Array.from(usersToUpdate.values());
     },
 
-    performTransfer: async (fromUserId: string, toUserId: string, amount: number): Promise<{fromUser: User, toUser: User}> => {
-        // FIX: Use Firebase v8 doc reference syntax
-        const fromUserRef = firestore.collection('users').doc(fromUserId);
-        const toUserRef = firestore.collection('users').doc(toUserId);
-        
-        // FIX: Use Firebase v8 batch syntax
-        const batch = firestore.batch();
 
-        // FIX: Use Firebase v8 get syntax on doc reference
-        const fromUserSnap = await fromUserRef.get();
-        const toUserSnap = await toUserRef.get();
+    addTeamTransaction: async (transaction: Omit<Transaction, 'id'>): Promise<Team> => {
+        if(!transaction.teamId) throw new Error("Team ID is required for team transaction.");
+        const teamRef = firestore.collection('teams').doc(transaction.teamId);
+        const teamSnap = await teamRef.get();
+        if(!teamSnap.exists) throw new Error("Team not found");
+        const team = teamSnap.data() as Team;
 
-        if (!fromUserSnap.exists || !toUserSnap.exists) {
-            throw new Error("User not found");
-        }
-
-        const fromUser = fromUserSnap.data() as User;
-        const toUser = toUserSnap.data() as User;
-
-        const fromCash = fromUser.financialStatement.assets.find(a => a.type === AssetType.CASH);
-        
-        if (!fromCash || fromCash.value < amount) {
-            throw new Error("Insufficient funds for transfer");
-        }
-
-        fromCash.value -= amount;
-        
-        const toCash = toUser.financialStatement.assets.find(a => a.type === AssetType.CASH);
-        if (toCash) {
-            toCash.value += amount;
-        } else {
-            toUser.financialStatement.assets.push({
-                id: `a${new Date().getTime()}`,
-                name: 'Cash',
-                type: AssetType.CASH,
-                value: amount,
-                monthlyCashflow: 0
-            });
+        for (const payment of transaction.paymentShares) {
+             const account = team.accounts.find(a => a.id === payment.accountId);
+            if(!account) throw new Error(`Account not found in team.`);
+            if (transaction.type === TransactionType.INCOME) account.balance += payment.amount;
+            else account.balance -= payment.amount;
         }
         
-        const transferTransactionOut: Transaction = {
-            id: `t-out-${new Date().getTime()}`,
-            description: `Transfer to ${toUser.name}`,
-            amount: amount,
-            type: TransactionType.EXPENSE,
-            category: 'Transfer',
-            date: new Date().toISOString().split('T')[0]
-        };
-        fromUser.financialStatement.transactions.push(transferTransactionOut);
-         
-        const transferTransactionIn: Transaction = {
-            id: `t-in-${new Date().getTime()}`,
-            description: `Transfer from ${fromUser.name}`,
-            amount: amount,
-            type: TransactionType.INCOME,
-            category: 'Transfer',
-            date: new Date().toISOString().split('T')[0]
-        };
-        toUser.financialStatement.transactions.push(transferTransactionIn);
+        const newTransaction: Transaction = { ...transaction, id: `t-${new Date().getTime()}` };
+        team.financialStatement.transactions.push(newTransaction);
+        await teamRef.set(team);
+        return team;
+    },
 
-        batch.set(fromUserRef, fromUser);
-        batch.set(toUserRef, toUser);
+    performTransfer: async (userId: string, fromAccountId: string, toAccountId: string, amount: number, isSettleUp: boolean): Promise<User> => {
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        const fromAccount = user.accounts.find(a => a.id === fromAccountId);
+        const toAccount = user.accounts.find(a => a.id === toAccountId);
+        if (!fromAccount || !toAccount) throw new Error("Account not found");
+        if (fromAccount.balance < amount) throw new Error("Insufficient funds");
+        fromAccount.balance -= amount;
+        toAccount.balance += amount;
         
-        await batch.commit();
-
-        return { fromUser, toUser };
+        if (!isSettleUp) {
+            const date = new Date().toISOString().split('T')[0];
+            const transferOut: Transaction = { id: `t-out-${new Date().getTime()}`, description: `Transfer to ${toAccount.name}`, amount, type: TransactionType.EXPENSE, category: 'Transfer', date, paymentShares: [{userId, accountId: fromAccountId, amount}], expenseShares: [{userId, amount}] };
+            const transferIn: Transaction = { id: `t-in-${new Date().getTime()}`, description: `Transfer from ${fromAccount.name}`, amount, type: TransactionType.INCOME, category: 'Transfer', date, paymentShares: [{userId, accountId: toAccountId, amount}] };
+            user.financialStatement.transactions.push(transferOut, transferIn);
+        }
+        
+        await userRef.set(user);
+        return user;
     },
     
-    addStock: async (userId: string, stockData: Omit<Asset, 'id' | 'type' | 'value' | 'monthlyCashflow'>): Promise<User> => {
-        // FIX: Use Firebase v8 doc reference and get syntax
+    addAsset: async (userId: string, assetData: Partial<Asset>): Promise<User> => {
         const userRef = firestore.collection('users').doc(userId);
         const userSnap = await userRef.get();
         if (!userSnap.exists) throw new Error("User not found");
-        const user = userSnap.data() as User;
+        const user = sanitizeUser(userSnap.data());
+        const newAsset: Asset = { id: `a-${new Date().getTime()}`, name: assetData.name || 'New Asset', type: assetData.type || AssetType.OTHER, value: assetData.value || 0, monthlyCashflow: assetData.monthlyCashflow || 0, ...assetData };
+        user.financialStatement.assets.push(newAsset);
+        await userRef.set(user);
+        return user;
+    },
+    addTeamAsset: async(teamId: string, assetData: Partial<Asset>): Promise<Team> => {
+        const teamRef = firestore.collection('teams').doc(teamId);
+        const teamSnap = await teamRef.get();
+        if (!teamSnap.exists) throw new Error("Team not found");
+        const team = teamSnap.data() as Team;
+        const newAsset: Asset = { id: `a-${new Date().getTime()}`, name: assetData.name || 'New Asset', type: assetData.type || AssetType.OTHER, value: assetData.value || 0, monthlyCashflow: assetData.monthlyCashflow || 0, teamId, ...assetData };
+        team.financialStatement.assets.push(newAsset);
+        await teamRef.set(team);
+        return team;
+    },
+    
+    addLiability: async (userId: string, liabilityData: Partial<Liability>): Promise<User> => {
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        const newLiability: Liability = { id: `l-${new Date().getTime()}`, name: liabilityData.name || 'New Liability', balance: liabilityData.balance || 0, interestRate: liabilityData.interestRate || 0, monthlyPayment: liabilityData.monthlyPayment || 0 };
+        user.financialStatement.liabilities.push(newLiability);
+        await userRef.set(user);
+        return user;
+    },
+    addTeamLiability: async(teamId: string, liabilityData: Partial<Liability>): Promise<Team> => {
+        const teamRef = firestore.collection('teams').doc(teamId);
+        const teamSnap = await teamRef.get();
+        if (!teamSnap.exists) throw new Error("Team not found");
+        const team = teamSnap.data() as Team;
+        const newLiability: Liability = { id: `l-${new Date().getTime()}`, name: liabilityData.name || 'New Liability', balance: liabilityData.balance || 0, interestRate: liabilityData.interestRate || 0, monthlyPayment: liabilityData.monthlyPayment || 0, teamId };
+        team.financialStatement.liabilities.push(newLiability);
+        await teamRef.set(team);
+        return team;
+    },
 
-        const cost = (stockData.shares || 0) * (stockData.purchasePrice || 0);
-        const cash = user.financialStatement.assets.find(a => a.type === AssetType.CASH);
-        if (!cash || cash.value < cost) throw new Error("Insufficient cash to purchase this stock.");
-        
-        cash.value -= cost;
-
-        const newStock: Asset = {
-            id: `a-stock-${new Date().getTime()}`,
-            ...stockData,
-            name: stockData.name || stockData.ticker || 'Unknown Stock',
-            type: AssetType.STOCK,
-            value: cost, // Initial value is the purchase cost
-            monthlyCashflow: 0, // Assuming stocks don't provide monthly cashflow unless dividends are logged
-        };
-        user.financialStatement.assets.push(newStock);
-
-        const purchaseTransaction: Transaction = {
-            id: `t-buy-${new Date().getTime()}`,
-            description: `Buy ${stockData.shares} of ${newStock.name} (${newStock.ticker})`,
-            amount: cost,
-            type: TransactionType.EXPENSE,
-            category: 'Investment',
-            date: new Date().toISOString().split('T')[0],
-        };
-        user.financialStatement.transactions.push(purchaseTransaction);
-        
-        // FIX: Use Firebase v8 set syntax
+    updateAsset: async (userId: string, assetId: string, assetData: Partial<Asset>): Promise<User> => {
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        const assetIndex = user.financialStatement.assets.findIndex(a => a.id === assetId);
+        if (assetIndex === -1) throw new Error("Asset not found");
+        user.financialStatement.assets[assetIndex] = { ...user.financialStatement.assets[assetIndex], ...assetData };
         await userRef.set(user);
         return user;
     },
 
-    updateStock: async (userId: string, assetId: string, stockData: Partial<Asset>): Promise<User> => {
-        // FIX: Use Firebase v8 doc reference and get syntax
+    deleteAsset: async (userId: string, assetId: string): Promise<User> => {
         const userRef = firestore.collection('users').doc(userId);
         const userSnap = await userRef.get();
         if (!userSnap.exists) throw new Error("User not found");
-        const user = userSnap.data() as User;
-
+        const user = sanitizeUser(userSnap.data());
         const assetIndex = user.financialStatement.assets.findIndex(a => a.id === assetId);
         if (assetIndex === -1) throw new Error("Asset not found");
-
-        // Merge new data into existing asset
-        user.financialStatement.assets[assetIndex] = {
-            ...user.financialStatement.assets[assetIndex],
-            ...stockData
-        };
-
-        // FIX: Use Firebase v8 set syntax
-        await userRef.set(user);
-        return user;
-    },
-
-    deleteStock: async (userId: string, assetId: string): Promise<User> => {
-        // FIX: Use Firebase v8 doc reference and get syntax
-        const userRef = firestore.collection('users').doc(userId);
-        const userSnap = await userRef.get();
-        if (!userSnap.exists) throw new Error("User not found");
-        const user = userSnap.data() as User;
-
-        const assetIndex = user.financialStatement.assets.findIndex(a => a.id === assetId);
-        if (assetIndex === -1) throw new Error("Asset not found");
-
-        const [stockToSell] = user.financialStatement.assets.splice(assetIndex, 1);
-        const sellValue = stockToSell.value; // Assume selling at current market value
-
-        const cash = user.financialStatement.assets.find(a => a.type === AssetType.CASH);
-        if (cash) {
-            cash.value += sellValue;
-        } else {
-             user.financialStatement.assets.push({
-                 id: `a-cash-${new Date().getTime()}`, name: 'Cash', type: AssetType.CASH,
-                 value: sellValue, monthlyCashflow: 0
-             });
+        const [assetToSell] = user.financialStatement.assets.splice(assetIndex, 1);
+        const cashAccount = user.accounts.find(a => a.type === AccountType.CASH || a.type === AccountType.CHECKING);
+        if (cashAccount) {
+            cashAccount.balance += assetToSell.value;
+            const saleTransaction: Transaction = { id: `t-sell-${new Date().getTime()}`, description: `Sell ${assetToSell.name}`, amount: assetToSell.value, type: TransactionType.INCOME, category: 'Investment', date: new Date().toISOString().split('T')[0], paymentShares: [{userId, accountId: cashAccount.id, amount: assetToSell.value}] };
+            user.financialStatement.transactions.push(saleTransaction);
         }
-        
-        const saleTransaction: Transaction = {
-            id: `t-sell-${new Date().getTime()}`,
-            description: `Sell ${stockToSell.name} (${stockToSell.ticker})`,
-            amount: sellValue,
-            type: TransactionType.INCOME,
-            category: 'Investment',
-            date: new Date().toISOString().split('T')[0],
-        };
-        user.financialStatement.transactions.push(saleTransaction);
-
-        // FIX: Use Firebase v8 set syntax
         await userRef.set(user);
         return user;
     },
 
-    logDividend: async (userId: string, assetId: string, amount: number): Promise<User> => {
-        // FIX: Use Firebase v8 doc reference and get syntax
-        const userRef = firestore.collection('users').doc(userId);
-        const userSnap = await userRef.get();
-        if (!userSnap.exists) throw new Error("User not found");
-        const user = userSnap.data() as User;
-
-        const stock = user.financialStatement.assets.find(a => a.id === assetId);
+    logDividend: async (user: User, assetId: string, amount: number, accountId: string): Promise<User> => {
+        const userRef = firestore.collection('users').doc(user.id);
+        const userToUpdate = sanitizeUser(user);
+        const stock = userToUpdate.financialStatement.assets.find(a => a.id === assetId);
         if (!stock) throw new Error("Stock asset not found");
-
-        const cash = user.financialStatement.assets.find(a => a.type === AssetType.CASH);
-        if (cash) {
-            cash.value += amount;
-        } else {
-             user.financialStatement.assets.push({
-                 id: `a-cash-${new Date().getTime()}`, name: 'Cash', type: AssetType.CASH,
-                 value: amount, monthlyCashflow: 0
-             });
-        }
-
-        const dividendTransaction: Transaction = {
-            id: `t-div-${new Date().getTime()}`,
-            description: `Dividend from ${stock.name} (${stock.ticker})`,
-            amount: amount,
-            type: TransactionType.INCOME,
-            category: 'Investment',
-            date: new Date().toISOString().split('T')[0],
-            isPassive: true, // Dividends are passive income
-        };
-        user.financialStatement.transactions.push(dividendTransaction);
-
-        // FIX: Use Firebase v8 set syntax
-        await userRef.set(user);
-        return user;
+        const account = userToUpdate.accounts.find(a => a.id === accountId);
+        if(!account) throw new Error("Receiving account not found");
+        account.balance += amount;
+        const dividendTransaction: Transaction = { id: `t-div-${new Date().getTime()}`, description: `Dividend from ${stock.name} (${stock.ticker})`, amount, type: TransactionType.INCOME, category: 'Investment', date: new Date().toISOString().split('T')[0], isPassive: true, paymentShares: [{userId: user.id, accountId, amount}] };
+        userToUpdate.financialStatement.transactions.push(dividendTransaction);
+        await userRef.set(userToUpdate);
+        return userToUpdate;
     },
 
-    applyEventOutcome: async (userId: string, outcome: EventOutcome): Promise<User> => {
-        // FIX: Use Firebase v8 doc reference and get syntax
-        const userRef = firestore.collection('users').doc(userId);
-        const userSnap = await userRef.get();
-
-        if (!userSnap.exists) {
-            throw new Error("User not found");
-        }
-
-        const user = userSnap.data() as User;
-        const statement = user.financialStatement;
-        
-        // 1. Apply cash change
+    applyEventOutcome: async (user: User, outcome: EventOutcome): Promise<User> => {
+        const userRef = firestore.collection('users').doc(user.id);
+        const userToUpdate = sanitizeUser(user);
+        const cashAccount = userToUpdate.accounts.find(a => a.type === AccountType.CASH || a.type === AccountType.CHECKING);
         if (outcome.cashChange) {
-            let cashAsset = statement.assets.find(a => a.type === AssetType.CASH);
-            if (cashAsset) {
-                if(cashAsset.value + outcome.cashChange < 0) {
-                    throw new Error("Operation failed: Not enough cash for this event.");
-                }
-                cashAsset.value += outcome.cashChange;
-            } else if (outcome.cashChange > 0) {
-                statement.assets.push({
-                    id: `a${new Date().getTime()}`, name: 'Cash', type: AssetType.CASH,
-                    value: outcome.cashChange, monthlyCashflow: 0
-                });
-            } else {
-                 throw new Error("Operation failed: Not enough cash for this event.");
-            }
+            if (!cashAccount) throw new Error("No cash account available for this event.");
+            if (cashAccount.balance + outcome.cashChange < 0) throw new Error("Not enough cash for this event.");
+            cashAccount.balance += outcome.cashChange;
         }
-        
-        // 2. Add new asset
         if (outcome.newAsset) {
-            const newAsset: Asset = {
-                ...outcome.newAsset,
-                id: `a${new Date().getTime()}`,
-            };
-            statement.assets.push(newAsset);
-            
-            // If the new asset generates passive income, add a recurring transaction
-            if (newAsset.monthlyCashflow > 0) {
-                 const newTransaction: Transaction = {
-                    id: `t-passive-${new Date().getTime()}`,
-                    description: `${newAsset.name} Cashflow`,
-                    amount: newAsset.monthlyCashflow,
-                    type: TransactionType.INCOME,
-                    category: 'Investment',
-                    date: new Date().toISOString().split('T')[0],
-                    isPassive: true
-                };
-                statement.transactions.push(newTransaction);
-            }
+            const newAsset: Asset = { ...outcome.newAsset, id: `a${new Date().getTime()}` };
+            userToUpdate.financialStatement.assets.push(newAsset);
         }
-        
-        // Add a transaction to log the event
-        const eventTransaction: Transaction = {
-            id: `t-event-${new Date().getTime()}`,
-            description: outcome.message.split('!')[0], // a summary of the message
-            amount: Math.abs(outcome.cashChange || 0),
-            type: (outcome.cashChange || 0) < 0 ? TransactionType.EXPENSE : TransactionType.INCOME,
-            category: 'Cosmic Event',
-            date: new Date().toISOString().split('T')[0],
-        };
-
-        // only add if there was a cash change
-        if(outcome.cashChange && outcome.cashChange !== 0){
-             statement.transactions.push(eventTransaction);
+        if(cashAccount && outcome.cashChange && outcome.cashChange !== 0){
+            const amount = Math.abs(outcome.cashChange);
+            const type = outcome.cashChange < 0 ? TransactionType.EXPENSE : TransactionType.INCOME;
+            const eventTransaction: Transaction = { id: `t-event-${new Date().getTime()}`, description: outcome.message.split('!')[0], amount, type, category: 'Cosmic Event', date: new Date().toISOString().split('T')[0], paymentShares: [{userId: user.id, accountId: cashAccount.id, amount}], expenseShares: type === TransactionType.EXPENSE ? [{userId: user.id, amount}] : undefined };
+             userToUpdate.financialStatement.transactions.push(eventTransaction);
         }
-
-        // FIX: Use Firebase v8 set syntax
-        await userRef.set(user);
-        return user;
+        await userRef.set(userToUpdate);
+        return userToUpdate;
     }
 };

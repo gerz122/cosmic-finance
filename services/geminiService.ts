@@ -1,10 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { FinancialStatement, CosmicEvent } from '../types';
+// FIX: Import Account and AccountType to correctly calculate cash from accounts.
+import type { FinancialStatement, CosmicEvent, Account } from '../types';
+import { AccountType } from '../types';
 import type { LiveStockData } from '../components/RealTimeStockData';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-function formatFinancialDataForPrompt(statement: FinancialStatement): string {
+// FIX: Update signature to accept accounts array to properly calculate cash.
+function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {
     const totalIncome = statement.transactions
         .filter(t => t.type === 'INCOME' && !t.isPassive)
         .reduce((sum, t) => sum + t.amount, 0);
@@ -15,7 +18,10 @@ function formatFinancialDataForPrompt(statement: FinancialStatement): string {
         .filter(t => t.type === 'EXPENSE')
         .reduce((sum, t) => sum + t.amount, 0);
     const netWorth = statement.assets.reduce((sum, a) => sum + a.value, 0) - statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
-    const cash = statement.assets.find(a => a.type === 'CASH')?.value || 0;
+    // FIX: Calculate cash from accounts, not from assets, to fix type error.
+    const cash = accounts
+        .filter(a => a.type === AccountType.CASH || a.type === AccountType.CHECKING)
+        .reduce((sum, a) => sum + a.balance, 0);
 
     return `
       Current Financial Snapshot:
@@ -28,13 +34,14 @@ function formatFinancialDataForPrompt(statement: FinancialStatement): string {
     `;
 }
 
-export const getFinancialAdvice = async (prompt: string, statement: FinancialStatement): Promise<string> => {
+// FIX: Update signature to accept accounts array.
+export const getFinancialAdvice = async (prompt: string, statement: FinancialStatement, accounts: Account[]): Promise<string> => {
   try {
     const fullPrompt = `
       You are an expert financial coach in a game called 'Cosmic Cashflow'. Your advice should be encouraging, strategic, and use the game's fun, cosmic/sports-themed language (e.g., 'goal', 'foul', 'dribble past debt', 'cosmic win').
 
       Here is the player's current situation:
-      ${formatFinancialDataForPrompt(statement)}
+      ${formatFinancialDataForPrompt(statement, accounts)}
 
       Player's question: "${prompt}"
 
@@ -54,9 +61,13 @@ export const getFinancialAdvice = async (prompt: string, statement: FinancialSta
 };
 
 
-export const getCosmicEvent = async (statement: FinancialStatement): Promise<CosmicEvent> => {
-  const financialContext = formatFinancialDataForPrompt(statement);
-  const availableCash = statement.assets.find(a => a.type === 'CASH')?.value || 0;
+// FIX: Update signature to accept accounts array.
+export const getCosmicEvent = async (statement: FinancialStatement, accounts: Account[]): Promise<CosmicEvent> => {
+  const financialContext = formatFinancialDataForPrompt(statement, accounts);
+  // FIX: Calculate cash from accounts, not from assets, to fix type error.
+  const availableCash = accounts
+    .filter(a => a.type === AccountType.CASH || a.type === AccountType.CHECKING)
+    .reduce((sum, a) => sum + a.balance, 0);
 
   const prompt = `
     You are the Game Master for 'Cosmic Cashflow'. Generate a random financial event for a player. The event should be a choice between two options. It could be an investment opportunity, a business venture, or an unexpected financial situation.

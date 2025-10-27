@@ -1,12 +1,14 @@
 
-import React, { useState, useMemo } from 'react';
-import type { FinancialStatement as FinancialStatementType, Transaction, Asset, Liability, User } from '../types';
+import React, { useMemo } from 'react';
+import type { FinancialStatement as FinancialStatementType, User, Team } from '../types';
 import { TransactionType } from '../types';
 
 interface FinancialStatementProps {
     statement: FinancialStatementType;
-    user: User; // Need user context to calculate shares
-    teamMates: User[]; // Need for displaying names on shared items
+    user: User;
+    teamMates: User[];
+    team?: Team; // Optional team context
+    onGenerateReport?: () => void; // Optional report generation handler
 }
 
 const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ title, value, color }) => (
@@ -31,7 +33,7 @@ const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; is
 );
 
 
-export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user }) => {
+export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, team, onGenerateReport }) => {
     const {
         totalIncome,
         passiveIncome,
@@ -42,31 +44,33 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
         totalLiabilities,
         netWorth,
     } = useMemo(() => {
-        // Calculate user's share of income and expenses
         let userTotalIncome = 0;
         let userPassiveIncome = 0;
         let userActiveIncome = 0;
         let userTotalExpenses = 0;
 
         statement.transactions.forEach(t => {
-            if (t.isShared && t.shares) {
-                const userShare = t.shares.find(s => s.userId === user.id);
-                if (userShare) {
-                    if (t.type === TransactionType.INCOME) {
-                        userTotalIncome += userShare.amount;
-                        if (t.isPassive) userPassiveIncome += userShare.amount;
-                        else userActiveIncome += userShare.amount;
-                    } else {
-                        userTotalExpenses += userShare.amount;
-                    }
-                }
-            } else { // Not shared, belongs entirely to the user this statement is for
-                 if (t.type === TransactionType.INCOME) {
+            if (team) { // If in team context, sum total amounts
+                if (t.type === TransactionType.INCOME) {
                     userTotalIncome += t.amount;
-                    if (t.isPassive) userPassiveIncome += t.amount;
+                    if(t.isPassive) userPassiveIncome += t.amount;
                     else userActiveIncome += t.amount;
                 } else {
                     userTotalExpenses += t.amount;
+                }
+            } else { // Personal context, calculate user's share
+                if (t.type === TransactionType.INCOME) {
+                    const userPaymentShare = t.paymentShares.find(s => s.userId === user.id);
+                    if (userPaymentShare) {
+                         userTotalIncome += userPaymentShare.amount;
+                        if (t.isPassive) userPassiveIncome += userPaymentShare.amount;
+                        else userActiveIncome += userPaymentShare.amount;
+                    }
+                } else { // Expense
+                    const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id);
+                    if (userExpenseShare) {
+                        userTotalExpenses += userExpenseShare.amount;
+                    }
                 }
             }
         });
@@ -85,12 +89,19 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
             totalLiabilities, 
             netWorth 
         };
-    }, [statement, user.id]);
+    }, [statement, user.id, team]);
 
 
     return (
         <div className="animate-fade-in space-y-6">
-            <h1 className="text-3xl font-bold text-cosmic-text-primary">Financial Statement for {user.name}</h1>
+            <div className="flex justify-between items-center flex-wrap gap-4">
+                <h1 className="text-3xl font-bold text-cosmic-text-primary">Financial Statement for {team ? team.name : user.name}</h1>
+                {onGenerateReport && (
+                    <button onClick={onGenerateReport} className="bg-cosmic-surface border border-cosmic-border text-cosmic-primary px-4 py-2 rounded-lg font-semibold hover:bg-cosmic-border transition-colors">
+                        Generate Report
+                    </button>
+                )}
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Monthly Cash Flow" value={`$${monthlyCashflow.toFixed(2)}`} color={monthlyCashflow >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'} />

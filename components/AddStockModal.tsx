@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Asset } from '../types';
+import type { Asset, Account, Team } from '../types';
 import { XIcon } from './icons';
 import { searchTickers, getLiveStockData } from '../services/geminiService';
 
 interface AddStockModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (stockData: Partial<Asset>) => void;
+    onSave: (stockData: Partial<Asset>, teamId?: string) => void;
     stockToEdit: Asset | null;
+    accounts: Account[];
+    teams: Team[];
+    defaultTeamId?: string;
 }
 
 // A simple debounce function
 const debounce = (func: (...args: any[]) => void, delay: number) => {
-    // FIX: Use ReturnType<typeof setTimeout> for portability between node and browser environments.
     let timeoutId: ReturnType<typeof setTimeout>;
     return (...args: any[]) => {
         clearTimeout(timeoutId);
@@ -23,14 +25,15 @@ const debounce = (func: (...args: any[]) => void, delay: number) => {
 };
 
 
-export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onSave, stockToEdit }) => {
+export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onSave, stockToEdit, accounts, teams, defaultTeamId }) => {
     const [ticker, setTicker] = useState('');
     const [name, setName] = useState('');
-    const [shares, setShares] = useState('');
+    const [numberOfShares, setNumberOfShares] = useState('');
     const [purchasePrice, setPurchasePrice] = useState('');
     const [takeProfit, setTakeProfit] = useState('');
     const [stopLoss, setStopLoss] = useState('');
     const [strategy, setStrategy] = useState('');
+    const [teamId, setTeamId] = useState(defaultTeamId || '');
     
     const [searchResults, setSearchResults] = useState<{ticker: string, name: string}[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -42,25 +45,27 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
             if (isEditing) {
                 setTicker(stockToEdit.ticker || '');
                 setName(stockToEdit.name || '');
-                setShares(String(stockToEdit.shares || ''));
+                setNumberOfShares(String(stockToEdit.numberOfShares || ''));
                 setPurchasePrice(String(stockToEdit.purchasePrice || ''));
                 setTakeProfit(String(stockToEdit.takeProfit || ''));
                 setStopLoss(String(stockToEdit.stopLoss || ''));
                 setStrategy(stockToEdit.strategy || '');
+                setTeamId(stockToEdit.teamId || '');
             } else {
                 // Reset form for adding new
                 setTicker('');
                 setName('');
-                setShares('');
+                setNumberOfShares('');
                 setPurchasePrice('');
                 setTakeProfit('');
                 setStopLoss('');
                 setStrategy('');
+                setTeamId(defaultTeamId || '');
             }
             setSearchResults([]);
             setIsSearching(false);
         }
-    }, [isOpen, stockToEdit, isEditing]);
+    }, [isOpen, stockToEdit, isEditing, defaultTeamId]);
 
     const handleTickerSearch = async (query: string) => {
         if (query.length > 0) {
@@ -101,20 +106,21 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
         const stockData: Partial<Asset> = {
             ticker: ticker.toUpperCase(),
             name: name || ticker.toUpperCase(), // Default name to ticker if empty
-            shares: parseFloat(shares) || 0,
+            numberOfShares: parseFloat(numberOfShares) || 0,
             purchasePrice: parseFloat(purchasePrice) || 0,
             takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
             stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
             strategy: strategy || undefined,
+            teamId: teamId || undefined
         };
         
         // Basic validation
-        if (!stockData.ticker || !stockData.shares || stockData.shares <= 0 || !stockData.purchasePrice || stockData.purchasePrice <= 0) {
+        if (!stockData.ticker || !stockData.numberOfShares || stockData.numberOfShares <= 0 || !stockData.purchasePrice || stockData.purchasePrice <= 0) {
             alert('Please fill in Ticker, Shares, and Purchase Price.');
             return;
         }
 
-        onSave(stockData);
+        onSave(stockData, teamId || undefined);
         onClose();
     };
 
@@ -129,6 +135,13 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label htmlFor="teamId" className="block text-sm font-medium text-cosmic-text-secondary mb-1">For</label>
+                        <select id="teamId" value={teamId} onChange={e => setTeamId(e.target.value)} disabled={!!defaultTeamId} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 disabled:bg-cosmic-border">
+                            <option value="">Personal</option>
+                            {teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                        </select>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                          <div className="relative">
                             <label htmlFor="ticker" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Ticker Symbol</label>
@@ -152,8 +165,8 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
                     </div>
                      <div className="grid grid-cols-2 gap-4">
                          <div>
-                            <label htmlFor="shares" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Number of Shares</label>
-                            <input type="number" id="shares" value={shares} onChange={e => setShares(e.target.value)} min="0" step="any" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" required />
+                            <label htmlFor="numberOfShares" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Number of Shares</label>
+                            <input type="number" id="numberOfShares" value={numberOfShares} onChange={e => setNumberOfShares(e.target.value)} min="0" step="any" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" required />
                         </div>
                         <div>
                             <label htmlFor="purchasePrice" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Purchase Price / Share</label>

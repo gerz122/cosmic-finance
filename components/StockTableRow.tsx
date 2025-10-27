@@ -8,7 +8,7 @@ interface StockTableRowProps {
     onEditStock: (stock: Asset) => void;
     onDeleteStock: (stockId: string) => void;
     onLogDividend: (stock: Asset) => void;
-    onOpenLargeChart: (ticker: string) => void;
+    onOpenLargeChart: (stock: Asset) => void;
 }
 
 export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock, onDeleteStock, onLogDividend, onOpenLargeChart }) => {
@@ -49,13 +49,14 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
     const toggleRow = () => setIsExpanded(prev => !prev);
 
     const { plValue, plPercent, plColor, dayChangeColor } = (() => {
-        if (liveData === null || liveData.price === null || !stock.purchasePrice || !stock.shares) {
+        // FIX: Use numberOfShares and add checks for null/undefined
+        if (liveData === null || liveData.price === null || !stock.purchasePrice || !stock.numberOfShares) {
             return { plValue: 0, plPercent: 0, plColor: 'text-cosmic-text-secondary', dayChangeColor: 'text-cosmic-text-secondary' };
         }
-        const value = (liveData.price - stock.purchasePrice) * stock.shares;
+        const value = (liveData.price - stock.purchasePrice) * stock.numberOfShares;
         const percent = stock.purchasePrice > 0 ? ((liveData.price - stock.purchasePrice) / stock.purchasePrice) * 100 : 0;
         const pColor = value >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
-        const dColor = liveData.dayChange && liveData.dayChange >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
+        const dColor = liveData.dayChange === null ? 'text-cosmic-text-secondary' : liveData.dayChange >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
         return { plValue: value, plPercent: percent, plColor: pColor, dayChangeColor: dColor };
     })();
     
@@ -70,13 +71,13 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
                 onClick={toggleRow}
             >
                 <td className="px-6 py-4 font-medium text-cosmic-text-primary whitespace-nowrap">{stock.ticker}</td>
-                <td className="px-6 py-4">{stock.shares}</td>
+                <td className="px-6 py-4">{stock.numberOfShares}</td>
                 <td className="px-6 py-4">${stock.purchasePrice?.toFixed(2)}</td>
                 <td className={`px-6 py-4 font-bold text-cosmic-text-primary transition-colors duration-300 ${priceIndicatorClass}`}>
                      {liveData?.price ? `$${liveData.price.toFixed(2)}` : <span className="text-xs">Loading...</span>}
                 </td>
                 <td className="px-6 py-4">
-                    {liveData?.dayChange !== null && liveData?.dayChangePercent !== null ? (
+                    {liveData && liveData.dayChange !== null && liveData.dayChangePercent !== null ? (
                         <div className={dayChangeColor}>
                             <p className="font-semibold">{liveData.dayChange >= 0 ? '+' : ''}{liveData.dayChange.toFixed(2)}</p>
                             <p className="text-xs">({liveData.dayChangePercent.toFixed(2)}%)</p>
@@ -102,10 +103,10 @@ export const StockTableRow: React.FC<StockTableRowProps> = ({ stock, onEditStock
                 <tr className="bg-cosmic-bg">
                     <td colSpan={9} className="p-0">
                          <div className="p-4" style={{ height: '400px' }}>
-                            <EmbeddedStockChart ticker={stock.ticker} />
+                            <EmbeddedStockChart ticker={stock.ticker} takeProfit={stock.takeProfit} stopLoss={stock.stopLoss} />
                             <div className="text-right mt-2">
                                 <button
-                                    onClick={() => onOpenLargeChart(stock.ticker!)}
+                                    onClick={() => onOpenLargeChart(stock)}
                                     className="text-sm bg-cosmic-surface hover:bg-cosmic-border text-cosmic-primary font-semibold py-1 px-3 rounded-md border border-cosmic-border"
                                 >
                                     Expand Chart

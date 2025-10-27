@@ -10,9 +10,10 @@ interface DoughnutChartProps {
     data: ChartData[];
     size?: number;
     centerLabel?: string;
+    onSliceClick?: (label: string) => void;
 }
 
-export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, centerLabel = "Total" }) => {
+export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, centerLabel = "Total", onSliceClick }) => {
     const total = data.reduce((sum, item) => sum + item.value, 0);
     if (total === 0) {
         return <div className="text-cosmic-text-secondary flex items-center justify-center" style={{ width: size, height: size }}>No data</div>;
@@ -39,7 +40,7 @@ export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, 
     });
 
     return (
-        <div className="relative" style={{ width: size, height: size }}>
+        <div className="relative group" style={{ width: size, height: size }}>
             <svg viewBox={`0 0 ${size} ${size}`}>
                 {segments.map((segment, index) => (
                     <circle
@@ -53,10 +54,14 @@ export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, 
                         strokeDasharray={segment.dasharray}
                         strokeDashoffset={segment.dashoffset}
                         transform={`rotate(-90 ${center} ${center}) rotate(${segment.rotation} ${center} ${center})`}
-                    />
+                        className={onSliceClick ? 'cursor-pointer transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100' : ''}
+                        onClick={() => onSliceClick?.(segment.label)}
+                    >
+                         <title>{`${segment.label}: $${segment.value.toFixed(2)}`}</title>
+                    </circle>
                 ))}
             </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
                  <span className="text-cosmic-text-secondary text-sm">{centerLabel}</span>
                  <span className="text-2xl font-bold text-cosmic-text-primary">${total.toLocaleString()}</span>
             </div>

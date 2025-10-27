@@ -1,28 +1,36 @@
-import React, { useState } from 'react';
-import type { Asset } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { Asset, Account } from '../types';
 import { XIcon } from './icons';
 
 interface LogDividendModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onLogDividend: (amount: number) => void;
+    onLogDividend: (amount: number, accountId: string) => void;
     stock: Asset;
+    accounts: Account[];
 }
 
-export const LogDividendModal: React.FC<LogDividendModalProps> = ({ isOpen, onClose, onLogDividend, stock }) => {
+export const LogDividendModal: React.FC<LogDividendModalProps> = ({ isOpen, onClose, onLogDividend, stock, accounts }) => {
     const [amount, setAmount] = useState('');
+    const [accountId, setAccountId] = useState('');
+
+    useEffect(() => {
+        if(isOpen && accounts.length > 0) {
+            setAccountId(accounts[0].id)
+        }
+    }, [isOpen, accounts]);
 
     if (!isOpen) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const numericAmount = parseFloat(amount);
-        if (!numericAmount || numericAmount <= 0) {
-            alert('Please enter a valid dividend amount.');
+        if (!numericAmount || numericAmount <= 0 || !accountId) {
+            alert('Please enter a valid dividend amount and select an account.');
             return;
         }
 
-        onLogDividend(numericAmount);
+        onLogDividend(numericAmount, accountId);
         setAmount('');
         onClose();
     };
@@ -55,6 +63,21 @@ export const LogDividendModal: React.FC<LogDividendModalProps> = ({ isOpen, onCl
                             required
                             autoFocus
                         />
+                    </div>
+                     <div>
+                        <label htmlFor="account" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Deposit to Account</label>
+                        <select 
+                            id="account" 
+                            value={accountId} 
+                            onChange={e => setAccountId(e.target.value)}
+                            className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary"
+                            required
+                        >
+                            <option value="" disabled>Select an account</option>
+                            {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border transition-colors">Cancel</button>
