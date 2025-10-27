@@ -6,7 +6,8 @@ import { XIcon, PlusIcon } from './icons';
 interface AddTransactionModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onAddTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+    onSave: (transaction: Omit<Transaction, 'id'> | Transaction) => void;
+    transactionToEdit: Transaction | null;
     currentUser: User;
     allUsers: User[];
     teams: Team[];
@@ -16,10 +17,10 @@ interface AddTransactionModalProps {
 }
 
 const defaultCategories = [
-    'Housing', 'Food', 'Transportation', 'Entertainment', 'Utilities', 'Job', 'Investment', 'Loan', 'Shopping', 'Business Expense', 'Team Contribution'
+    'Housing', 'Food', 'Transportation', 'Entertainment', 'Utilities', 'Job', 'Investment', 'Loan', 'Shopping', 'Business Expense', 'Team Contribution', 'Transfer', 'Cosmic Event', 'Maintenance'
 ];
 
-export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onAddTransaction, currentUser, allUsers, teams, onAddAccountClick, onAddCategoryClick, defaultTeamId }) => {
+export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategoryClick, defaultTeamId }) => {
     const [description, setDescription] = useState('');
     const [totalAmount, setTotalAmount] = useState('');
     const [categoryInput, setCategoryInput] = useState('');
@@ -28,12 +29,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     const [isPassive, setIsPassive] = useState(false);
     const [teamId, setTeamId] = useState(defaultTeamId || '');
 
-    // New state for advanced splits
     const [paymentShares, setPaymentShares] = useState<PaymentShare[]>([{ userId: currentUser.id, accountId: '', amount: 0 }]);
     const [expenseShares, setExpenseShares] = useState<ExpenseShare[]>([{ userId: currentUser.id, amount: 0 }]);
     
-    // UI state
     const [splitEqually, setSplitEqually] = useState(true);
+    const isEditing = !!transactionToEdit;
 
     const contextMembers = useMemo(() => {
         if (!teamId) return allUsers;
@@ -41,23 +41,34 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         return team ? allUsers.filter(u => team.memberIds.includes(u.id)) : [currentUser];
     }, [teamId, teams, allUsers, currentUser]);
 
-    // Reset form when opening or defaultTeamId changes
     useEffect(() => {
         if (isOpen) {
-            setDescription(''); setTotalAmount(''); setCategoryInput('');
-            setDate(new Date().toISOString().split('T')[0]);
-            setType(TransactionType.EXPENSE); setIsPassive(false);
-            setTeamId(defaultTeamId || '');
-            const initialAccountId = teamId 
-                ? teams.find(t => t.id === teamId)?.accounts[0]?.id || ''
-                : currentUser.accounts?.[0]?.id || '';
-            setPaymentShares([{ userId: currentUser.id, accountId: initialAccountId, amount: 0 }]);
-            setExpenseShares(contextMembers.map(m => ({ userId: m.id, amount: 0 })));
-            setSplitEqually(true);
+            if (isEditing && transactionToEdit) {
+                setDescription(transactionToEdit.description);
+                setTotalAmount(String(transactionToEdit.amount));
+                setCategoryInput(transactionToEdit.category);
+                setDate(transactionToEdit.date);
+                setType(transactionToEdit.type);
+                setIsPassive(transactionToEdit.isPassive || false);
+                setTeamId(transactionToEdit.teamId || '');
+                setPaymentShares(transactionToEdit.paymentShares);
+                setExpenseShares(transactionToEdit.expenseShares || contextMembers.map(m => ({ userId: m.id, amount: 0 })));
+                setSplitEqually(false); // Default to custom split when editing
+            } else {
+                setDescription(''); setTotalAmount(''); setCategoryInput('');
+                setDate(new Date().toISOString().split('T')[0]);
+                setType(TransactionType.EXPENSE); setIsPassive(false);
+                setTeamId(defaultTeamId || '');
+                const initialAccountId = teamId 
+                    ? teams.find(t => t.id === teamId)?.accounts[0]?.id || ''
+                    : currentUser.accounts?.[0]?.id || '';
+                setPaymentShares([{ userId: currentUser.id, accountId: initialAccountId, amount: 0 }]);
+                setExpenseShares(contextMembers.map(m => ({ userId: m.id, amount: 0 })));
+                setSplitEqually(true);
+            }
         }
-    }, [isOpen, currentUser, contextMembers, defaultTeamId, teamId, teams]);
+    }, [isOpen, transactionToEdit, currentUser, contextMembers, defaultTeamId, teamId, teams]);
     
-    // Auto-update shares when total amount or members change
     useEffect(() => {
         const amount = parseFloat(totalAmount) || 0;
         if (splitEqually) {
@@ -91,7 +102,6 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             return;
         }
         
-        // Validate Payments
         const totalPaid = paymentShares.reduce((sum, share) => sum + Number(share.amount), 0);
         if (Math.abs(totalPaid - numericAmount) > 0.01) {
             alert(`The total paid ($${totalPaid.toFixed(2)}) does not match the transaction amount ($${numericAmount.toFixed(2)}).`);
@@ -102,7 +112,6 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             return;
         }
 
-        // Validate Expenses
         let finalExpenseShares: ExpenseShare[] | undefined = undefined;
         if (type === TransactionType.EXPENSE) {
             const totalSplit = expenseShares.reduce((sum, share) => sum + share.amount, 0);
@@ -113,22 +122,27 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             finalExpenseShares = expenseShares;
         }
 
-        onAddTransaction({
+        const transactionData = {
             description, amount: numericAmount, type, category: categoryInput, date,
             teamId: teamId || undefined,
             isPassive: type === TransactionType.INCOME ? isPassive : undefined,
             paymentShares: paymentShares,
             expenseShares: finalExpenseShares,
-        });
+        };
+
+        if (isEditing && transactionToEdit) {
+            onSave({ ...transactionToEdit, ...transactionData });
+        } else {
+            onSave(transactionData);
+        }
         onClose();
     };
 
     const getAccountsForUser = (userId: string): Account[] => {
-        if(teamId) { // Team context
+        if(teamId) {
             const team = teams.find(t => t.id === teamId);
             return team?.accounts || [];
         }
-        // Personal context
         const user = allUsers.find(u => u.id === userId);
         return user?.accounts || [];
     }
@@ -137,7 +151,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
             <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-3xl shadow-2xl p-6 m-4 animate-slide-in-up max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-cosmic-text-primary">Add New Play</h2>
+                    <h2 className="text-2xl font-bold text-cosmic-text-primary">{isEditing ? 'Edit Transaction' : 'Add New Play'}</h2>
                     <button onClick={onClose} className="text-cosmic-text-secondary hover:text-cosmic-text-primary"><XIcon className="w-6 h-6" /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -159,7 +173,6 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                          {type === TransactionType.INCOME && (<div className="self-center"><label className="flex items-center"><input type="checkbox" checked={isPassive} onChange={(e) => setIsPassive(e.target.checked)} className="w-4 h-4 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary" /><span className="ml-2 text-sm text-cosmic-text-secondary">Is this passive income?</span></label></div>)}
                     </div>
 
-                    {/* Payment Split */}
                     <div className="space-y-3 pt-3 border-t border-cosmic-border">
                         <h3 className="font-medium text-cosmic-text-primary">{type === TransactionType.EXPENSE ? "Who Paid?" : "Who Received?"}</h3>
                          {paymentShares.map((share, index) => (
@@ -175,7 +188,6 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                         <button type="button" onClick={() => setPaymentShares(prev => [...prev, {userId: '', accountId: '', amount: 0}])} className="text-sm text-cosmic-primary hover:underline">+ Add another payer</button>
                     </div>
 
-                    {/* Expense Split */}
                     {type === TransactionType.EXPENSE && (
                          <div className="space-y-3 pt-3 border-t border-cosmic-border">
                             <div className="flex justify-between items-center">
@@ -193,7 +205,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                         </div>
                     )}
                     
-                    <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border">Cancel</button><button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400">Save Transaction</button></div>
+                    <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border">Cancel</button><button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400">{isEditing ? 'Save Changes' : 'Save Transaction'}</button></div>
                 </form>
             </div><style>{`.date-input::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; }`}</style>
         </div>

@@ -1,14 +1,14 @@
-
 import React, { useMemo } from 'react';
-import type { FinancialStatement as FinancialStatementType, User, Team } from '../types';
+import type { FinancialStatement as FinancialStatementType, User, Team, Transaction } from '../types';
 import { TransactionType } from '../types';
 
 interface FinancialStatementProps {
     statement: FinancialStatementType;
     user: User;
     teamMates: User[];
-    team?: Team; // Optional team context
-    onGenerateReport?: () => void; // Optional report generation handler
+    team?: Team;
+    onEditTransaction: (transaction: Transaction) => void;
+    onDeleteTransaction: (transactionId: string) => void;
 }
 
 const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ title, value, color }) => (
@@ -18,60 +18,46 @@ const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ 
     </div>
 );
 
-const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-cosmic-surface rounded-lg border border-cosmic-border overflow-hidden">
-        <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">{title}</h3>
-        <div className="p-4 space-y-3">{children}</div>
-    </div>
-);
+const TransactionRow: React.FC<{ tx: Transaction, onEdit: () => void, onDelete: () => void }> = ({ tx, onEdit, onDelete }) => {
+    const isIncome = tx.type === TransactionType.INCOME;
+    return (
+        <tr className="border-b border-cosmic-border last:border-b-0 hover:bg-cosmic-bg group">
+            <td className="px-4 py-3 text-cosmic-text-primary">{new Date(tx.date).toLocaleDateString()}</td>
+            <td className="px-4 py-3 text-cosmic-text-primary">{tx.description}</td>
+            <td className="px-4 py-3 text-cosmic-text-secondary">{tx.category}</td>
+            <td className={`px-4 py-3 font-semibold ${isIncome ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>
+                {isIncome ? '+' : '-'}${tx.amount.toFixed(2)}
+            </td>
+            <td className="px-4 py-3 text-right">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity space-x-2">
+                    <button onClick={onEdit} className="text-yellow-500 hover:underline text-sm font-semibold">Edit</button>
+                    <button onClick={onDelete} className="text-red-500 hover:underline text-sm font-semibold">Delete</button>
+                </div>
+            </td>
+        </tr>
+    );
+};
 
-const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; isNegative?: boolean; }> = ({ label, value, isPositive, isNegative }) => (
-    <div className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
-        <span>{label}</span>
-        <span className={`font-semibold ${isPositive ? 'text-cosmic-success' : ''} ${isNegative ? 'text-cosmic-danger' : ''}`}>{value}</span>
-    </div>
-);
-
-
-export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, team, onGenerateReport }) => {
+export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, team, onEditTransaction, onDeleteTransaction }) => {
     const {
-        totalIncome,
-        passiveIncome,
-        activeIncome,
-        totalExpenses,
         monthlyCashflow,
-        totalAssets,
-        totalLiabilities,
+        passiveIncome,
+        totalExpenses,
         netWorth,
     } = useMemo(() => {
         let userTotalIncome = 0;
         let userPassiveIncome = 0;
-        let userActiveIncome = 0;
         let userTotalExpenses = 0;
 
         statement.transactions.forEach(t => {
-            if (team) { // If in team context, sum total amounts
-                if (t.type === TransactionType.INCOME) {
-                    userTotalIncome += t.amount;
-                    if(t.isPassive) userPassiveIncome += t.amount;
-                    else userActiveIncome += t.amount;
-                } else {
-                    userTotalExpenses += t.amount;
-                }
-            } else { // Personal context, calculate user's share
-                if (t.type === TransactionType.INCOME) {
-                    const userPaymentShare = t.paymentShares.find(s => s.userId === user.id);
-                    if (userPaymentShare) {
-                         userTotalIncome += userPaymentShare.amount;
-                        if (t.isPassive) userPassiveIncome += userPaymentShare.amount;
-                        else userActiveIncome += userPaymentShare.amount;
-                    }
-                } else { // Expense
-                    const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id);
-                    if (userExpenseShare) {
-                        userTotalExpenses += userExpenseShare.amount;
-                    }
-                }
+            const userPaymentShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
+            const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
+
+            if (t.type === TransactionType.INCOME) {
+                userTotalIncome += userPaymentShare;
+                if (t.isPassive) userPassiveIncome += userPaymentShare;
+            } else {
+                userTotalExpenses += userExpenseShare;
             }
         });
 
@@ -81,27 +67,20 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
         const netWorth = totalAssets - totalLiabilities;
         return { 
             totalIncome: userTotalIncome, 
-            passiveIncome: userPassiveIncome, 
-            activeIncome: userActiveIncome, 
+            passiveIncome: userPassiveIncome,
             totalExpenses: userTotalExpenses, 
             monthlyCashflow, 
-            totalAssets, 
-            totalLiabilities, 
             netWorth 
         };
-    }, [statement, user.id, team]);
+    }, [statement, user.id]);
 
+    const sortedTransactions = useMemo(() => {
+        return [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [statement.transactions]);
 
     return (
         <div className="animate-fade-in space-y-6">
-            <div className="flex justify-between items-center flex-wrap gap-4">
-                <h1 className="text-3xl font-bold text-cosmic-text-primary">Financial Statement for {team ? team.name : user.name}</h1>
-                {onGenerateReport && (
-                    <button onClick={onGenerateReport} className="bg-cosmic-surface border border-cosmic-border text-cosmic-primary px-4 py-2 rounded-lg font-semibold hover:bg-cosmic-border transition-colors">
-                        Generate Report
-                    </button>
-                )}
-            </div>
+            <h1 className="text-3xl font-bold text-cosmic-text-primary">Financial Statement</h1>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Monthly Cash Flow" value={`$${monthlyCashflow.toFixed(2)}`} color={monthlyCashflow >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'} />
@@ -110,46 +89,34 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                 <StatCard title="Net Worth" value={`$${netWorth.toFixed(2)}`} color="text-white" />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Income Statement */}
-                <Section title="Income Statement (Monthly)">
-                    <DataRow label="Active Income" value={`$${activeIncome.toFixed(2)}`} isPositive />
-                    <DataRow label="Passive Income" value={`$${passiveIncome.toFixed(2)}`} isPositive />
-                    <hr className="border-cosmic-border" />
-                    <DataRow label="Total Income" value={`$${totalIncome.toFixed(2)}`} isPositive />
-                    <hr className="border-cosmic-border my-2" />
-                    {statement.transactions.filter(t => t.type === TransactionType.EXPENSE).map(tx => (
-                         <DataRow key={tx.id} label={tx.description} value={`-$${tx.amount.toFixed(2)}`} />
-                    ))}
-                    <hr className="border-cosmic-border" />
-                    <DataRow label="Total Expenses" value={`-$${totalExpenses.toFixed(2)}`} isNegative />
-                    <hr className="border-cosmic-border my-2" />
-                    <div className="bg-cosmic-bg p-3 rounded-md">
-                        <DataRow label="Monthly Net Cash Flow" value={`$${monthlyCashflow.toFixed(2)}`} isPositive={monthlyCashflow >= 0} isNegative={monthlyCashflow < 0}/>
-                    </div>
-                </Section>
-
-                {/* Balance Sheet */}
-                <Section title="Balance Sheet">
-                    <h4 className="font-bold text-cosmic-primary">Assets</h4>
-                    {statement.assets.map(asset => (
-                        <DataRow key={asset.id} label={asset.name} value={`$${asset.value.toFixed(2)}`} />
-                    ))}
-                    <hr className="border-cosmic-border" />
-                    <DataRow label="Total Assets" value={`$${totalAssets.toFixed(2)}`} isPositive />
-                    
-                    <h4 className="font-bold text-cosmic-secondary mt-4">Liabilities</h4>
-                    {statement.liabilities.map(lia => (
-                        <DataRow key={lia.id} label={lia.name} value={`$${lia.balance.toFixed(2)}`} />
-                    ))}
-                    <hr className="border-cosmic-border" />
-                    <DataRow label="Total Liabilities" value={`$${totalLiabilities.toFixed(2)}`} isNegative />
-
-                    <hr className="border-cosmic-border my-2" />
-                    <div className="bg-cosmic-bg p-3 rounded-md">
-                         <DataRow label="Net Worth" value={`$${netWorth.toFixed(2)}`} isPositive={netWorth >= 0} isNegative={netWorth < 0}/>
-                    </div>
-                </Section>
+            <div className="bg-cosmic-surface rounded-lg border border-cosmic-border overflow-hidden">
+                <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">All Transactions</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead className="bg-cosmic-bg text-left text-cosmic-text-secondary">
+                            <tr>
+                                <th className="px-4 py-2 font-semibold">Date</th>
+                                <th className="px-4 py-2 font-semibold">Description</th>
+                                <th className="px-4 py-2 font-semibold">Category</th>
+                                <th className="px-4 py-2 font-semibold">Amount</th>
+                                <th className="px-4 py-2 font-semibold text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sortedTransactions.map(tx => (
+                                <TransactionRow 
+                                    key={tx.id} 
+                                    tx={tx} 
+                                    onEdit={() => onEditTransaction(tx)} 
+                                    onDelete={() => onDeleteTransaction(tx.id)}
+                                />
+                            ))}
+                        </tbody>
+                    </table>
+                     {sortedTransactions.length === 0 && (
+                        <p className="text-center py-8 text-cosmic-text-secondary">No transactions recorded yet.</p>
+                    )}
+                </div>
             </div>
         </div>
     );

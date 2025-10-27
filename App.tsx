@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint } from './types';
-// FIX: Import AssetType enum to use for stock creation.
 import { AssetType } from './types';
 import { db } from './db'; 
 import { getCosmicEvent } from './services/geminiService';
@@ -27,6 +26,7 @@ import { NetWorthBreakdownModal } from './components/NetWorthBreakdownModal';
 import { AddCategoryModal } from './components/AddCategoryModal';
 import { TeamDashboard } from './components/TeamDashboard';
 import { Balances } from './components/Balances';
+import { AccountTransactionsModal } from './components/AccountTransactionsModal';
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
     <button
@@ -62,6 +62,7 @@ const App: React.FC = () => {
     const [isCreateTeamModalOpen, setCreateTeamModalOpen] = useState(false);
     const [isNetWorthBreakdownModalOpen, setNetWorthBreakdownModalOpen] = useState(false);
     const [isAddCategoryModalOpen, setAddCategoryModalOpen] = useState(false);
+    const [isAccountTransactionsModalOpen, setAccountTransactionsModalOpen] = useState(false);
     const [isFabOpen, setIsFabOpen] = useState(false);
     
     // Data for Modals
@@ -73,8 +74,10 @@ const App: React.FC = () => {
     const [isGeneratingCosmicEvent, setIsGeneratingCosmicEvent] = useState(false);
     const [currentCosmicEvent, setCurrentCosmicEvent] = useState<CosmicEvent | null>(null);
     const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+    const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [modalDefaultTeamId, setModalDefaultTeamId] = useState<string | undefined>(undefined);
+    const [accountForTransactionList, setAccountForTransactionList] = useState<Account | null>(null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -103,7 +106,6 @@ const App: React.FC = () => {
     const activeUser = useMemo(() => users.find(u => u.id === activeUserId), [users, activeUserId]);
     const selectedTeam = useMemo(() => teams.find(t => t.id === selectedTeamId), [teams, selectedTeamId]);
     
-    // This calculates an "effective" financial statement including the user's share of team finances.
     const effectiveFinancialStatement = useMemo(() => {
         if (!activeUser) return { transactions: [], assets: [], liabilities: [] };
         
@@ -111,20 +113,15 @@ const App: React.FC = () => {
         const userTeams = teams.filter(t => t.memberIds.includes(activeUser.id));
 
         for(const team of userTeams) {
-            const userShare = 1 / team.memberIds.length; // Simplified share calculation
-
-            team.financialStatement.transactions.forEach(t => {
-                // Find or create a share for the active user
-                const userExpenseShare = t.expenseShares?.find(s => s.userId === activeUser.id);
-                const userPaymentShare = t.paymentShares.find(s => s.userId === activeUser.id);
-                
-                // Add the transaction to the personal statement for visibility
-                // The FinancialStatement component will then calculate the user's actual contribution
-                personalStatement.transactions.push(t);
-            });
+            personalStatement.transactions.push(...team.financialStatement.transactions);
+            const userShare = 1 / team.memberIds.length;
             team.financialStatement.assets.forEach(a => personalStatement.assets.push({ ...a, value: a.value * userShare, shares: [{userId: activeUser.id, percentage: userShare * 100}] }));
             team.financialStatement.liabilities.forEach(l => personalStatement.liabilities.push({ ...l, balance: l.balance * userShare, shares: [{userId: activeUser.id, percentage: userShare * 100}] }));
         }
+        
+        const uniqueTransactions = Array.from(new Map(personalStatement.transactions.map((t: Transaction) => [t.id, t])).values());
+        personalStatement.transactions = uniqueTransactions;
+        
         return personalStatement;
     }, [activeUser, teams]);
 
@@ -134,10 +131,8 @@ const App: React.FC = () => {
         if (allTransactions.length === 0) return [];
 
         const dataPoints: HistoricalDataPoint[] = [];
-        let runningNetWorth = 0; // Simplified starting point
-
+        let runningNetWorth = 0; 
         allTransactions.forEach(tx => {
-            // This is a simplified net worth calculation. A more accurate one would be more complex.
             if(tx.type === 'INCOME') runningNetWorth += tx.amount;
             else runningNetWorth -= tx.amount;
             dataPoints.push({date: tx.date, value: runningNetWorth});
@@ -146,28 +141,40 @@ const App: React.FC = () => {
         return dataPoints;
     }, [effectiveFinancialStatement.transactions, activeUser]);
 
-
-    const updateUserState = (updatedUser: User) => {
-        setUsers(currentUsers => currentUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
-    };
+    const updateUserState = (updatedUser: User) => setUsers(currentUsers => currentUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
     const updateMultipleUsersState = (updatedUsers: User[]) => {
         const updatedUsersMap = new Map(updatedUsers.map(u => [u.id, u]));
         setUsers(currentUsers => currentUsers.map(u => updatedUsersMap.get(u.id) || u));
     };
-    const updateTeamState = (updatedTeam: Team) => {
-        setTeams(currentTeams => currentTeams.map(t => t.id === updatedTeam.id ? updatedTeam : t));
+    const updateTeamState = (updatedTeam: Team) => setTeams(currentTeams => currentTeams.map(t => t.id === updatedTeam.id ? updatedTeam : t));
+    const updateMultipleTeamsState = (updatedTeams: Team[]) => {
+        const updatedTeamsMap = new Map(updatedTeams.map(t => [t.id, t]));
+        setTeams(currentTeams => currentTeams.map(t => updatedTeamsMap.get(t.id) || t));
     };
 
-    const handleAddTransaction = async (transaction: Omit<Transaction, 'id'>) => {
+    const handleSaveTransaction = async (transaction: Omit<Transaction, 'id'> | Transaction) => {
         if (!activeUser) return;
         
-        if(transaction.teamId) {
-            const updatedTeam = await db.addTeamTransaction(transaction);
-            updateTeamState(updatedTeam);
-        } else {
-            const updatedUsers = await db.addTransaction(activeUser.id, transaction, users);
+        if ('id' in transaction) { // Editing existing transaction
+            const { updatedUsers, updatedTeams } = await db.updateTransaction(transaction, users, teams);
             updateMultipleUsersState(updatedUsers);
+            updateMultipleTeamsState(updatedTeams);
+        } else { // Adding new transaction
+            if(transaction.teamId) {
+                const updatedTeam = await db.addTeamTransaction(transaction);
+                updateTeamState(updatedTeam);
+            } else {
+                const updatedUsers = await db.addTransaction(activeUser.id, transaction, users);
+                updateMultipleUsersState(updatedUsers);
+            }
         }
+    };
+    
+    const handleDeleteTransaction = async (transactionId: string) => {
+        if (!window.confirm("Are you sure you want to delete this transaction? This action cannot be undone.")) return;
+        const { updatedUsers, updatedTeams } = await db.deleteTransaction(transactionId, users, teams);
+        updateMultipleUsersState(updatedUsers);
+        updateMultipleTeamsState(updatedTeams);
     };
 
     const handleTransfer = async (fromAccountId: string, toAccountId: string, amount: number, isSettleUp: boolean = false) => {
@@ -245,7 +252,6 @@ const App: React.FC = () => {
         if (!activeUser) return;
         try {
             if(teamId) {
-                // FIX: Use AssetType.STOCK enum instead of string literal 'Stock'.
                 const updatedTeam = await db.addTeamAsset(teamId, {...stockData, type: AssetType.STOCK});
                 updateTeamState(updatedTeam);
             } else {
@@ -253,7 +259,6 @@ const App: React.FC = () => {
                 if (stockToEdit) { 
                     updatedUser = await db.updateAsset(activeUser.id, stockToEdit.id, stockData);
                 } else { 
-                    // FIX: Use AssetType.STOCK enum instead of string literal 'Stock'.
                     updatedUser = await db.addAsset(activeUser.id, {...stockData, type: AssetType.STOCK} as any);
                 }
                 updateUserState(updatedUser);
@@ -292,7 +297,7 @@ const App: React.FC = () => {
             alert((e as Error).message);
         }
         setAddAccountModalOpen(false);
-        setAddTransactionModalOpen(true); // Re-open transaction modal
+        setAddTransactionModalOpen(true); 
     };
 
     const handleAddCategory = (newCategory: string) => {
@@ -307,44 +312,30 @@ const App: React.FC = () => {
         setTeams(current => [...current, newTeam]);
     };
 
-    const handleTeamClick = (teamId: string) => {
-        setSelectedTeamId(teamId);
-        setActiveView('team-detail');
-    };
-    
-    const handleBackToTeams = () => {
-        setSelectedTeamId(null);
-        setActiveView('teams');
-    };
-
+    const handleTeamClick = (teamId: string) => { setSelectedTeamId(teamId); setActiveView('team-detail'); };
+    const handleBackToTeams = () => { setSelectedTeamId(null); setActiveView('teams'); };
     const handleCategoryClick = (category: string) => { setSelectedCategory(category); setCategoryModalOpen(true); };
     const handleTransactionClick = (transaction: Transaction) => { setSelectedTransaction(transaction); setTransactionDetailModalOpen(true); };
     
     const handleStatCardClick = (stat: 'netWorth' | 'cashflow' | 'passiveIncome') => {
-        if (stat === 'netWorth') {
-            setNetWorthBreakdownModalOpen(true);
-        }
-        if (stat === 'cashflow') {
-            setActiveView('statement');
-        }
-        if (stat === 'passiveIncome') {
-            setSelectedCategory('Passive Income');
-            setCategoryModalOpen(true);
-        }
+        if (stat === 'netWorth') setNetWorthBreakdownModalOpen(true);
+        if (stat === 'cashflow') setActiveView('statement');
+        if (stat === 'passiveIncome') { setSelectedCategory('Passive Income'); setCategoryModalOpen(true); }
     };
-
+    
+    const handleOpenAccountTransactionsModal = (account: Account) => { setAccountForTransactionList(account); setAccountTransactionsModalOpen(true); };
     const openLargeChartModal = (stock: Asset) => setStockForLargeChart(stock);
     const closeLargeChartModal = () => setStockForLargeChart(null);
     const handleOpenLogDividendModal = (stock: Asset) => { setStockForDividend(stock); setLogDividendModalOpen(true); };
     
-    const handleOpenAddTransactionModal = (teamId?: string) => { setModalDefaultTeamId(teamId); setAddTransactionModalOpen(true); };
+    const handleOpenAddTransactionModal = (teamId?: string) => { setTransactionToEdit(null); setModalDefaultTeamId(teamId); setAddTransactionModalOpen(true); };
+    const handleOpenEditTransactionModal = (transaction: Transaction) => { setTransactionToEdit(transaction); setAddTransactionModalOpen(true); };
+    
     const handleOpenAddAssetLiabilityModal = (type: 'asset' | 'liability', teamId?: string) => { setAssetLiabilityToEdit(null); setModalDefaultTeamId(teamId); setAssetLiabilityToAdd(type); setAddAssetLiabilityModalOpen(true); };
     const handleOpenEditAssetLiabilityModal = (item: Asset | Liability) => { setAssetLiabilityToEdit(item); setAssetLiabilityToAdd('value' in item ? 'asset' : 'liability'); setAddAssetLiabilityModalOpen(true); };
-
     const handleOpenAddStockModal = (teamId?: string) => { setStockToEdit(null); setModalDefaultTeamId(teamId); setAddStockModalOpen(true); };
     const handleOpenEditStockModal = (stock: Asset) => { setStockToEdit(stock); setAddStockModalOpen(true); };
-
-    // FAB Handlers
+    
     const fabActions = {
         onAddTransaction: () => { setIsFabOpen(false); handleOpenAddTransactionModal(selectedTeamId || undefined); },
         onAddAccount: () => { setIsFabOpen(false); setAddAccountModalOpen(true); },
@@ -360,12 +351,13 @@ const App: React.FC = () => {
 
         switch (activeView) {
             case 'dashboard': return <Dashboard user={activeUser} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
-            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} teamMates={users.filter(u => u.id !== activeUser.id)} onGenerateReport={() => alert("Backend needed: This would generate a PDF report.")}/>;
-            case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => setAddAccountModalOpen(true)}/>;
+            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} teamMates={users.filter(u => u.id !== activeUser.id)} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction}/>;
+            case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => setAddAccountModalOpen(true)} onOpenAccountTransactions={handleOpenAccountTransactionsModal}/>;
             case 'coach': return <AICoach user={activeUser} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} />;
             case 'teams': return <Teams teams={teams} onCreateTeam={() => setCreateTeamModalOpen(true)} onTeamClick={handleTeamClick}/>;
-            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} /> : null;
+            // FIX: Pass the transaction edit and delete handlers to the TeamDashboard component.
+            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} /> : null;
             case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => setTransferModalOpen(true)} />;
             default: return <Dashboard user={activeUser} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
         }
@@ -404,10 +396,9 @@ const App: React.FC = () => {
                 <FloatingActionButton {...fabActions} isOpen={isFabOpen} onToggle={() => setIsFabOpen(prev => !prev)} />
             </main>
             
-            {activeUser && <AddTransactionModal isOpen={isAddTransactionModalOpen} onClose={() => setAddTransactionModalOpen(false)} onAddTransaction={handleAddTransaction} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={() => { setAddTransactionModalOpen(false); setAddAccountModalOpen(true); }} onAddCategoryClick={() => { setAddTransactionModalOpen(false); setAddCategoryModalOpen(true); }} defaultTeamId={modalDefaultTeamId} />}
+            {activeUser && <AddTransactionModal isOpen={isAddTransactionModalOpen} onClose={() => setAddTransactionModalOpen(false)} onSave={handleSaveTransaction} transactionToEdit={transactionToEdit} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={() => { setAddTransactionModalOpen(false); setAddAccountModalOpen(true); }} onAddCategoryClick={() => { setAddTransactionModalOpen(false); setAddCategoryModalOpen(true); }} defaultTeamId={modalDefaultTeamId} />}
             {activeUser && <TransferModal isOpen={isTransferModalOpen} onClose={() => setTransferModalOpen(false)} onTransfer={handleTransfer} currentUser={activeUser}/>}
             <CosmicEventModal isOpen={isCosmicEventModalOpen} isGenerating={isGeneratingCosmicEvent} event={currentCosmicEvent} onClose={() => setCosmicEventModalOpen(false)} onResolve={handleCosmicEventResolution}/>
-            {/* FIX: Pass the required 'teams' prop to the AddStockModal component. */}
             <AddStockModal isOpen={isAddStockModalOpen} onClose={() => setAddStockModalOpen(false)} onSave={handleSaveStock} stockToEdit={stockToEdit} accounts={activeUser?.accounts || []} teams={teams} defaultTeamId={modalDefaultTeamId} />
             {activeUser && stockForDividend && <LogDividendModal isOpen={isLogDividendModalOpen} onClose={() => { setLogDividendModalOpen(false); setStockForDividend(null); }} onLogDividend={handleLogDividend} stock={stockForDividend} accounts={activeUser.accounts}/>}
             {stockForLargeChart && <LargeChartModal stock={stockForLargeChart} onClose={closeLargeChartModal}/>}
@@ -418,6 +409,7 @@ const App: React.FC = () => {
             {activeUser && <CreateTeamModal isOpen={isCreateTeamModalOpen} onClose={() => setCreateTeamModalOpen(false)} onCreateTeam={handleCreateTeam} allUsers={users} currentUser={activeUser}/>}
             {activeUser && <NetWorthBreakdownModal isOpen={isNetWorthBreakdownModalOpen} onClose={() => setNetWorthBreakdownModalOpen(false)} user={activeUser} teams={teams} />}
             <AddCategoryModal isOpen={isAddCategoryModalOpen} onClose={() => { setAddCategoryModalOpen(false); setAddTransactionModalOpen(true); }} onAddCategory={handleAddCategory} />
+            {activeUser && accountForTransactionList && <AccountTransactionsModal isOpen={isAccountTransactionsModalOpen} onClose={() => setAccountTransactionsModalOpen(false)} account={accountForTransactionList} allTransactions={effectiveFinancialStatement.transactions} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} />}
         </div>
     );
 };

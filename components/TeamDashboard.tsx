@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Team, User, Asset, Liability } from '../types';
+import type { Team, User, Asset, Liability, Transaction } from '../types';
 import { FinancialStatement } from './FinancialStatement';
 import { PlusIcon } from './icons';
 
@@ -13,6 +13,8 @@ interface TeamDashboardProps {
     onAddStock: () => void;
     onEditAsset: (asset: Asset) => void;
     onEditLiability: (liability: Liability) => void;
+    onEditTransaction: (transaction: Transaction) => void;
+    onDeleteTransaction: (transactionId: string) => void;
 }
 
 const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; isNegative?: boolean; onEdit: () => void }> = ({ label, value, isPositive, isNegative, onEdit }) => (
@@ -25,7 +27,7 @@ const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; is
     </div>
 );
 
-export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock, onEditAsset, onEditLiability }) => {
+export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock, onEditAsset, onEditLiability, onEditTransaction, onDeleteTransaction }) => {
     const members = allUsers.filter(u => team.memberIds.includes(u.id));
     const { assets, liabilities } = team.financialStatement;
 
@@ -55,7 +57,8 @@ export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, on
                 </div>
             </div>
 
-            <FinancialStatement statement={team.financialStatement} user={members[0]} teamMates={[]} team={team} />
+            {/* FIX: Pass required props to enable editing and deleting transactions. */}
+            <FinancialStatement statement={team.financialStatement} user={members[0]} teamMates={[]} team={team} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">

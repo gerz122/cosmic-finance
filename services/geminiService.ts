@@ -1,16 +1,16 @@
-
-
 import { GoogleGenAI, Type } from "@google/genai";
-// FIX: Import Account and AccountType to correctly calculate cash from accounts.
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType } from '../types';
 import type { LiveStockData } from '../components/RealTimeStockData';
 
-// FIX: Per coding guidelines, the API key must be read from process.env.API_KEY.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// FIX: Per coding guidelines, the API key MUST be read from `process.env.API_KEY`.
+const apiKey = process.env.API_KEY;
+if (!apiKey) {
+    throw new Error("API_KEY environment variable not set.");
+}
+const ai = new GoogleGenAI({ apiKey });
 
 
-// FIX: Update signature to accept accounts array to properly calculate cash.
 function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {
     const totalIncome = statement.transactions
         .filter(t => t.type === 'INCOME' && !t.isPassive)
@@ -22,7 +22,6 @@ function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: A
         .filter(t => t.type === 'EXPENSE')
         .reduce((sum, t) => sum + t.amount, 0);
     const netWorth = statement.assets.reduce((sum, a) => sum + a.value, 0) - statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
-    // FIX: Calculate cash from accounts, not from assets, to fix type error.
     const cash = accounts
         .filter(a => a.type === AccountType.CASH || a.type === AccountType.CHECKING)
         .reduce((sum, a) => sum + a.balance, 0);
@@ -38,7 +37,6 @@ function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: A
     `;
 }
 
-// FIX: Update signature to accept accounts array.
 export const getFinancialAdvice = async (prompt: string, statement: FinancialStatement, accounts: Account[]): Promise<string> => {
   try {
     const fullPrompt = `
@@ -64,11 +62,8 @@ export const getFinancialAdvice = async (prompt: string, statement: FinancialSta
   }
 };
 
-
-// FIX: Update signature to accept accounts array.
 export const getCosmicEvent = async (statement: FinancialStatement, accounts: Account[]): Promise<CosmicEvent> => {
   const financialContext = formatFinancialDataForPrompt(statement, accounts);
-  // FIX: Calculate cash from accounts, not from assets, to fix type error.
   const availableCash = accounts
     .filter(a => a.type === AccountType.CASH || a.type === AccountType.CHECKING)
     .reduce((sum, a) => sum + a.balance, 0);
@@ -129,65 +124,34 @@ export const getCosmicEvent = async (statement: FinancialStatement, accounts: Ac
     });
 
     const eventJson = JSON.parse(response.text);
-
-    // Basic validation to ensure we have two choices.
     if (!eventJson.choices || eventJson.choices.length !== 2) {
       throw new Error("AI did not generate two choices.");
     }
-    
     return eventJson as CosmicEvent;
   } catch (error) {
     console.error("Error generating cosmic event:", error);
-    // Fallback event in case of AI error
     return {
       title: "Signal Lost",
       description: "A solar flare interrupted our transmission from the opportunities quadrant! For now, the cosmos is quiet.",
       choices: [
-        {
-          text: "Stay Put",
-          outcome: { message: "You decide to wait for the solar flare to pass. No changes to your finances." }
-        },
-        {
-          text: "Continue Scanning",
-          outcome: { message: "You use some energy to scan again, but find nothing new." }
-        }
+        { text: "Stay Put", outcome: { message: "You decide to wait for the solar flare to pass. No changes to your finances." } },
+        { text: "Continue Scanning", outcome: { message: "You use some energy to scan again, but find nothing new." } }
       ]
     };
   }
 };
 
 export const searchTickers = async (query: string): Promise<{ticker: string, name: string}[]> => {
-    if (!query || query.length < 1) {
-        return [];
-    }
-
+    if (!query || query.length < 1) return [];
     const prompt = `
         Based on the search query "${query}", find up to 5 relevant stock tickers and their company names.
         Provide the response ONLY in the specified JSON format.
         If you can't find anything, return an empty array.
     `;
-    const responseSchema = {
-        type: Type.ARRAY,
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                ticker: { type: Type.STRING },
-                name: { type: Type.STRING }
-            }
-        }
-    };
+    const responseSchema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { ticker: { type: Type.STRING }, name: { type: Type.STRING } } } };
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema
-            }
-        });
-        const results = JSON.parse(response.text);
-        return results;
-
+        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema } });
+        return JSON.parse(response.text);
     } catch (error) {
         console.error("Error searching for tickers:", error);
         return [];
@@ -204,31 +168,16 @@ export const getLiveStockData = async (ticker: string): Promise<LiveStockData> =
       Respond ONLY with the specified JSON format.
       If Google Finance does not recognize the ticker or no data is available, return nulls for all values.
     `;
-    const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-            price: { type: Type.NUMBER, nullable: true },
-            dayChange: { type: Type.NUMBER, nullable: true, description: "The change in price for the day." },
-            dayChangePercent: { type: Type.NUMBER, nullable: true, description: "The percentage change for the day." }
-        }
-    };
+    const responseSchema = { type: Type.OBJECT, properties: { price: { type: Type.NUMBER, nullable: true }, dayChange: { type: Type.NUMBER, nullable: true, description: "The change in price for the day." }, dayChangePercent: { type: Type.NUMBER, nullable: true, description: "The percentage change for the day." } } };
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema
-            }
-        });
+        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema } });
         const result = JSON.parse(response.text) as LiveStockData;
         if (result.price === null) {
             console.warn(`Could not fetch live data for ticker from Google Finance: ${ticker}`);
             return fallbackData;
         }
         return result;
-
     } catch (error) {
         console.error(`Error fetching live stock data for ${ticker}:`, error);
         return fallbackData;
