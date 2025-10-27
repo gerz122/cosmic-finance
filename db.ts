@@ -1,124 +1,144 @@
 import { firestore } from './services/firebase';
-import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, PaymentShare, ExpenseShare } from './types';
+import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team } from './types';
 import { TransactionType, AssetType, AccountType } from './types';
 
-
+// Real data for German & Valeria
 const initialData = {
     users: [
         {
-            id: 'user1',
-            name: 'Star Player',
-            avatar: 'https://i.pravatar.cc/150?u=user1',
-            teamIds: ['team1', 'team2'],
+            id: 'german',
+            name: 'German',
+            avatar: 'https://i.pravatar.cc/150?u=german',
+            teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'],
         },
         {
-            id: 'user2',
-            name: 'Cosmic Partner',
-            avatar: 'https://i.pravatar.cc/150?u=user2',
-            teamIds: ['team1', 'team2'],
+            id: 'valeria',
+            name: 'Valeria',
+            avatar: 'https://i.pravatar.cc/150?u=valeria',
+            teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'],
         },
-        {
-            id: 'user3',
-            name: 'Nova Investor',
-            avatar: 'https://i.pravatar.cc/150?u=user3',
-            teamIds: ['team2'],
-        }
     ],
     accounts: [
-        // User 1
-        { id: 'acc1-u1', name: 'Personal Checking', type: AccountType.CHECKING, balance: 10000, ownerIds: ['user1'] },
-        { id: 'acc2-u1', name: 'Galaxy Brokerage', type: AccountType.INVESTMENT, balance: 0, ownerIds: ['user1'] },
-        // User 2
-        { id: 'acc1-u2', name: 'Partner Checking', type: AccountType.CHECKING, balance: 15000, ownerIds: ['user2'] },
-        // User 3
-        { id: 'acc1-u3', name: 'Investor Savings', type: AccountType.SAVINGS, balance: 50000, ownerIds: ['user3'] },
-        { id: 'acc2-u3', name: 'Trading Account', type: AccountType.INVESTMENT, balance: 0, ownerIds: ['user3'] },
+        // Joint Accounts
+        { id: 'acc-joint-checking', name: 'Cuenta Conjunta', type: AccountType.CHECKING, balance: 6686.80, ownerIds: ['german', 'valeria'] },
+        { id: 'acc-joint-cc', name: 'Tarjeta Conjunta', type: AccountType.CREDIT_CARD, balance: 250.00, ownerIds: ['german', 'valeria'] },
+
+        // German's Accounts
+        { id: 'g-savings-1', name: 'G-Ahorros 1', type: AccountType.SAVINGS, balance: 15000, ownerIds: ['german'] },
+        { id: 'g-savings-2', name: 'G-Ahorros 2', type: AccountType.SAVINGS, balance: 5000, ownerIds: ['german'] },
+        { id: 'g-rrsp', name: 'G-RRSP', type: AccountType.RRSP, balance: 10000, ownerIds: ['german'] },
+        { id: 'g-tfsa', name: 'G-TFSA', type: AccountType.TFSA, balance: 12000, ownerIds: ['german'] },
+        { id: 'g-margin', name: 'G-Cuenta Margen', type: AccountType.INVESTMENT, balance: 8000, ownerIds: ['german'] },
+        { id: 'g-fx', name: 'G-Cuenta FX', type: AccountType.INVESTMENT, balance: 3000, ownerIds: ['german'] },
+        
+        // Valeria's Accounts
+        { id: 'v-savings-1', name: 'V-Ahorros 1', type: AccountType.SAVINGS, balance: 18000, ownerIds: ['valeria'] },
+        { id: 'v-savings-2', name: 'V-Ahorros 2', type: AccountType.SAVINGS, balance: 4000, ownerIds: ['valeria'] },
+        { id: 'v-rrsp', name: 'V-RRSP', type: AccountType.RRSP, balance: 9000, ownerIds: ['valeria'] },
+        { id: 'v-tfsa', name: 'V-TFSA', type: AccountType.TFSA, balance: 11000, ownerIds: ['valeria'] },
     ],
     teams: [
         {
-            id: 'team1',
-            name: 'Family Finances',
-            memberIds: ['user1', 'user2'],
-            goals: [{ description: 'Save for Vacation', current: 500, target: 5000 }],
-            accounts: [
-                { id: 'acc-team1-1', name: 'Household Expenses', type: AccountType.CHECKING, balance: 3000, ownerIds: [], teamId: 'team1' },
-            ],
+            id: 'team-millo',
+            name: 'Les Millo',
+            memberIds: ['german', 'valeria'],
+            goals: [],
+            accounts: [],
             financialStatement: {
                 transactions: [
-                     { id: 't-team1-1', description: 'Groceries', amount: 400, type: TransactionType.EXPENSE, category: 'Food', date: '2023-10-05', teamId: 'team1', paymentShares: [{ userId: 'user1', accountId: 'acc-team1-1', amount: 400 }], expenseShares: [{ userId: 'user1', amount: 200 }, { userId: 'user2', amount: 200 }] },
-                     { id: 't-team1-2', description: 'Electricity Bill', amount: 150, type: TransactionType.EXPENSE, category: 'Utilities', date: '2023-10-06', teamId: 'team1', paymentShares: [{ userId: 'user2', accountId: 'acc-team1-1', amount: 150 }], expenseShares: [{ userId: 'user1', amount: 75 }, { userId: 'user2', amount: 75 }] },
-                     { id: 't-team1-3', description: 'Internet Bill', amount: 80, type: TransactionType.EXPENSE, category: 'Utilities', date: '2023-10-10', teamId: 'team1', paymentShares: [{ userId: 'user1', accountId: 'acc-team1-1', amount: 80 }], expenseShares: [{ userId: 'user1', amount: 40 }, { userId: 'user2', amount: 40 }] }
+                     // This transaction results in Valeria owing German 233.40 in this team context.
+                     { id: 't-millo-1', description: 'Gastos Extras Varios', amount: 466.80, type: TransactionType.EXPENSE, category: 'Entertainment', date: '2023-10-25', teamId: 'team-millo', 
+                       paymentShares: [{ userId: 'german', accountId: 'g-savings-1', amount: 466.80 }], 
+                       expenseShares: [{ userId: 'german', amount: 233.40 }, { userId: 'valeria', amount: 233.40 }] }
                 ],
-                assets: [
-                    { id: 'a-team1-1', name: 'Family Home', type: AssetType.REAL_ESTATE, value: 400000, monthlyCashflow: 0, teamId: 'team1' },
-                ],
-                liabilities: [
-                    { id: 'l-team1-1', name: 'Mortgage', balance: 250000, interestRate: 3.5, monthlyPayment: 1800, teamId: 'team1' },
-                ]
+                assets: [], liabilities: []
             }
         },
         {
-            id: 'team2',
-            name: 'Startup Project',
-            memberIds: ['user1', 'user2', 'user3'],
-            goals: [{ description: 'Launch MVP', current: 1000, target: 10000 }],
-            accounts: [
-                { id: 'acc-team2-1', name: 'Startup Checking', type: AccountType.CHECKING, balance: 5000, ownerIds: [], teamId: 'team2' }
-            ],
+            id: 'team-casita',
+            name: 'Casita',
+            memberIds: ['german', 'valeria'],
+            goals: [],
+            accounts: [],
+            financialStatement: {
+                transactions: [
+                    { id: 't-casita-1', description: 'Alquiler Mensual', amount: 2850, type: TransactionType.EXPENSE, category: 'Housing', date: '2023-10-01', teamId: 'team-casita', paymentShares: [{ userId: 'german', accountId: 'acc-joint-checking', amount: 2850 }], expenseShares: [{ userId: 'german', amount: 1425 }, { userId: 'valeria', amount: 1425 }] },
+                    { id: 't-casita-2', description: 'Servicios Varios', amount: 350, type: TransactionType.EXPENSE, category: 'Utilities', date: '2023-10-15', teamId: 'team-casita', paymentShares: [{ userId: 'valeria', accountId: 'acc-joint-checking', amount: 350 }], expenseShares: [{ userId: 'german', amount: 175 }, { userId: 'valeria', amount: 175 }] },
+                    { id: 't-casita-3', description: 'Ingreso Alquiler 1', amount: 1100, type: TransactionType.INCOME, category: 'Rental', date: '2023-10-01', teamId: 'team-casita', isPassive: true, paymentShares: [{ userId: 'german', accountId: 'acc-joint-checking', amount: 1100 }] },
+                    { id: 't-casita-4', description: 'Ingreso Alquiler 2', amount: 1400, type: TransactionType.INCOME, category: 'Rental', date: '2023-10-01', teamId: 'team-casita', isPassive: true, paymentShares: [{ userId: 'valeria', accountId: 'acc-joint-checking', amount: 1400 }] },
+                    // This transaction ensures Valeria owes German 21.56 in this context.
+                    { id: 't-casita-balance', description: 'Ajuste de Cuentas', amount: 43.12, type: TransactionType.EXPENSE, category: 'Utilities', date: '2023-10-26', teamId: 'team-casita', paymentShares: [{ userId: 'german', accountId: 'g-savings-1', amount: 43.12 }], expenseShares: [{ userId: 'german', amount: 21.56 }, { userId: 'valeria', amount: 21.56 }] }
+                ],
+                assets: [], liabilities: []
+            }
+        },
+        {
+            id: 'team-regina',
+            name: 'Casa de Regina',
+            memberIds: ['german', 'valeria'],
+            goals: [],
+            accounts: [], // Uses joint account
             financialStatement: { 
                 transactions: [
-                    { id: 't-team2-1', description: 'Server Costs', amount: 100, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-12', teamId: 'team2', paymentShares: [{ userId: 'user1', accountId: 'acc-team2-1', amount: 100 }], expenseShares: [{ userId: 'user1', amount: 50 }, { userId: 'user2', amount: 50 }] },
-                    { id: 't-team2-2', description: 'Software License', amount: 300, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-15', teamId: 'team2', paymentShares: [{ userId: 'user3', accountId: 'acc-team2-1', amount: 300 }], expenseShares: [{ userId: 'user1', amount: 100 }, { userId: 'user2', amount: 100 }, { userId: 'user3', amount: 100 }] },
-                    { id: 't-team2-3', description: 'Client Pre-payment', amount: 2000, type: TransactionType.INCOME, category: 'Business Income', date: '2023-10-20', teamId: 'team2', isPassive: false, paymentShares: [{ userId: 'user1', accountId: 'acc-team2-1', amount: 2000 }] },
-                    { id: 't-team2-4', description: 'Domain Registration', amount: 50, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-22', teamId: 'team2', paymentShares: [{ userId: 'user3', accountId: 'acc1-u3', amount: 50 }], expenseShares: [{ userId: 'user1', amount: 16.67 }, { userId: 'user2', amount: 16.67 }, { userId: 'user3', amount: 16.66 }] },
+                    { id: 't-regina-income1', description: 'Ingreso Alquiler Basement', amount: 800, type: TransactionType.INCOME, category: 'Rental', date: '2023-10-01', teamId: 'team-regina', isPassive: true, paymentShares: [{ userId: 'german', accountId: 'acc-joint-checking', amount: 800 }] },
+                    { id: 't-regina-income2', description: 'Ingreso Alquiler Main Floor', amount: 1150, type: TransactionType.INCOME, category: 'Rental', date: '2023-10-01', teamId: 'team-regina', isPassive: true, paymentShares: [{ userId: 'german', accountId: 'acc-joint-checking', amount: 1150 }] },
+                    { id: 't-regina-income3', description: 'Ingreso Alquiler Second Floor', amount: 1050, type: TransactionType.INCOME, category: 'Rental', date: '2023-10-01', teamId: 'team-regina', isPassive: true, paymentShares: [{ userId: 'valeria', accountId: 'acc-joint-checking', amount: 1050 }] },
+                    { id: 't-regina-income4', description: 'Ingreso Alquiler Garage', amount: 150, type: TransactionType.INCOME, category: 'Rental', date: '2023-10-01', teamId: 'team-regina', isPassive: true, paymentShares: [{ userId: 'valeria', accountId: 'acc-joint-checking', amount: 150 }] },
+                    { id: 't-regina-exp-mortgage', description: 'Pago Hipoteca', amount: 1000, type: TransactionType.EXPENSE, category: 'Mortgage', date: '2023-10-01', teamId: 'team-regina', paymentShares: [{ userId: 'german', accountId: 'acc-joint-checking', amount: 1000 }], expenseShares: [{ userId: 'german', amount: 500 }, { userId: 'valeria', amount: 500 }] },
+                    { id: 't-regina-exp-utils', description: 'Gastos (Utilities, Seguro, etc)', amount: 1000, type: TransactionType.EXPENSE, category: 'Utilities', date: '2023-10-15', teamId: 'team-regina', paymentShares: [{ userId: 'valeria', accountId: 'acc-joint-checking', amount: 1000 }], expenseShares: [{ userId: 'german', amount: 500 }, { userId: 'valeria', amount: 500 }] },
+                    // This transaction ensures German owes Valeria 4728 in this context.
+                    { id: 't-regina-balance', description: 'Ajuste de Cuentas (Renovaciones)', amount: 9456, type: TransactionType.EXPENSE, category: 'Maintenance', date: '2023-10-20', teamId: 'team-regina', paymentShares: [{ userId: 'valeria', accountId: 'v-savings-1', amount: 9456 }], expenseShares: [{ userId: 'german', amount: 4728 }, { userId: 'valeria', amount: 4728 }] }
                 ], 
-                assets: [
-                     { id: 'a-team2-1', name: 'Software IP', type: AssetType.BUSINESS, value: 25000, monthlyCashflow: 0, teamId: 'team2' },
-                ], 
-                liabilities: [
-                    { id: 'l-team2-1', name: 'Angel Investor Loan', balance: 10000, interestRate: 8.0, monthlyPayment: 200, teamId: 'team2' },
-                ] 
+                assets: [ { id: 'a-regina-1', name: 'Casa de Regina', type: AssetType.REAL_ESTATE, value: 240000, monthlyCashflow: 0, teamId: 'team-regina' } ], 
+                liabilities: [ { id: 'l-regina-1', name: 'Hipoteca Regina', balance: 220000, interestRate: 3.49, monthlyPayment: 1000, teamId: 'team-regina' } ] 
+            }
+        },
+        {
+            id: 'team-viandas',
+            name: 'Negocio de la viandas',
+            memberIds: ['german', 'valeria'],
+            goals: [],
+            accounts: [],
+            financialStatement: {
+                transactions: [
+                    { id: 't-viandas-1', description: 'Venta de Productos', amount: 130, type: TransactionType.INCOME, category: 'Business Income', date: '2023-10-22', teamId: 'team-viandas', paymentShares: [{ userId: 'valeria', accountId: 'v-savings-1', amount: 130 }] },
+                    { id: 't-viandas-2', description: 'Compra de Comida', amount: 120, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-21', teamId: 'team-viandas', paymentShares: [{ userId: 'german', accountId: 'g-savings-1', amount: 120 }], expenseShares: [{ userId: 'german', amount: 60 }, { userId: 'valeria', amount: 60 }] }
+                ],
+                assets: [], liabilities: []
             }
         }
     ],
     baseStatements: {
-        user1: {
+        german: {
             assets: [
-                { id: 'a2', name: 'Galactic Holdings Inc.', type: AssetType.STOCK, value: 15000, monthlyCashflow: 50, ticker: 'GHI', numberOfShares: 100, purchasePrice: 150 },
-                { id: 'a3', name: 'Tesla', type: AssetType.STOCK, value: 10000, monthlyCashflow: 0, ticker: 'TSLA', numberOfShares: 40, purchasePrice: 250 },
+                { id: 'g-a1', name: 'Grupo Financiero Galicia', type: AssetType.STOCK, value: 2500, monthlyCashflow: 0, ticker: 'GGAL', numberOfShares: 10, purchasePrice: 250 },
+                { id: 'g-a2', name: 'Pampa Energia', type: AssetType.STOCK, value: 800, monthlyCashflow: 0, ticker: 'PAM', numberOfShares: 10, purchasePrice: 80 },
+                { id: 'g-a3', name: 'YPF', type: AssetType.STOCK, value: 400, monthlyCashflow: 0, ticker: 'YPF', numberOfShares: 10, purchasePrice: 40 },
+                { id: 'g-a4', name: 'Supervielle', type: AssetType.STOCK, value: 200, monthlyCashflow: 0, ticker: 'SUPV', numberOfShares: 10, purchasePrice: 20 },
+                { id: 'g-a5', name: 'BBVA Argentina', type: AssetType.STOCK, value: 300, monthlyCashflow: 0, ticker: 'BBAR', numberOfShares: 10, purchasePrice: 30 },
+                { id: 'g-a6', name: 'Banco Macro', type: AssetType.STOCK, value: 600, monthlyCashflow: 0, ticker: 'BMA', numberOfShares: 10, purchasePrice: 60 },
+                { id: 'g-a7', name: 'Loma Negra', type: AssetType.STOCK, value: 150, monthlyCashflow: 0, ticker: 'LOMA', numberOfShares: 10, purchasePrice: 15 },
+                { id: 'g-a8', name: 'Vista Energy', type: AssetType.STOCK, value: 500, monthlyCashflow: 0, ticker: 'VIST', numberOfShares: 10, purchasePrice: 50 },
+                // Joint stocks held in German's account
+                { id: 'j-a1', name: 'Grupo Financiero Galicia (Conjunto)', type: AssetType.STOCK, value: 2500, monthlyCashflow: 0, ticker: 'GGAL', numberOfShares: 10, purchasePrice: 250, shares: [{ userId: 'german', percentage: 50 }, { userId: 'valeria', percentage: 50 }] },
             ],
-            liabilities: [
-                { id: 'l2', name: 'Car Loan', balance: 12000, interestRate: 5.0, monthlyPayment: 350 },
-            ],
-            transactions: [
-                { id: 't1-u1', description: 'Salary', amount: 5000, type: TransactionType.INCOME, category: 'Job', date: '2023-10-01', isPassive: false, paymentShares: [{ userId: 'user1', accountId: 'acc1-u1', amount: 5000 }] },
-                { id: 't2-u1', description: 'Dinner with Partner', amount: 120, type: TransactionType.EXPENSE, category: 'Food', date: '2023-10-02', paymentShares: [{ userId: 'user1', accountId: 'acc1-u1', amount: 120 }], expenseShares: [{ userId: 'user1', amount: 60 }, { userId: 'user2', amount: 60 }] },
-                { id: 't3-u1', description: 'Movie Night', amount: 50, type: TransactionType.EXPENSE, category: 'Entertainment', date: '2023-10-08', paymentShares: [{ userId: 'user1', accountId: 'acc1-u1', amount: 50 }], expenseShares: [{ userId: 'user1', amount: 25 }, { userId: 'user3', amount: 25 }] },
-                { id: 't4-u1', description: 'GHI Dividend', amount: 50, type: TransactionType.INCOME, category: 'Investment', date: '2023-10-15', isPassive: true, paymentShares: [{ userId: 'user1', accountId: 'acc1-u1', amount: 50 }] },
-            ]
-        },
-        user2: {
-             assets: [
-                { id: 'a2-u2', name: 'Nebula Corp', type: AssetType.STOCK, value: 32000, monthlyCashflow: 0, ticker: 'NBLA', numberOfShares: 200, purchasePrice: 160 },
-            ],
-            liabilities: [
-                 { id: 'l1-u2', name: 'Student Loan', balance: 25000, interestRate: 6.0, monthlyPayment: 400 },
-            ],
-            transactions: [
-                 { id: 't1-u2', description: 'Freelance Work', amount: 3500, type: TransactionType.INCOME, category: 'Job', date: '2023-10-01', isPassive: false, paymentShares: [{ userId: 'user2', accountId: 'acc1-u2', amount: 3500 }] },
-                 { id: 't2-u2', description: 'Lunch with Investor', amount: 90, type: TransactionType.EXPENSE, category: 'Food', date: '2023-10-18', paymentShares: [{ userId: 'user2', accountId: 'acc1-u2', amount: 90 }], expenseShares: [{ userId: 'user2', amount: 45 }, { userId: 'user3', amount: 45 }] },
-            ]
-        },
-        user3: {
-             assets: [
-                { id: 'a1-u3', name: 'Apple Inc.', type: AssetType.STOCK, value: 50000, monthlyCashflow: 100, ticker: 'AAPL', numberOfShares: 300, purchasePrice: 140 },
-             ],
             liabilities: [],
-            transactions: [
-                 { id: 't1-u3', description: 'Consulting Gig', amount: 6000, type: TransactionType.INCOME, category: 'Job', date: '2023-10-03', isPassive: false, paymentShares: [{ userId: 'user3', accountId: 'acc1-u3', amount: 6000 }] },
-                 { id: 't2-u3', description: 'AAPL Dividend', amount: 100, type: TransactionType.INCOME, category: 'Investment', date: '2023-10-20', isPassive: true, paymentShares: [{ userId: 'user3', accountId: 'acc1-u3', amount: 100 }] },
-            ]
-        }
+            transactions: []
+        },
+        valeria: {
+             assets: [
+                { id: 'v-a1', name: 'Grupo Financiero Galicia', type: AssetType.STOCK, value: 2500, monthlyCashflow: 0, ticker: 'GGAL', numberOfShares: 10, purchasePrice: 250 },
+                { id: 'v-a2', name: 'Pampa Energia', type: AssetType.STOCK, value: 800, monthlyCashflow: 0, ticker: 'PAM', numberOfShares: 10, purchasePrice: 80 },
+                { id: 'v-a3', name: 'YPF', type: AssetType.STOCK, value: 400, monthlyCashflow: 0, ticker: 'YPF', numberOfShares: 10, purchasePrice: 40 },
+                { id: 'v-a4', name: 'Supervielle', type: AssetType.STOCK, value: 200, monthlyCashflow: 0, ticker: 'SUPV', numberOfShares: 10, purchasePrice: 20 },
+                { id: 'v-a5', name: 'BBVA Argentina', type: AssetType.STOCK, value: 300, monthlyCashflow: 0, ticker: 'BBAR', numberOfShares: 10, purchasePrice: 30 },
+                { id: 'v-a6', name: 'Banco Macro', type: AssetType.STOCK, value: 600, monthlyCashflow: 0, ticker: 'BMA', numberOfShares: 10, purchasePrice: 60 },
+                { id: 'v-a7', name: 'Loma Negra', type: AssetType.STOCK, value: 150, monthlyCashflow: 0, ticker: 'LOMA', numberOfShares: 10, purchasePrice: 15 },
+                { id: 'v-a8', name: 'Vista Energy', type: AssetType.STOCK, value: 500, monthlyCashflow: 0, ticker: 'VIST', numberOfShares: 10, purchasePrice: 50 },
+            ],
+            liabilities: [],
+            transactions: []
+        },
     }
 };
 
@@ -264,9 +284,9 @@ export const db = {
         for (const payment of transaction.paymentShares) {
              const account = team.accounts.find(a => a.id === payment.accountId);
             if(!account) {
-                 // The payment might come from a PERSONAL account for a team expense, so we don't need to find it here.
-                 // Balance changes for personal accounts are handled in the addTransaction function.
+                 // The payment might come from a PERSONAL account for a team expense.
                  // This function only handles changes to TEAM accounts.
+                 // A separate function is needed to update personal accounts from team transactions.
             } else {
                 if (transaction.type === TransactionType.INCOME) account.balance += payment.amount;
                 else account.balance -= payment.amount;

@@ -1,10 +1,17 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 // FIX: Import Account and AccountType to correctly calculate cash from accounts.
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType } from '../types';
 import type { LiveStockData } from '../components/RealTimeStockData';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// FIX: Read the API key from process.env.API_KEY as per the coding guidelines.
+const apiKey = process.env.API_KEY;
+if (!apiKey) {
+  throw new Error("API_KEY is not set. Please add it to your environment variables.");
+}
+const ai = new GoogleGenAI({ apiKey });
+
 
 // FIX: Update signature to accept accounts array to properly calculate cash.
 function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {
