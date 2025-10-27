@@ -22,36 +22,35 @@ export const Balances: React.FC<BalancesProps> = ({ currentUser, allUsers, teams
         const balanceMap: { [userId: string]: number } = {};
         allUsers.forEach(u => balanceMap[u.id] = 0);
 
-        // Gather all transactions from all users and teams
-        const allTransactions: Transaction[] = [];
-        allUsers.forEach(u => {
-            // Only include personal transactions that are actually shared
-            const sharedTx = u.financialStatement.transactions.filter(tx => 
-                tx.type === TransactionType.EXPENSE && tx.expenseShares && tx.expenseShares.length > 1
-            );
-            allTransactions.push(...sharedTx);
-        });
-        teams.forEach(team => {
-            allTransactions.push(...team.financialStatement.transactions);
-        });
+        // Step 1: Gather all relevant transactions from every source.
+        // This includes personal shared expenses and all team expenses.
+        const allSharedTransactions = [
+            ...teams.flatMap(team => team.financialStatement.transactions),
+            ...allUsers.flatMap(user => user.financialStatement.transactions)
+        ].filter(tx => tx.type === TransactionType.EXPENSE && tx.expenseShares && tx.expenseShares.length > 0);
 
-        // Get unique transactions to avoid double counting if a user is part of a team
-        const uniqueTransactions = Array.from(new Map(allTransactions.map(t => [t.id, t])).values());
+        // Step 2: Ensure we only process each transaction once, even if it's in multiple places.
+        const uniqueTransactions = Array.from(new Map(allSharedTransactions.map(t => [t.id, t])).values());
         
+        // Step 3: Calculate balances based on the "pool" method.
         uniqueTransactions.forEach(tx => {
-            // We only care about shared expenses for calculating interpersonal debt
+            // A transaction must be an expense with defined shares to affect balances.
             if (tx.type === TransactionType.EXPENSE && tx.expenseShares) {
-                // Credit the payers: they put money in, so their balance goes up (group owes them)
+                // Credit the payers: They put money into the "pool".
+                // Their balance goes up, meaning the group owes them.
                 tx.paymentShares.forEach(payment => {
                     balanceMap[payment.userId] = (balanceMap[payment.userId] || 0) + payment.amount;
                 });
-                // Debit the people who benefited: they took value out, so their balance goes down (they owe the group)
+
+                // Debit the beneficiaries: They took value from the "pool".
+                // Their balance goes down, meaning they owe the group.
                 tx.expenseShares.forEach(expense => {
                     balanceMap[expense.userId] = (balanceMap[expense.userId] || 0) - expense.amount;
                 });
             }
         });
 
+        // Step 4: Format the data for the UI.
         return allUsers
             .map(user => ({
                 userId: user.id,
@@ -59,19 +58,13 @@ export const Balances: React.FC<BalancesProps> = ({ currentUser, allUsers, teams
                 avatar: user.avatar,
                 amount: balanceMap[user.id] || 0,
             }))
-            .filter(balance => Math.abs(balance.amount) > 0.01); // Only show non-zero balances
+            .filter(balance => Math.abs(balance.amount) > 0.01); // Only show non-zero balances for clarity.
             
     }, [allUsers, teams]);
 
     const myNetBalance = balances.find(b => b.userId === currentUser.id)?.amount || 0;
     
-    // What I owe is the sum of what others are owed (positive balances)
-    const totalOwedByMe = balances.filter(b => b.userId !== currentUser.id && b.amount > 0).reduce((sum, b) => sum + b.amount, 0);
-
-    // What I am owed is the sum of what others owe (negative balances)
-    const totalOwedToMe = balances.filter(b => b.userId !== currentUser.id && b.amount < 0).reduce((sum, b) => sum + Math.abs(b.amount), 0);
-    
-    // This is a simplified view. The real settlement might be more complex, but this gives a good overview.
+    // This is a simplified view for the summary cards.
     const netOwedToMe = Math.max(0, myNetBalance);
     const netOwedByMe = Math.max(0, -myNetBalance);
 
@@ -98,7 +91,7 @@ export const Balances: React.FC<BalancesProps> = ({ currentUser, allUsers, teams
                 <h2 className="text-xl font-bold text-cosmic-text-primary mb-4 px-2">Player Net Balances</h2>
                 <div className="space-y-2">
                     {balances.length === 0 && <p className="text-center py-8 text-cosmic-text-secondary">All balances are settled up!</p>}
-                    {balances.map(balance => (
+                    {balances.sort((a, b) => b.amount - a.amount).map(balance => (
                         <div key={balance.userId} className="flex justify-between items-center p-3 bg-cosmic-bg rounded-lg">
                             <div className="flex items-center gap-3">
                                 <img src={balance.avatar} alt={balance.userName} className="w-10 h-10 rounded-full" />
@@ -109,7 +102,7 @@ export const Balances: React.FC<BalancesProps> = ({ currentUser, allUsers, teams
                                     </p>
                                 </div>
                             </div>
-                            {balance.userId !== currentUser.id && (
+                            {balance.amount < 0 && balance.userId === currentUser.id && (
                                 <button onClick={onSettleUp} className="bg-cosmic-primary text-white font-bold py-1 px-3 text-sm rounded-lg hover:bg-blue-400 transition-colors">
                                     Settle Up
                                 </button>

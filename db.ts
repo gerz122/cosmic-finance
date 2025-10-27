@@ -70,6 +70,7 @@ const initialData = {
                     { id: 't-team2-1', description: 'Server Costs', amount: 100, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-12', teamId: 'team2', paymentShares: [{ userId: 'user1', accountId: 'acc-team2-1', amount: 100 }], expenseShares: [{ userId: 'user1', amount: 50 }, { userId: 'user2', amount: 50 }] },
                     { id: 't-team2-2', description: 'Software License', amount: 300, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-15', teamId: 'team2', paymentShares: [{ userId: 'user3', accountId: 'acc-team2-1', amount: 300 }], expenseShares: [{ userId: 'user1', amount: 100 }, { userId: 'user2', amount: 100 }, { userId: 'user3', amount: 100 }] },
                     { id: 't-team2-3', description: 'Client Pre-payment', amount: 2000, type: TransactionType.INCOME, category: 'Business Income', date: '2023-10-20', teamId: 'team2', isPassive: false, paymentShares: [{ userId: 'user1', accountId: 'acc-team2-1', amount: 2000 }] },
+                    { id: 't-team2-4', description: 'Domain Registration', amount: 50, type: TransactionType.EXPENSE, category: 'Business Expense', date: '2023-10-22', teamId: 'team2', paymentShares: [{ userId: 'user3', accountId: 'acc1-u3', amount: 50 }], expenseShares: [{ userId: 'user1', amount: 16.67 }, { userId: 'user2', amount: 16.67 }, { userId: 'user3', amount: 16.66 }] },
                 ], 
                 assets: [
                      { id: 'a-team2-1', name: 'Software IP', type: AssetType.BUSINESS, value: 25000, monthlyCashflow: 0, teamId: 'team2' },
@@ -262,9 +263,14 @@ export const db = {
 
         for (const payment of transaction.paymentShares) {
              const account = team.accounts.find(a => a.id === payment.accountId);
-            if(!account) throw new Error(`Account not found in team.`);
-            if (transaction.type === TransactionType.INCOME) account.balance += payment.amount;
-            else account.balance -= payment.amount;
+            if(!account) {
+                 // The payment might come from a PERSONAL account for a team expense, so we don't need to find it here.
+                 // Balance changes for personal accounts are handled in the addTransaction function.
+                 // This function only handles changes to TEAM accounts.
+            } else {
+                if (transaction.type === TransactionType.INCOME) account.balance += payment.amount;
+                else account.balance -= payment.amount;
+            }
         }
         
         const newTransaction: Transaction = { ...transaction, id: `t-${new Date().getTime()}` };
