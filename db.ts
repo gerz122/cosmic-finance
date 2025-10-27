@@ -376,6 +376,42 @@ export const db = {
         return user;
     },
 
+    updateLiability: async (userId: string, liabilityId: string, liabilityData: Partial<Liability>): Promise<User> => {
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        const liabilityIndex = user.financialStatement.liabilities.findIndex(l => l.id === liabilityId);
+        if (liabilityIndex === -1) throw new Error("Liability not found");
+        user.financialStatement.liabilities[liabilityIndex] = { ...user.financialStatement.liabilities[liabilityIndex], ...liabilityData };
+        await userRef.set(user);
+        return user;
+    },
+    
+    updateTeamAsset: async (teamId: string, assetId: string, assetData: Partial<Asset>): Promise<Team> => {
+        const teamRef = firestore.collection('teams').doc(teamId);
+        const teamSnap = await teamRef.get();
+        if (!teamSnap.exists) throw new Error("Team not found");
+        const team = teamSnap.data() as Team;
+        const assetIndex = team.financialStatement.assets.findIndex(a => a.id === assetId);
+        if (assetIndex === -1) throw new Error("Team asset not found");
+        team.financialStatement.assets[assetIndex] = { ...team.financialStatement.assets[assetIndex], ...assetData };
+        await teamRef.set(team);
+        return team;
+    },
+
+    updateTeamLiability: async (teamId: string, liabilityId: string, liabilityData: Partial<Liability>): Promise<Team> => {
+        const teamRef = firestore.collection('teams').doc(teamId);
+        const teamSnap = await teamRef.get();
+        if (!teamSnap.exists) throw new Error("Team not found");
+        const team = teamSnap.data() as Team;
+        const liabilityIndex = team.financialStatement.liabilities.findIndex(l => l.id === liabilityId);
+        if (liabilityIndex === -1) throw new Error("Team liability not found");
+        team.financialStatement.liabilities[liabilityIndex] = { ...team.financialStatement.liabilities[liabilityIndex], ...liabilityData };
+        await teamRef.set(team);
+        return team;
+    },
+
     deleteAsset: async (userId: string, assetId: string): Promise<User> => {
         const userRef = firestore.collection('users').doc(userId);
         const userSnap = await userRef.get();

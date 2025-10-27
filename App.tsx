@@ -66,6 +66,7 @@ const App: React.FC = () => {
     
     // Data for Modals
     const [assetLiabilityToAdd, setAssetLiabilityToAdd] = useState<'asset' | 'liability' | null>(null);
+    const [assetLiabilityToEdit, setAssetLiabilityToEdit] = useState<Asset | Liability | null>(null);
     const [stockToEdit, setStockToEdit] = useState<Asset | null>(null);
     const [stockForDividend, setStockForDividend] = useState<Asset | null>(null);
     const [stockForLargeChart, setStockForLargeChart] = useState<Asset | null>(null);
@@ -219,6 +220,27 @@ const App: React.FC = () => {
         }
     };
 
+    const handleUpdateAssetLiability = async (data: Partial<Asset | Liability>) => {
+        if (!activeUser || !assetLiabilityToEdit) return;
+        try {
+            if (assetLiabilityToEdit.teamId) {
+                const isAsset = 'value' in assetLiabilityToEdit;
+                const updatedTeam = isAsset
+                    ? await db.updateTeamAsset(assetLiabilityToEdit.teamId, assetLiabilityToEdit.id, data)
+                    : await db.updateTeamLiability(assetLiabilityToEdit.teamId, assetLiabilityToEdit.id, data);
+                updateTeamState(updatedTeam);
+            } else {
+                const isAsset = 'value' in assetLiabilityToEdit;
+                const updatedUser = isAsset
+                    ? await db.updateAsset(activeUser.id, assetLiabilityToEdit.id, data)
+                    : await db.updateLiability(activeUser.id, assetLiabilityToEdit.id, data);
+                updateUserState(updatedUser);
+            }
+        } catch (e) {
+            alert((e as Error).message);
+        }
+    };
+
     const handleSaveStock = async (stockData: Partial<Asset>, teamId?: string) => {
         if (!activeUser) return;
         try {
@@ -316,7 +338,9 @@ const App: React.FC = () => {
     const handleOpenLogDividendModal = (stock: Asset) => { setStockForDividend(stock); setLogDividendModalOpen(true); };
     
     const handleOpenAddTransactionModal = (teamId?: string) => { setModalDefaultTeamId(teamId); setAddTransactionModalOpen(true); };
-    const handleOpenAddAssetLiabilityModal = (type: 'asset' | 'liability', teamId?: string) => { setModalDefaultTeamId(teamId); setAssetLiabilityToAdd(type); setAddAssetLiabilityModalOpen(true); };
+    const handleOpenAddAssetLiabilityModal = (type: 'asset' | 'liability', teamId?: string) => { setAssetLiabilityToEdit(null); setModalDefaultTeamId(teamId); setAssetLiabilityToAdd(type); setAddAssetLiabilityModalOpen(true); };
+    const handleOpenEditAssetLiabilityModal = (item: Asset | Liability) => { setAssetLiabilityToEdit(item); setAssetLiabilityToAdd('value' in item ? 'asset' : 'liability'); setAddAssetLiabilityModalOpen(true); };
+
     const handleOpenAddStockModal = (teamId?: string) => { setStockToEdit(null); setModalDefaultTeamId(teamId); setAddStockModalOpen(true); };
     const handleOpenEditStockModal = (stock: Asset) => { setStockToEdit(stock); setAddStockModalOpen(true); };
 
@@ -339,9 +363,9 @@ const App: React.FC = () => {
             case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} teamMates={users.filter(u => u.id !== activeUser.id)} onGenerateReport={() => alert("Backend needed: This would generate a PDF report.")}/>;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => setAddAccountModalOpen(true)}/>;
             case 'coach': return <AICoach user={activeUser} />;
-            case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams}/>;
+            case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} />;
             case 'teams': return <Teams teams={teams} onCreateTeam={() => setCreateTeamModalOpen(true)} onTeamClick={handleTeamClick}/>;
-            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} /> : null;
+            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} /> : null;
             case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => setTransferModalOpen(true)} />;
             default: return <Dashboard user={activeUser} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
         }
@@ -388,7 +412,7 @@ const App: React.FC = () => {
             {activeUser && stockForDividend && <LogDividendModal isOpen={isLogDividendModalOpen} onClose={() => { setLogDividendModalOpen(false); setStockForDividend(null); }} onLogDividend={handleLogDividend} stock={stockForDividend} accounts={activeUser.accounts}/>}
             {stockForLargeChart && <LargeChartModal stock={stockForLargeChart} onClose={closeLargeChartModal}/>}
             <AddAccountModal isOpen={isAddAccountModalOpen} onClose={() => setAddAccountModalOpen(false)} onAddAccount={handleAddAccount}/>
-            {activeUser && <AddAssetLiabilityModal isOpen={isAddAssetLiabilityModalOpen} type={assetLiabilityToAdd} onClose={() => setAddAssetLiabilityModalOpen(false)} onSave={handleAddAssetLiability} teams={teams} defaultTeamId={modalDefaultTeamId} />}
+            {activeUser && <AddAssetLiabilityModal isOpen={isAddAssetLiabilityModalOpen} type={assetLiabilityToAdd} itemToEdit={assetLiabilityToEdit} onClose={() => { setAddAssetLiabilityModalOpen(false); setAssetLiabilityToEdit(null); }} onSave={assetLiabilityToEdit ? handleUpdateAssetLiability : handleAddAssetLiability} teams={teams} defaultTeamId={modalDefaultTeamId} />}
             {selectedTransaction && <TransactionDetailModal isOpen={isTransactionDetailModalOpen} onClose={() => { setTransactionDetailModalOpen(false); setSelectedTransaction(null); }} transaction={selectedTransaction} users={users}/>}
             {selectedCategory && <CategoryTransactionListModal isOpen={isCategoryModalOpen} onClose={() => { setCategoryModalOpen(false); setSelectedCategory(null); }} category={selectedCategory} transactions={effectiveFinancialStatement.transactions}/>}
             {activeUser && <CreateTeamModal isOpen={isCreateTeamModalOpen} onClose={() => setCreateTeamModalOpen(false)} onCreateTeam={handleCreateTeam} allUsers={users} currentUser={activeUser}/>}

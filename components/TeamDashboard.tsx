@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Team, User, Transaction, Asset, Liability } from '../types';
+import type { Team, User, Asset, Liability } from '../types';
 import { FinancialStatement } from './FinancialStatement';
 import { PlusIcon } from './icons';
 
@@ -11,10 +11,23 @@ interface TeamDashboardProps {
     onAddAsset: () => void;
     onAddLiability: () => void;
     onAddStock: () => void;
+    onEditAsset: (asset: Asset) => void;
+    onEditLiability: (liability: Liability) => void;
 }
 
-export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock }) => {
+const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; isNegative?: boolean; onEdit: () => void }> = ({ label, value, isPositive, isNegative, onEdit }) => (
+    <div className="flex justify-between items-center text-cosmic-text-primary text-sm py-2 border-b border-cosmic-border last:border-0 group">
+        <span>{label}</span>
+        <div className="flex items-center gap-4">
+            <span className={`font-semibold ${isPositive ? 'text-cosmic-success' : ''} ${isNegative ? 'text-cosmic-danger' : ''}`}>{value}</span>
+            <button onClick={onEdit} className="text-xs text-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
+        </div>
+    </div>
+);
+
+export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock, onEditAsset, onEditLiability }) => {
     const members = allUsers.filter(u => team.memberIds.includes(u.id));
+    const { assets, liabilities } = team.financialStatement;
 
     return (
         <div className="animate-fade-in space-y-8">
@@ -43,6 +56,28 @@ export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, on
             </div>
 
             <FinancialStatement statement={team.financialStatement} user={members[0]} teamMates={[]} team={team} />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
+                    <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Team Assets</h3>
+                    <div className="p-4 space-y-2">
+                        {assets.map(asset => (
+                            <DataRow key={asset.id} label={`${asset.name} (${asset.type})`} value={`$${asset.value.toLocaleString()}`} onEdit={() => onEditAsset(asset)} isPositive />
+                        ))}
+                        {assets.length === 0 && <p className="text-xs text-cosmic-text-secondary">No assets for this team.</p>}
+                    </div>
+                </div>
+                <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
+                    <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Team Liabilities</h3>
+                    <div className="p-4 space-y-2">
+                        {liabilities.map(lia => (
+                           <DataRow key={lia.id} label={lia.name} value={`$${lia.balance.toLocaleString()}`} onEdit={() => onEditLiability(lia)} isNegative />
+                        ))}
+                        {liabilities.length === 0 && <p className="text-xs text-cosmic-text-secondary">No liabilities for this team.</p>}
+                    </div>
+                </div>
+            </div>
+
         </div>
     );
 };

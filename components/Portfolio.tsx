@@ -1,5 +1,5 @@
 import React from 'react';
-import type { User, Asset, Team } from '../types';
+import type { User, Asset, Liability, Team } from '../types';
 import { AssetType } from '../types';
 import { StockTableRow } from './StockTableRow';
 import { PlusIcon } from './icons';
@@ -11,6 +11,8 @@ interface PortfolioProps {
     onAddAsset: () => void;
     onAddLiability: () => void;
     onEditStock: (stock: Asset) => void;
+    onEditAsset: (asset: Asset) => void;
+    onEditLiability: (liability: Liability) => void;
     onDeleteStock: (stockId: string) => void;
     onLogDividend: (stock: Asset) => void;
     onOpenLargeChart: (stock: Asset) => void;
@@ -23,7 +25,7 @@ const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ 
     </div>
 );
 
-export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, onAddAsset, onAddLiability, onEditStock, onDeleteStock, onLogDividend, onOpenLargeChart }) => {
+export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, onAddAsset, onAddLiability, onEditStock, onEditAsset, onEditLiability, onDeleteStock, onLogDividend, onOpenLargeChart }) => {
     
     const assets = user.financialStatement?.assets || [];
     const liabilities = user.financialStatement?.liabilities || [];
@@ -105,14 +107,30 @@ export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, o
                  <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
                      <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Personal Assets</h3>
                      <div className="p-4 space-y-2">
-                        {personalOtherAssets.map(asset => ( <div key={asset.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1"><span>{asset.name} ({asset.type})</span><span className="font-semibold">${asset.value.toLocaleString()}</span></div>))}
+                        {personalOtherAssets.map(asset => (
+                            <div key={asset.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1 group">
+                                <span>{asset.name} ({asset.type})</span>
+                                <div className="flex items-center gap-4">
+                                    <span className="font-semibold">${asset.value.toLocaleString()}</span>
+                                    <button onClick={() => onEditAsset(asset)} className="text-xs text-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
+                                </div>
+                            </div>
+                        ))}
                         {personalOtherAssets.length === 0 && <p className="text-xs text-cosmic-text-secondary">No other personal assets.</p>}
                      </div>
                 </div>
                  <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
                      <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Personal Liabilities</h3>
                      <div className="p-4 space-y-2">
-                        {personalLiabilities.map(lia => ( <div key={lia.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1"><span>{lia.name}</span><span className="font-semibold text-cosmic-danger">-${lia.balance.toLocaleString()}</span></div>))}
+                        {personalLiabilities.map(lia => (
+                             <div key={lia.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1 group">
+                                <span>{lia.name}</span>
+                                <div className="flex items-center gap-4">
+                                    <span className="font-semibold text-cosmic-danger">-${lia.balance.toLocaleString()}</span>
+                                    <button onClick={() => onEditLiability(lia)} className="text-xs text-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
+                                </div>
+                            </div>
+                        ))}
                         {personalLiabilities.length === 0 && <p className="text-xs text-cosmic-text-secondary">No personal liabilities.</p>}
                      </div>
                 </div>

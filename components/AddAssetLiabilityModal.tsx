@@ -10,9 +10,10 @@ interface AddAssetLiabilityModalProps {
     onSave: (data: Partial<Asset | Liability>, teamId?: string) => void;
     teams: Team[];
     defaultTeamId?: string;
+    itemToEdit?: Asset | Liability | null;
 }
 
-export const AddAssetLiabilityModal: React.FC<AddAssetLiabilityModalProps> = ({ isOpen, type, onClose, onSave, teams, defaultTeamId }) => {
+export const AddAssetLiabilityModal: React.FC<AddAssetLiabilityModalProps> = ({ isOpen, type, onClose, onSave, teams, defaultTeamId, itemToEdit }) => {
     const [name, setName] = useState('');
     const [value, setValue] = useState('');
     const [assetType, setAssetType] = useState<AssetType>(AssetType.REAL_ESTATE);
@@ -21,13 +22,33 @@ export const AddAssetLiabilityModal: React.FC<AddAssetLiabilityModalProps> = ({ 
     const [monthlyPayment, setMonthlyPayment] = useState('');
     const [teamId, setTeamId] = useState(defaultTeamId || '');
 
+    const isEditing = !!itemToEdit;
+
     useEffect(() => {
         if (isOpen) {
-             setName(''); setValue(''); setAssetType(AssetType.REAL_ESTATE);
-            setMonthlyCashflow(''); setInterestRate(''); setMonthlyPayment(''); 
-            setTeamId(defaultTeamId || '');
+            if (isEditing && itemToEdit) {
+                setName(itemToEdit.name);
+                setTeamId(itemToEdit.teamId || '');
+                if ('value' in itemToEdit) { // It's an Asset
+                    setValue(String(itemToEdit.value));
+                    setAssetType(itemToEdit.type);
+                    setMonthlyCashflow(String(itemToEdit.monthlyCashflow || ''));
+                } else { // It's a Liability
+                    setValue(String(itemToEdit.balance));
+                    setInterestRate(String(itemToEdit.interestRate || ''));
+                    setMonthlyPayment(String(itemToEdit.monthlyPayment || ''));
+                }
+            } else {
+                setName('');
+                setValue('');
+                setAssetType(AssetType.REAL_ESTATE);
+                setMonthlyCashflow('');
+                setInterestRate('');
+                setMonthlyPayment('');
+                setTeamId(defaultTeamId || '');
+            }
         }
-    }, [isOpen, defaultTeamId]);
+    }, [isOpen, itemToEdit, isEditing, defaultTeamId]);
 
     if (!isOpen || !type) return null;
 
@@ -88,13 +109,13 @@ export const AddAssetLiabilityModal: React.FC<AddAssetLiabilityModalProps> = ({ 
         <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
             <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-md shadow-2xl p-6 m-4 animate-slide-in-up" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-cosmic-text-primary">Add New {type === 'asset' ? 'Asset' : 'Liability'}</h2>
+                    <h2 className="text-2xl font-bold text-cosmic-text-primary">{isEditing ? 'Edit' : 'Add New'} {type === 'asset' ? 'Asset' : 'Liability'}</h2>
                     <button onClick={onClose} className="text-cosmic-text-secondary hover:text-cosmic-text-primary"><XIcon className="w-6 h-6" /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label htmlFor="teamId" className="block text-sm font-medium text-cosmic-text-secondary mb-1">For</label>
-                        <select id="teamId" value={teamId} onChange={e => setTeamId(e.target.value)} disabled={!!defaultTeamId} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary disabled:bg-cosmic-border">
+                        <select id="teamId" value={teamId} onChange={e => setTeamId(e.target.value)} disabled={!!defaultTeamId || isEditing} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary disabled:bg-cosmic-border">
                             <option value="">Personal</option>
                             {teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
                         </select>
@@ -106,7 +127,7 @@ export const AddAssetLiabilityModal: React.FC<AddAssetLiabilityModalProps> = ({ 
                     {type === 'asset' ? renderAssetFields() : renderLiabilityFields()}
                      <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border">Cancel</button>
-                        <button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400">Save</button>
+                        <button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400">{isEditing ? 'Save Changes' : 'Save'}</button>
                     </div>
                 </form>
             </div>
