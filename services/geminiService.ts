@@ -1,13 +1,10 @@
-
-
-
 import { GoogleGenAI, Type } from "@google/genai";
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType } from '../types';
 
-// Fix: Per coding guidelines, initialize GoogleGenAI directly with process.env.API_KEY.
-// The API key's availability is assumed to be handled externally.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// CRITICAL FIX: The AI client is disabled to prevent the API_KEY error on Vercel.
+// The app will run without AI features until this is re-enabled with a working API key setup.
+// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 
 function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {
@@ -37,6 +34,9 @@ function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: A
 }
 
 export const getFinancialAdvice = async (prompt: string, statement: FinancialStatement, accounts: Account[]): Promise<string> => {
+  console.warn("AI Coach is currently disabled.");
+  return "The AI Coach is temporarily offline for maintenance. Please try again later.";
+  /*
   try {
     const fullPrompt = `
       You are an expert financial coach in a game called 'Cosmic Cashflow'. Your advice should be encouraging, strategic, and use the game's fun, cosmic/sports-themed language (e.g., 'goal', 'foul', 'dribble past debt', 'cosmic win').
@@ -59,9 +59,21 @@ export const getFinancialAdvice = async (prompt: string, statement: FinancialSta
     console.error("Error fetching financial advice:", error);
     return "The stars are a bit cloudy right now... I couldn't get a signal. Please try asking again in a moment.";
   }
+  */
 };
 
 export const getCosmicEvent = async (statement: FinancialStatement, accounts: Account[]): Promise<CosmicEvent> => {
+    console.warn("Cosmic Event generation is currently disabled.");
+    // Return a default, safe event to ensure the app doesn't crash.
+    return {
+      title: "Cosmic Interference",
+      description: "A solar flare is causing some interference with our long-range scanners. All event generation is temporarily offline.",
+      choices: [
+        { text: "Okay", outcome: { message: "You acknowledge the solar flare and continue on your journey." } },
+        { text: "Understood", outcome: { message: "You decide to wait for the interference to clear. Your finances remain unchanged." } }
+      ]
+    };
+  /*
   const financialContext = formatFinancialDataForPrompt(statement, accounts);
   const availableCash = accounts
     .filter(a => a.type === AccountType.CASH || a.type === AccountType.CHECKING)
@@ -138,4 +150,5 @@ export const getCosmicEvent = async (statement: FinancialStatement, accounts: Ac
       ]
     };
   }
+  */
 };
