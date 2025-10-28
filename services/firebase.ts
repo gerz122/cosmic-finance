@@ -1,4 +1,5 @@
 // Import the functions you need from the SDKs you need
+// FIX: Switched to Firebase v8 compat syntax to resolve initializeApp import error.
 import firebase from "firebase/app";
 import "firebase/firestore";
 
@@ -13,13 +14,11 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+const app = firebase.initializeApp(firebaseConfig);
 
 
 // Initialize Cloud Firestore and get a reference to the service
 const db = firebase.firestore();
 
 // Export firestore for use in db.ts
-export { db, firebase };
+export { db };

@@ -2,7 +2,7 @@ import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, 
 // FIX: Imported AssetType to resolve reference error.
 import { TransactionType, AccountType, AssetType } from '../types';
 import { ALL_ACHIEVEMENTS } from '../components/Achievements';
-// FIX: Updated imports for Firebase v8 syntax.
+// FIX: Switched to Firebase v8 compat syntax to match firebase.ts initialization.
 import { db } from './firebase';
 
 // This data is now ONLY used to populate a fresh, empty database.
@@ -267,7 +267,12 @@ export const deleteTransaction = async (transactionId: string, users: User[], te
     }
     
     const updatedUsers = await getUsers();
-    const updatedTeams = await getTeamsForUser(users[0]?.id); // HACK: assumes at least one user to get teams
+    let updatedTeams: Team[] = [];
+    if (updatedUsers.length > 0) {
+        updatedTeams = await getTeamsForUser(updatedUsers[0].id);
+    } else if (users.length > 0) {
+        updatedTeams = await getTeamsForUser(users[0].id);
+    }
     return { updatedUsers, updatedTeams };
 };
 
