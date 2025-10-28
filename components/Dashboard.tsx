@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import type { User, Transaction, FinancialStatement, HistoricalDataPoint } from '../types';
+import type { User, Transaction, FinancialStatement, HistoricalDataPoint, Team } from '../types';
 import { TransactionType, AssetType } from '../types';
 import { StarIcon, PlusIcon, SparklesIcon } from './icons';
 import { PortfolioLivePL } from './PortfolioLivePL';
@@ -8,6 +8,7 @@ import { LineChart } from './LineChart';
 
 interface DashboardProps {
     user: User;
+    teams: Team[];
     effectiveStatement: FinancialStatement;
     historicalNetWorth: HistoricalDataPoint[];
     onAddTransactionClick: () => void;
@@ -43,30 +44,59 @@ const ProgressBar: React.FC<{ value: number; max: number; }> = ({ value, max }) 
     );
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, effectiveStatement, historicalNetWorth, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStatement, historicalNetWorth, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick }) => {
 
     const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks, expenseBreakdown } = useMemo(() => {
         const statement = effectiveStatement;
-        const passiveIncome = statement.transactions.filter(t => t.type === TransactionType.INCOME && t.isPassive).reduce((sum, t) => sum + Number(t.amount), 0);
-        const totalExpenses = statement.transactions.filter(t => t.type === TransactionType.EXPENSE).reduce((sum, t) => sum + Number(t.amount), 0);
-        const totalIncome = statement.transactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + Number(t.amount), 0);
-        // FIX: Ensure values are treated as numbers during arithmetic operations.
+        
+        let calculatedPassiveIncome = 0;
+        let calculatedTotalExpenses = 0;
+        let calculatedTotalIncome = 0;
+        const calculatedExpenseBreakdown: Record<string, number> = {};
+
+        statement.transactions.forEach(t => {
+            if (t.type === TransactionType.INCOME) {
+                let incomeShare = 0;
+                if (t.teamId) {
+                    const team = teams.find(tm => tm.id === t.teamId);
+                    if (team && team.memberIds.includes(user.id)) {
+                        incomeShare = t.amount / team.memberIds.length;
+                    }
+                } else {
+                    incomeShare = t.paymentShares?.find(ps => ps.userId === user.id)?.amount || 0;
+                }
+                calculatedTotalIncome += incomeShare;
+                if (t.isPassive) {
+                    calculatedPassiveIncome += incomeShare;
+                }
+            } else { // EXPENSE
+                const expenseShare = t.expenseShares?.find(es => es.userId === user.id)?.amount || 0;
+                calculatedTotalExpenses += expenseShare;
+                if (expenseShare > 0) {
+                    calculatedExpenseBreakdown[t.category] = (calculatedExpenseBreakdown[t.category] || 0) + expenseShare;
+                }
+            }
+        });
+        
+        const calculatedMonthlyCashflow = calculatedTotalIncome - calculatedTotalExpenses;
+
         const totalAssets = statement.assets.reduce((sum, a) => sum + Number(a.value), 0);
         const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + Number(l.balance), 0);
-        const netWorth = totalAssets - totalLiabilities;
-        const monthlyCashflow = totalIncome - totalExpenses;
+        const calculatedNetWorth = totalAssets - totalLiabilities;
+        
         const recentTransactions = [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
         const stocks = user.financialStatement.assets.filter(a => a.type === AssetType.STOCK); // Portfolio PL should only show personal stocks
         
-        const expenseBreakdown = statement.transactions
-            .filter(t => t.type === TransactionType.EXPENSE)
-            .reduce((acc, t) => {
-                acc[t.category] = (acc[t.category] || 0) + Number(t.amount);
-                return acc;
-            }, {} as Record<string, number>);
-
-        return { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks, expenseBreakdown };
-    }, [user.financialStatement, effectiveStatement]);
+        return { 
+            passiveIncome: calculatedPassiveIncome, 
+            totalExpenses: calculatedTotalExpenses, 
+            netWorth: calculatedNetWorth, 
+            monthlyCashflow: calculatedMonthlyCashflow, 
+            recentTransactions, 
+            stocks, 
+            expenseBreakdown: calculatedExpenseBreakdown
+        };
+    }, [user, teams, effectiveStatement]);
 
     const freedomPercentage = totalExpenses > 0 ? Math.round((passiveIncome / totalExpenses) * 100) : (passiveIncome > 0 ? 100 : 0);
 

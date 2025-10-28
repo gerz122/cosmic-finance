@@ -5,7 +5,7 @@ import { TransactionType } from '../types';
 interface FinancialStatementProps {
     statement: FinancialStatementType;
     user: User;
-    teamMates: User[];
+    teams: Team[];
     team?: Team;
     onEditTransaction: (transaction: Transaction) => void;
     onDeleteTransaction: (transactionId: string) => void;
@@ -38,17 +38,20 @@ const TransactionRow: React.FC<{ tx: Transaction, onEdit: () => void, onDelete: 
     );
 };
 
-export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, team, onEditTransaction, onDeleteTransaction }) => {
+export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, teams, team, onEditTransaction, onDeleteTransaction }) => {
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [categoryFilter, setCategoryFilter] = useState('all');
 
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setDateRange(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
+    const transactionCategories = useMemo(() => {
+        const categories = new Set(statement.transactions.map(tx => tx.category));
+        return ['all', ...Array.from(categories)];
+    }, [statement.transactions]);
+
     const filteredTransactions = useMemo(() => {
-        if (!dateRange.start && !dateRange.end) {
-            return statement.transactions;
-        }
         return statement.transactions.filter(tx => {
             // Adjust date to avoid timezone issues where '2023-10-01' becomes '2023-09-30T20:00:00'
             const txDate = new Date(tx.date + 'T00:00:00');
@@ -56,9 +59,10 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
             const end = dateRange.end ? new Date(dateRange.end + 'T00:00:00') : null;
             if (start && txDate < start) return false;
             if (end && txDate > end) return false;
+            if (categoryFilter !== 'all' && tx.category !== categoryFilter) return false;
             return true;
         });
-    }, [statement.transactions, dateRange]);
+    }, [statement.transactions, dateRange, categoryFilter]);
 
 
     const {
@@ -96,13 +100,23 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
             let userTotalExpenses = 0;
 
             filteredTransactions.forEach(t => {
-                const userPaymentShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
-                const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
-
                 if (t.type === TransactionType.INCOME) {
-                    userTotalIncome += userPaymentShare;
-                    if (t.isPassive) userPassiveIncome += userPaymentShare;
-                } else {
+                    let incomeShare = 0;
+                    if (t.teamId) {
+                        const teamContext = teams.find(team => team.id === t.teamId);
+                        if (teamContext && teamContext.memberIds.includes(user.id)) {
+                            // Assume equal share of team income
+                            incomeShare = t.amount / teamContext.memberIds.length;
+                        }
+                    } else {
+                        // Personal income is based on payment shares
+                        incomeShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
+                    }
+                    userTotalIncome += incomeShare;
+                    if (t.isPassive) userPassiveIncome += incomeShare;
+                } else { // EXPENSE
+                    // Expenses are always based on explicit expense shares
+                    const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
                     userTotalExpenses += userExpenseShare;
                 }
             });
@@ -118,7 +132,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                 netWorth
             };
         }
-    }, [filteredTransactions, statement.assets, statement.liabilities, user.id, team]);
+    }, [filteredTransactions, statement.assets, statement.liabilities, user.id, team, teams]);
 
     const sortedTransactions = useMemo(() => {
         return [...filteredTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -129,7 +143,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
             <h1 className="text-3xl font-bold text-cosmic-text-primary">Financial Statement</h1>
             
             <div className="bg-cosmic-surface p-4 rounded-lg border border-cosmic-border flex items-center gap-4 flex-wrap text-sm">
-                <h3 className="text-cosmic-text-secondary font-semibold">Filter by date:</h3>
+                <h3 className="text-cosmic-text-secondary font-semibold">Filter by:</h3>
                 <div className="flex items-center gap-2">
                     <label htmlFor="startDate" className="text-cosmic-text-secondary">From:</label>
                     <input type="date" name="start" value={dateRange.start} onChange={handleDateChange} className="bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-cosmic-text-primary date-input" />
@@ -137,6 +151,12 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                  <div className="flex items-center gap-2">
                     <label htmlFor="endDate" className="text-cosmic-text-secondary">To:</label>
                     <input type="date" name="end" value={dateRange.end} onChange={handleDateChange} className="bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-cosmic-text-primary date-input" />
+                </div>
+                 <div className="flex items-center gap-2">
+                    <label htmlFor="categoryFilter" className="text-cosmic-text-secondary">Category:</label>
+                    <select id="categoryFilter" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-cosmic-text-primary">
+                         {transactionCategories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All Categories' : cat}</option>)}
+                    </select>
                 </div>
             </div>
             

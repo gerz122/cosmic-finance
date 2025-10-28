@@ -418,8 +418,8 @@ const App: React.FC = () => {
         if (!activeUser) return <div className="flex items-center justify-center h-full"><p>No Players Found</p></div>;
 
         switch (activeView) {
-            case 'dashboard': return <Dashboard user={activeUser} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
-            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} teamMates={users.filter(u => u.id !== activeUser.id)} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction}/>;
+            case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
+            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} teams={teams} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction}/>;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => setAddAccountModalOpen(true)} onOpenAccountTransactions={handleOpenAccountTransactionsModal} onEditAccount={handleOpenEditAccountModal} />;
             case 'coach': return <AICoach user={activeUser} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} />;
@@ -428,7 +428,7 @@ const App: React.FC = () => {
             case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => setTransferModalOpen(true)} />;
             case 'budget': return <BudgetView user={activeUser} onSaveBudget={handleSaveBudget} onOpenBudgetModal={() => setAddBudgetModalOpen(true)} />;
             case 'goals': return <GoalsView user={activeUser} onAddGoal={() => setAddGoalModalOpen(true)} onDeleteGoal={handleDeleteGoal} onContribute={handleOpenContributeToGoalModal} />;
-            default: return <Dashboard user={activeUser} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
+            default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
         }
     };
 

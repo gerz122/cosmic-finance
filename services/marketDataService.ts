@@ -27,15 +27,6 @@ const ensureApiRateLimit = async () => {
     lastApiCallTime = Date.now();
 };
 
-// CRITICAL FIX: Add suffix for Argentinian stocks
-const getTickerWithSuffix = (ticker: string) => {
-    const argentinianStocks = ['GGAL', 'PAM', 'YPF', 'SUPV', 'BBAR', 'BMA', 'LOMA', 'VIST'];
-    if (argentinianStocks.includes(ticker.toUpperCase())) {
-        return `${ticker}.BA`;
-    }
-    return ticker;
-};
-
 const getLiveStockData = async (ticker: string): Promise<MarketData> => {
     if (!API_KEY) {
         console.warn("Alpha Vantage API key is not set. Returning mock data.");
@@ -44,16 +35,26 @@ const getLiveStockData = async (ticker: string): Promise<MarketData> => {
         return { ticker, price: mockPrice, dayChange: mockPrice - mockPrevClose, previousClose: mockPrevClose };
     }
 
-    const tickerWithSuffix = getTickerWithSuffix(ticker);
+    const tryFetch = async (symbol: string) => {
+        await ensureApiRateLimit();
+        const response = await fetch(`${BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${API_KEY}`);
+        if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+        const data = await response.json();
+        return data['Global Quote'];
+    };
 
     try {
-        await ensureApiRateLimit();
-        const response = await fetch(`${BASE_URL}?function=GLOBAL_QUOTE&symbol=${tickerWithSuffix}&apikey=${API_KEY}`);
-        if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-        
-        const data = await response.json();
-        const quote = data['Global Quote'];
+        let quote = await tryFetch(ticker);
 
+        // If no data and it's a known Argentinian stock, try with .BA suffix as a fallback
+        if ((!quote || Object.keys(quote).length === 0) && !ticker.toUpperCase().endsWith('.BA')) {
+            const argentinianStocks = ['GGAL', 'PAM', 'YPF', 'SUPV', 'BBAR', 'BMA', 'LOMA', 'VIST'];
+             if (argentinianStocks.includes(ticker.toUpperCase())) {
+                console.log(`Retrying ${ticker} with .BA suffix...`);
+                quote = await tryFetch(`${ticker}.BA`);
+            }
+        }
+        
         if (!quote || Object.keys(quote).length === 0) {
             console.warn(`No data returned for ticker: ${ticker}. It might be an invalid symbol or delisted.`);
             return { ticker, price: 0, dayChange: 0, previousClose: 0 };
@@ -75,11 +76,9 @@ const getMultipleStockData = async (tickers: string[]): Promise<MarketData[]> =>
     if (tickers.length === 0) return [];
     
     const results: MarketData[] = [];
-    for (const ticker of tickers) {
-        const data = await getLiveStockData(ticker);
-        results.push(data);
-    }
-    return results;
+    // Use Promise.all for concurrent requests, but ensure rate limit is handled inside getLiveStockData
+    const promises = tickers.map(ticker => getLiveStockData(ticker));
+    return Promise.all(promises);
 };
 
 const searchTickers = async (query: string): Promise<TickerSearchResult[]> => {

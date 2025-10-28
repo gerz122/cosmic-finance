@@ -5,8 +5,8 @@ import { TransactionType, AssetType, AccountType } from '../types';
 // Real data for German & Valeria
 const initialData = {
     users: [
-        { id: 'german', name: 'German', avatar: 'https://i.pravatar.cc/150?u=german', teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'] },
-        { id: 'valeria', name: 'Valeria', avatar: 'https://i.pravatar.cc/150?u=valeria', teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'] },
+        { id: 'german', name: 'German', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=german', teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'] },
+        { id: 'valeria', name: 'Valeria', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=valeria', teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'] },
     ],
     accounts: [
         { id: 'acc-joint-checking', name: 'Cuenta Conjunta', type: AccountType.CHECKING, balance: 6686.80, ownerIds: ['german', 'valeria'] },

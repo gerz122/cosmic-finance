@@ -57,7 +57,8 @@ export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, on
                 </div>
             </div>
 
-            <FinancialStatement statement={team.financialStatement} user={members[0]} teamMates={[]} team={team} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />
+            {/* FIX: Corrected prop from `teamMates` to `teams` to match FinancialStatementProps. */}
+            <FinancialStatement statement={team.financialStatement} user={members[0]} teams={[]} team={team} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
