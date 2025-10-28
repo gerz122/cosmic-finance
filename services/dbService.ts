@@ -1,5 +1,5 @@
 import { db, collection, doc, getDocs, writeBatch, query, where, getDoc, setDoc, deleteDoc } from './firebase';
-import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team } from '../types';
+import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, Budget, Goal } from '../types';
 import { TransactionType, AssetType, AccountType } from '../types';
 
 // Real data for German & Valeria
@@ -90,7 +90,9 @@ const initialData = {
             transactions: [
                 { id: 'g-salary', description: 'Salario German', amount: 5000, type: TransactionType.INCOME, category: 'Job', date: '2023-10-15', paymentShares: [{ userId: 'german', accountId: 'g-savings-1', amount: 5000 }] },
                 { id: 'g-car-payment', description: 'Pago Auto y Seguro', amount: 800, type: TransactionType.EXPENSE, category: 'Transportation', date: '2023-10-20', paymentShares: [{ userId: 'german', accountId: 'g-savings-1', amount: 800 }], expenseShares: [{ userId: 'german', amount: 800 }] },
-            ]
+            ],
+            budgets: [],
+            goals: []
         },
         valeria: {
              assets: [
@@ -106,7 +108,9 @@ const initialData = {
             liabilities: [],
             transactions: [
                  { id: 'v-salary', description: 'Salario Valeria', amount: 4500, type: TransactionType.INCOME, category: 'Job', date: '2023-10-15', paymentShares: [{ userId: 'valeria', accountId: 'v-savings-1', amount: 4500 }] },
-            ]
+            ],
+            budgets: [],
+            goals: []
         },
     }
 };
@@ -117,7 +121,7 @@ const seedInitialData = async () => {
 
     const finalUsers: User[] = initialData.users.map(u => {
         const userAccounts = initialData.accounts.filter(acc => acc.ownerIds.includes(u.id));
-        const baseStatement = initialData.baseStatements[u.id as keyof typeof initialData.baseStatements] || { assets: [], liabilities: [], transactions: [] };
+        const baseStatement = initialData.baseStatements[u.id as keyof typeof initialData.baseStatements] || { assets: [], liabilities: [], transactions: [], budgets: [], goals: [] };
         return {
             ...u,
             accounts: userAccounts,
@@ -125,7 +129,9 @@ const seedInitialData = async () => {
                 assets: baseStatement.assets,
                 liabilities: baseStatement.liabilities,
                 transactions: baseStatement.transactions,
-            }
+            },
+            budgets: baseStatement.budgets,
+            goals: baseStatement.goals
         };
     });
     
@@ -153,6 +159,8 @@ const sanitizeUser = (user: any): User => ({
         assets: user.financialStatement?.assets || [],
         liabilities: user.financialStatement?.liabilities || [],
     },
+    budgets: user.budgets || [],
+    goals: user.goals || [],
 });
 
 export const dbService = {
@@ -207,8 +215,6 @@ export const dbService = {
                 date: new Date().toISOString().split('T')[0],
                 paymentShares: [{ userId, accountId: newAccount.id, amount: newAccount.balance }],
             };
-            // Note: This doesn't add to the user's transaction list, just sets the balance.
-            // For full history, a transaction should be added. We simplify here.
         }
 
         await setDoc(userRef, user);
@@ -268,9 +274,6 @@ export const dbService = {
         const newTx: Transaction = { ...transaction, id: `tx_${Date.now()}` };
         team.financialStatement.transactions.push(newTx);
 
-        // Team transaction balances are handled via personal accounts for now
-        // A more advanced system would use team-owned accounts.
-
         await setDoc(teamRef, team);
         return team;
     },
@@ -279,8 +282,6 @@ export const dbService = {
         const found = dbService._findTransactionAndContext(updatedTx.id, allUsers, allTeams);
         if (!found) throw new Error("Transaction not found to update");
         
-        // Simple update: just replace the transaction object.
-        // A robust implementation would also revert old balance changes and apply new ones.
         const txIndex = found.context.financialStatement.transactions.findIndex(t => t.id === updatedTx.id);
         found.context.financialStatement.transactions[txIndex] = updatedTx;
 
@@ -297,7 +298,6 @@ export const dbService = {
         const found = dbService._findTransactionAndContext(txId, allUsers, allTeams);
         if (!found) throw new Error("Transaction not found to delete");
 
-        // Revert balance changes
         const txToDelete = found.transaction;
         const usersToUpdate = new Map<string, User>();
         allUsers.forEach(u => usersToUpdate.set(u.id, JSON.parse(JSON.stringify(u))));
@@ -312,7 +312,6 @@ export const dbService = {
             }
         });
 
-        // Remove the transaction
         if (found.isTeam) {
             const team = found.context as Team;
             team.financialStatement.transactions = team.financialStatement.transactions.filter(t => t.id !== txId);
@@ -359,19 +358,14 @@ export const dbService = {
         
         const context = (isTeam ? snap.data() as Team : sanitizeUser(snap.data())) as User | Team;
         
-        if(assetId) { // Update
+        if(assetId) {
             const index = context.financialStatement.assets.findIndex(a => a.id === assetId);
             if (index > -1) {
                 context.financialStatement.assets[index] = { ...context.financialStatement.assets[index], ...assetData };
             }
-        } else { // Add
+        } else {
              const newAsset: Asset = {
-                id: `asset_${Date.now()}`,
-                name: 'New Asset',
-                type: AssetType.OTHER,
-                value: 0,
-                monthlyCashflow: 0,
-                ...assetData
+                id: `asset_${Date.now()}`, name: 'New Asset', type: AssetType.OTHER, value: 0, monthlyCashflow: 0, ...assetData
             };
             context.financialStatement.assets.push(newAsset);
         }
@@ -386,19 +380,14 @@ export const dbService = {
         
         const context = (isTeam ? snap.data() as Team : sanitizeUser(snap.data())) as User | Team;
         
-        if(liabilityId) { // Update
+        if(liabilityId) {
             const index = context.financialStatement.liabilities.findIndex(l => l.id === liabilityId);
             if (index > -1) {
                 context.financialStatement.liabilities[index] = { ...context.financialStatement.liabilities[index], ...liabilityData };
             }
-        } else { // Add
+        } else {
              const newLiability: Liability = {
-                id: `lia_${Date.now()}`,
-                name: 'New Liability',
-                balance: 0,
-                interestRate: 0,
-                monthlyPayment: 0,
-                ...liabilityData
+                id: `lia_${Date.now()}`, name: 'New Liability', balance: 0, interestRate: 0, monthlyPayment: 0, ...liabilityData
             };
             context.financialStatement.liabilities.push(newLiability);
         }
@@ -433,13 +422,7 @@ export const dbService = {
         if (!stock) throw new Error("Stock not found");
         
         const dividendTx: Omit<Transaction, 'id'> = {
-            description: `Dividend from ${stock.name}`,
-            amount: amount,
-            type: TransactionType.INCOME,
-            category: 'Investment',
-            date: new Date().toISOString().split('T')[0],
-            isPassive: true,
-            paymentShares: [{ userId: user.id, accountId, amount }],
+            description: `Dividend from ${stock.name}`, amount, type: TransactionType.INCOME, category: 'Investment', date: new Date().toISOString().split('T')[0], isPassive: true, paymentShares: [{ userId: user.id, accountId, amount }],
         };
         
         const [updatedUser] = await dbService.addTransaction(user.id, dividendTx, [user]);
@@ -462,5 +445,58 @@ export const dbService = {
 
         await setDoc(doc(db, 'users', user.id), updatedUser);
         return updatedUser;
-    }
+    },
+
+    saveBudget: async (userId: string, budget: Budget): Promise<User> => {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        const budgetIndex = user.budgets.findIndex(b => b.month === budget.month);
+        if (budgetIndex > -1) {
+            user.budgets[budgetIndex] = budget;
+        } else {
+            user.budgets.push(budget);
+        }
+        await setDoc(userRef, user);
+        return user;
+    },
+    
+    addGoal: async (userId: string, goalData: Omit<Goal, 'id' | 'currentAmount'>): Promise<User> => {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        const newGoal: Goal = {
+            id: `goal_${Date.now()}`,
+            currentAmount: 0,
+            ...goalData,
+        };
+        user.goals.push(newGoal);
+        await setDoc(userRef, user);
+        return user;
+    },
+
+    updateGoal: async (userId: string, updatedGoal: Goal): Promise<User> => {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        const goalIndex = user.goals.findIndex(g => g.id === updatedGoal.id);
+        if (goalIndex > -1) {
+            user.goals[goalIndex] = updatedGoal;
+        }
+        await setDoc(userRef, user);
+        return user;
+    },
+
+    deleteGoal: async (userId: string, goalId: string): Promise<User> => {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("User not found");
+        const user = sanitizeUser(userSnap.data());
+        user.goals = user.goals.filter(g => g.id !== goalId);
+        await setDoc(userRef, user);
+        return user;
+    },
 };

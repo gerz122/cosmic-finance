@@ -66,7 +66,7 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                 plColor: 'text-cosmic-text-secondary', 
                 dayChangeColor: 'text-cosmic-text-secondary', 
                 dayChangePercent: 0, 
-                totalValue: stock.value 
+                totalValue: stock.numberOfShares && stock.purchasePrice ? stock.numberOfShares * stock.purchasePrice : 0
             };
         }
         
@@ -77,11 +77,10 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
         const pColor = value >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
         const dColor = liveData.dayChange >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
         
-        const previousClose = liveData.price - liveData.dayChange;
-        const dPercent = previousClose > 0 ? (liveData.dayChange / previousClose) * 100 : 0;
+        const dPercent = liveData.previousClose > 0 ? (liveData.dayChange / liveData.previousClose) * 100 : 0;
 
         return { plValue: value, plColor: pColor, dayChangeColor: dColor, dayChangePercent: dPercent, totalValue: currentTotalValue };
-    }, [liveData, stock.purchasePrice, stock.numberOfShares, stock.value]);
+    }, [liveData, stock.purchasePrice, stock.numberOfShares]);
     
     const priceIndicatorClass = priceChangeIndicator === 'up' ? 'bg-green-500/20' : priceChangeIndicator === 'down' ? 'bg-red-500/20' : '';
 
@@ -98,7 +97,7 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                      {liveData ? `$${liveData.price.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
                 <td className="px-6 py-4 font-semibold text-cosmic-text-primary">
-                    {liveData ? `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
+                    ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td className={`px-6 py-4 ${dayChangeColor}`}>
                     {liveData ? (

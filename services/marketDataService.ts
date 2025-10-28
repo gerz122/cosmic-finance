@@ -2,6 +2,7 @@ export interface MarketData {
     ticker: string;
     price: number;
     dayChange: number;
+    previousClose: number;
 }
 
 export interface TickerSearchResult {
@@ -9,57 +10,90 @@ export interface TickerSearchResult {
     name: string;
 }
 
-// STABILITY FIX: All functions now return hardcoded mock data to prevent API errors
-// and ensure the application is stable and loads instantly on Vercel.
-// The live API calls have been commented out.
+// Fix: Cast `import.meta` to `any` to access Vite environment variables without causing a TypeScript type error, as adding a new d.ts file is not permitted.
+const API_KEY = (import.meta as any).env.VITE_ALPHA_VANTAGE_API_KEY;
+const BASE_URL = 'https://www.alphavantage.co/query';
 
-const MOCK_STOCK_DATA: { [key: string]: MarketData } = {
-    'GGAL': { ticker: 'GGAL', price: 265.50, dayChange: 2.10 },
-    'PAM': { ticker: 'PAM', price: 85.20, dayChange: -0.50 },
-    'YPF': { ticker: 'YPF', price: 42.80, dayChange: 1.25 },
-    'SUPV': { ticker: 'SUPV', price: 22.30, dayChange: -0.15 },
-    'BBAR': { ticker: 'BBAR', price: 31.00, dayChange: 0.80 },
-    'BMA': { ticker: 'BMA', price: 63.40, dayChange: -1.10 },
-    'LOMA': { ticker: 'LOMA', price: 16.70, dayChange: 0.20 },
-    'VIST': { ticker: 'VIST', price: 55.90, dayChange: 2.30 },
+// Helper to handle API rate limiting (5 calls per minute for free tier)
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+let lastApiCallTime = 0;
+const apiCallInterval = 13000; // 13 seconds to be safe
+
+const ensureApiRateLimit = async () => {
+    const now = Date.now();
+    const timeSinceLastCall = now - lastApiCallTime;
+    if (timeSinceLastCall < apiCallInterval) {
+        await sleep(apiCallInterval - timeSinceLastCall);
+    }
+    lastApiCallTime = Date.now();
 };
 
-
 const getLiveStockData = async (ticker: string): Promise<MarketData> => {
-    console.warn(`Market data for ${ticker} is SIMULATED.`);
-    return new Promise(resolve => {
-        setTimeout(() => {
-            const data = MOCK_STOCK_DATA[ticker] || { ticker, price: Math.random() * 200, dayChange: (Math.random() - 0.5) * 10 };
-            resolve(data);
-        }, 100); // Simulate network delay
-    });
+    if (!API_KEY) {
+        console.error("Alpha Vantage API key is not set.");
+        // Return stable mock data if key is missing
+        return { ticker, price: 100.00, dayChange: 1.50, previousClose: 98.50 };
+    }
+
+    try {
+        await ensureApiRateLimit();
+        const response = await fetch(`${BASE_URL}?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${API_KEY}`);
+        if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+        
+        const data = await response.json();
+        const quote = data['Global Quote'];
+
+        if (!quote || Object.keys(quote).length === 0) {
+            console.warn(`No data returned for ticker: ${ticker}. It might be an invalid symbol or delisted.`);
+            return { ticker, price: 0, dayChange: 0, previousClose: 0 };
+        }
+
+        const price = parseFloat(quote['05. price']);
+        const dayChange = parseFloat(quote['09. change']);
+        const previousClose = parseFloat(quote['08. previous close']);
+
+        return { ticker, price, dayChange, previousClose };
+
+    } catch (error) {
+        console.error(`Error fetching live stock data for ${ticker}:`, error);
+        return { ticker, price: 0, dayChange: 0, previousClose: 0 }; // Return a default state on error
+    }
 };
 
 const getMultipleStockData = async (tickers: string[]): Promise<MarketData[]> => {
     if (tickers.length === 0) return [];
-    console.warn(`Market data for multiple stocks is SIMULATED.`);
-    const promises = tickers.map(ticker => getLiveStockData(ticker));
-    return Promise.all(promises);
+    
+    const results: MarketData[] = [];
+    for (const ticker of tickers) {
+        const data = await getLiveStockData(ticker);
+        results.push(data);
+    }
+    return results;
 };
-
 
 const searchTickers = async (query: string): Promise<TickerSearchResult[]> => {
-    if (!query) return [];
-    console.warn(`Ticker search for "${query}" is SIMULATED.`);
-    const mockResults = [
-        { ticker: 'GGAL', name: 'Grupo Financiero Galicia' },
-        { ticker: 'AAPL', name: 'Apple Inc.' },
-        { ticker: 'GOOGL', name: 'Alphabet Inc.' },
-        { ticker: 'MSFT', name: 'Microsoft Corporation' },
-        { ticker: 'TSLA', name: 'Tesla, Inc.' },
-    ];
-    return new Promise(resolve => {
-        setTimeout(() => {
-            resolve(mockResults.filter(r => r.ticker.includes(query.toUpperCase()) || r.name.toLowerCase().includes(query.toLowerCase())));
-        }, 100);
-    });
-};
+    if (!query || !API_KEY) return [];
 
+    try {
+        await ensureApiRateLimit();
+        const response = await fetch(`${BASE_URL}?function=SYMBOL_SEARCH&keywords=${query}&apikey=${API_KEY}`);
+        if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+
+        const data = await response.json();
+        const matches = data['bestMatches'] || [];
+
+        return matches
+            .filter((match: any) => !match['1. symbol'].includes('.')) // Filter out non-common stocks
+            .map((match: any) => ({
+                ticker: match['1. symbol'],
+                name: match['2. name'],
+            }));
+            
+    } catch (error) {
+        console.error(`Error searching tickers for "${query}":`, error);
+        return [];
+    }
+};
 
 export const marketDataService = {
     getLiveStockData,

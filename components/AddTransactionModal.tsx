@@ -17,7 +17,7 @@ interface AddTransactionModalProps {
 }
 
 const defaultCategories = [
-    'Housing', 'Food', 'Transportation', 'Entertainment', 'Utilities', 'Job', 'Investment', 'Loan', 'Shopping', 'Business Expense', 'Team Contribution', 'Transfer', 'Cosmic Event', 'Maintenance'
+    'Housing', 'Food', 'Transportation', 'Entertainment', 'Utilities', 'Job', 'Investment', 'Loan', 'Shopping', 'Business Expense', 'Team Contribution', 'Transfer', 'Cosmic Event', 'Maintenance', 'Goals'
 ];
 
 export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategoryClick, defaultTeamId }) => {

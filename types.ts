@@ -3,7 +3,6 @@ export enum TransactionType {
   EXPENSE = 'EXPENSE',
 }
 
-// New: Account Type Enum
 export enum AccountType {
   CASH = 'Cash',
   CHECKING = 'Checking',
@@ -15,31 +14,27 @@ export enum AccountType {
   RRSP = 'RRSP',
 }
 
-// New: Account Interface
 export interface Account {
   id: string;
   name: string;
   type: AccountType;
   balance: number;
-  ownerIds: string[]; // Changed from ownerId to support multiple owners
-  teamId?: string; // Accounts can belong to a team
-  sharedWith?: string[]; // user IDs
+  ownerIds: string[];
+  teamId?: string;
+  sharedWith?: string[];
 }
-
 
 export interface Share {
   userId: string;
-  percentage: number; // Use percentage for assets/liabilities
+  percentage: number;
 }
 
-// New: Defines who paid what, and from which account
 export interface PaymentShare {
   userId: string;
   accountId: string;
   amount: number;
 }
 
-// New: Defines how an expense is split among users
 export interface ExpenseShare {
   userId: string;
   amount: number;
@@ -48,19 +43,16 @@ export interface ExpenseShare {
 export interface Transaction {
   id: string;
   description: string;
-  amount: number; // Total amount of the transaction
+  amount: number;
   type: TransactionType;
   category: string;
   date: string;
   isPassive?: boolean;
-  teamId?: string; // Transactions can belong to a team
-  receiptUrl?: string; // For uploading receipts
-
-  // New: Advanced shared transaction details
-  paymentShares: PaymentShare[]; // Who paid what from where. For INCOME, this is who received what.
-  expenseShares?: ExpenseShare[]; // How an EXPENSE is split. Not applicable for INCOME.
+  teamId?: string;
+  receiptUrl?: string;
+  paymentShares: PaymentShare[];
+  expenseShares?: ExpenseShare[];
 }
-
 
 export enum AssetType {
   STOCK = 'Stock',
@@ -73,29 +65,26 @@ export interface Asset {
   id: string;
   name: string;
   type: AssetType;
-  value: number; // Current market value
+  value: number;
   monthlyCashflow: number;
-  teamId?: string; // Assets can belong to a team
-  shares?: Share[]; // For shared ownership
-  
-  // Stock specific fields
+  teamId?: string;
+  shares?: Share[];
   ticker?: string;
   numberOfShares?: number;
   purchasePrice?: number;
-  takeProfit?: number; // Optional TP price
-  stopLoss?: number;   // Optional SL price
-  strategy?: string;   // Optional user-defined strategy or notes
+  takeProfit?: number;
+  stopLoss?: number;
+  strategy?: string;
 }
 
-
 export interface Liability {
-  id:string;
+  id: string;
   name: string;
-  balance: number; // This should be a positive number
+  balance: number;
   interestRate: number;
   monthlyPayment: number;
-  teamId?: string; // Liabilities can belong to a team
-  shares?: Share[]; // For shared ownership
+  teamId?: string;
+  shares?: Share[];
 }
 
 export interface FinancialStatement {
@@ -104,22 +93,41 @@ export interface FinancialStatement {
   liabilities: Liability[];
 }
 
+// New: Budgeting interfaces
+export type BudgetCategory = 'Housing' | 'Food' | 'Transportation' | 'Entertainment' | 'Utilities' | 'Shopping' | 'Business Expense' | 'Maintenance' | 'Other';
+
+export interface Budget {
+    month: string; // "YYYY-MM" format
+    limits: Partial<Record<BudgetCategory, number>>;
+}
+
+// New: Financial Goal interface
+export interface Goal {
+    id: string;
+    name: string;
+    targetAmount: number;
+    currentAmount: number;
+    targetDate?: string;
+}
+
+
 export interface User {
   id: string;
   name: string;
   avatar: string;
   financialStatement: FinancialStatement;
-  accounts: Account[]; // User's personal accounts
-  teamIds?: string[]; // IDs of teams the user is a member of
+  accounts: Account[];
+  teamIds?: string[];
+  budgets: Budget[];
+  goals: Goal[];
 }
 
-// A Team is a financial entity like a business or project
 export interface Team {
   id: string;
   name: string;
   memberIds: string[];
   financialStatement: FinancialStatement;
-  accounts: Account[]; // Teams have their own accounts
+  accounts: Account[];
   goals: {
     description: string;
     target: number;
@@ -127,27 +135,26 @@ export interface Team {
   }[];
 }
 
-export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances';
+export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals';
 
-// Types for the new Cosmic Event feature
 export interface EventOutcome {
-    message: string;
-    cashChange?: number; // This will now affect a user's primary cash account
-    newAsset?: Omit<Asset, 'id'>;
+  message: string;
+  cashChange?: number;
+  newAsset?: Omit<Asset, 'id'>;
 }
 
 export interface EventChoice {
-    text: string;
-    outcome: EventOutcome;
+  text: string;
+  outcome: EventOutcome;
 }
 
 export interface CosmicEvent {
-    title: string;
-    description: string;
-    choices: EventChoice[];
+  title: string;
+  description: string;
+  choices: EventChoice[];
 }
 
 export interface HistoricalDataPoint {
-    date: string;
-    value: number;
+  date: string;
+  value: number;
 }
