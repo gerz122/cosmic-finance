@@ -10,7 +10,7 @@ export interface TickerSearchResult {
     name: string;
 }
 
-const API_KEY = (import.meta as any).env.VITE_ALPHA_VANTAGE_API_KEY;
+const API_KEY = process.env.VITE_ALPHA_VANTAGE_API_KEY;
 const BASE_URL = 'https://www.alphavantage.co/query';
 
 // Helper to handle API rate limiting (5 calls per minute for free tier)
