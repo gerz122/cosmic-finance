@@ -3,7 +3,7 @@ import type { User, Achievement } from '../types';
 import { PlusIcon, StarIcon, CreditCardIcon, TeamsIcon } from './icons';
 
 // Master list of all possible achievements in the game
-const ALL_ACHIEVEMENTS: Achievement[] = [
+export const ALL_ACHIEVEMENTS: Achievement[] = [
     {
         id: 'FIRST_TRANSACTION',
         title: 'First Play',
