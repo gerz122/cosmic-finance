@@ -39,4 +39,22 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ isOp
                         <CreditCardIcon className="w-6 h-6"/>
                     </FabAction>
                      <FabAction label="Transfer" onClick={onTransfer}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                    </FabAction>
+                    <FabAction label="Add Transaction" onClick={onAddTransaction}>
+                        <PlusIcon className="w-6 h-6" />
+                    </FabAction>
+                </div>
+            )}
+            <button
+                onClick={onToggle}
+                className="bg-cosmic-primary text-white w-16 h-16 rounded-full flex items-center justify-center shadow-2xl hover:bg-blue-400 transition-transform transform hover:scale-110"
+                aria-label="Toggle Actions Menu"
+            >
+                <div className={`transition-transform duration-300 ${isOpen ? 'rotate-45' : 'rotate-0'}`}>
+                    <PlusIcon className="w-8 h-8"/>
+                </div>
+            </button>
+        </div>
+    );
+};

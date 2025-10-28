@@ -4,7 +4,7 @@ import { AssetType, TransactionType } from './types';
 import { dbService } from './services/dbService'; 
 import { getCosmicEvent } from './services/geminiService';
 import { generateHistoricalData } from './utils/financialCalculations';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon, HistoryIcon } from './components/icons';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon, HistoryIcon, TrophyIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -37,6 +37,7 @@ import { ContributeToGoalModal } from './components/ContributeToGoalModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { HistoricalPerformance } from './components/HistoricalPerformance';
 import { TransactionSplitDetailModal } from './components/TransactionSplitDetailModal';
+import { Achievements } from './components/Achievements';
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
     <button
@@ -162,10 +163,22 @@ const App: React.FC = () => {
         const updatedTeamsMap = new Map(updatedTeams.map(t => [t.id, t]));
         setTeams(currentTeams => currentTeams.map(t => updatedTeamsMap.get(t.id) || t));
     };
+    
+    const handleUnlockAchievement = async (achievementId: string) => {
+        if (!activeUser) return;
+        const updatedUser = await dbService.checkAndUnlockAchievement(activeUser.id, achievementId);
+        if (updatedUser) {
+            updateUserState(updatedUser);
+            // In a real app, you might show a toast notification here
+            console.log(`Achievement Unlocked: ${achievementId}`);
+        }
+    };
 
     const handleSaveTransaction = async (transaction: Omit<Transaction, 'id'> | Transaction) => {
         if (!activeUser) return;
         
+        const isFirstTransaction = effectiveFinancialStatement.transactions.length === 0 && !('id' in transaction);
+
         if ('id' in transaction) { // Editing existing transaction
             const { updatedUsers, updatedTeams } = await dbService.updateTransaction(transaction, users, teams);
             updateMultipleUsersState(updatedUsers);
@@ -179,6 +192,10 @@ const App: React.FC = () => {
                 const updatedUsers = await dbService.addTransaction(activeUser.id, transaction, users);
                 updateMultipleUsersState(updatedUsers);
             }
+        }
+        
+        if(isFirstTransaction) {
+            handleUnlockAchievement('FIRST_TRANSACTION');
         }
     };
     
@@ -275,6 +292,7 @@ const App: React.FC = () => {
                 }
                 updateUserState(updatedUser);
             }
+             handleUnlockAchievement('FIRST_INVESTMENT');
         } catch(e) {
             alert((e as Error).message);
         }
@@ -331,6 +349,7 @@ const App: React.FC = () => {
         if(!activeUser) return;
         const newTeam = await dbService.createTeam(name, [...memberIds, activeUser.id]);
         setTeams(current => [...current, newTeam]);
+        handleUnlockAchievement('FIRST_TEAM');
     };
 
     const handleSaveBudget = async (budget: Budget) => {
@@ -437,6 +456,7 @@ const App: React.FC = () => {
             case 'budget': return <BudgetView user={activeUser} onSaveBudget={handleSaveBudget} onOpenBudgetModal={() => setAddBudgetModalOpen(true)} />;
             case 'goals': return <GoalsView user={activeUser} onAddGoal={() => setAddGoalModalOpen(true)} onDeleteGoal={handleDeleteGoal} onContribute={handleOpenContributeToGoalModal} />;
             case 'history': return <HistoricalPerformance data={historicalData} />;
+            case 'achievements': return <Achievements user={activeUser} />;
             default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
         }
     };
@@ -456,6 +476,7 @@ const App: React.FC = () => {
             <NavItem icon={<PortfolioIcon className="w-6 h-6" />} label="Portfolio" isActive={activeView === 'portfolio'} onClick={() => handleViewChange('portfolio')} />
             <NavItem icon={<BudgetIcon className="w-6 h-6" />} label="Budget" isActive={activeView === 'budget'} onClick={() => handleViewChange('budget')} />
             <NavItem icon={<GoalIcon className="w-6 h-6" />} label="Goals" isActive={activeView === 'goals'} onClick={() => handleViewChange('goals')} />
+            <NavItem icon={<TrophyIcon className="w-6 h-6" />} label="Achievements" isActive={activeView === 'achievements'} onClick={() => handleViewChange('achievements')} />
             <NavItem icon={<TeamsIcon className="w-6 h-6" />} label="Teams" isActive={activeView === 'teams' || activeView === 'team-detail'} onClick={() => handleViewChange('teams')} />
              {activeView === 'team-detail' && selectedTeam && (
                 <div className="pl-4 mt-1 border-l-2 border-cosmic-primary ml-5">

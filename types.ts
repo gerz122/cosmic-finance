@@ -111,6 +111,12 @@ export interface Goal {
     targetDate?: string;
 }
 
+export interface Achievement {
+    id: string;
+    title: string;
+    description: string;
+    icon: React.FC<{ className?: string }>;
+}
 
 export interface User {
   id: string;
@@ -121,6 +127,7 @@ export interface User {
   teamIds?: string[];
   budgets: Budget[];
   goals: Goal[];
+  achievements: string[];
 }
 
 export interface Team {
@@ -136,7 +143,7 @@ export interface Team {
   }[];
 }
 
-export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals' | 'history';
+export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals' | 'history' | 'achievements';
 
 export interface EventOutcome {
   message: string;

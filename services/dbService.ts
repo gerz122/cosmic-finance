@@ -5,8 +5,8 @@ import { TransactionType, AssetType, AccountType } from '../types';
 // Real data for German & Valeria
 const initialData = {
     users: [
-        { id: 'german', name: 'German', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=german', teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'] },
-        { id: 'valeria', name: 'Valeria', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=valeria', teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'] },
+        { id: 'german', name: 'German', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=german', teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'], achievements: [] },
+        { id: 'valeria', name: 'Valeria', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=valeria', teamIds: ['team-millo', 'team-casita', 'team-regina', 'team-viandas'], achievements: [] },
     ],
     accounts: [
         { id: 'acc-joint-checking', name: 'Cuenta Conjunta', type: AccountType.CHECKING, balance: 6686.80, ownerIds: ['german', 'valeria'] },
@@ -162,7 +162,8 @@ const seedInitialData = async () => {
                 transactions: baseStatement.transactions,
             },
             budgets: baseStatement.budgets,
-            goals: baseStatement.goals
+            goals: baseStatement.goals,
+            achievements: u.achievements || [],
         };
     });
     
@@ -192,6 +193,7 @@ const sanitizeUser = (user: any): User => ({
     },
     budgets: user.budgets || [],
     goals: user.goals || [],
+    achievements: user.achievements || [],
 });
 
 export const dbService = {
@@ -585,6 +587,21 @@ export const dbService = {
         if (!userSnap.exists()) throw new Error("User not found");
         const user = sanitizeUser(userSnap.data());
         user.goals = user.goals.filter(g => g.id !== goalId);
+        await setDoc(userRef, sanitizeForFirestore(user));
+        return user;
+    },
+
+    checkAndUnlockAchievement: async (userId: string, achievementId: string): Promise<User | null> => {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) return null;
+
+        const user = sanitizeUser(userSnap.data());
+        if (user.achievements.includes(achievementId)) {
+            return null; // Already unlocked, no update needed.
+        }
+
+        user.achievements.push(achievementId);
         await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
