@@ -12,20 +12,20 @@ export const PortfolioLivePL: React.FC<PortfolioLivePLProps> = ({ stocks }) => {
 
     useEffect(() => {
         let isMounted = true;
+        if (stocks.length === 0) {
+            setIsLoading(false);
+            return;
+        }
         setIsLoading(true);
 
         const fetchAllStockData = async () => {
-            if (stocks.length === 0) {
-                setIsLoading(false);
-                return;
-            }
             try {
                 const results = await marketDataService.getMultipleStockData(stocks.map(s => s.ticker).filter(Boolean) as string[]);
                 if (isMounted) {
                     const dataMap: Record<string, { price: number; dayChange: number }> = {};
                     stocks.forEach(stock => {
                         const data = results.find(r => r.ticker === stock.ticker);
-                        if (data) {
+                        if (data && data.price > 0) { // Only store valid data
                             dataMap[stock.id] = { price: data.price, dayChange: data.dayChange };
                         }
                     });

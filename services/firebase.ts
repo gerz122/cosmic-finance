@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, getDocs, writeBatch, query, where } from "firebase/firestore";
+// Fix: Import missing firestore functions (getDoc, setDoc, deleteDoc) to be used in dbService.ts.
+import { getFirestore, collection, doc, getDocs, writeBatch, query, where, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -19,4 +20,5 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // Export firestore functions for use in db.ts
-export { db, collection, doc, getDocs, writeBatch, query, where };
+// Fix: Export the newly imported functions so they can be used in dbService.ts.
+export { db, collection, doc, getDocs, writeBatch, query, where, getDoc, setDoc, deleteDoc };

@@ -2,12 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { getFinancialAdvice } from '../services/geminiService';
-// FIX: Import User type instead of FinancialStatement to get access to accounts.
 import type { User } from '../types';
 import { CoachIcon, SendIcon, StarIcon } from './icons';
 
 interface AICoachProps {
-    // FIX: Expect the full User object.
     user: User;
 }
 
@@ -16,7 +14,6 @@ interface Message {
     text: string;
 }
 
-// FIX: Update props to accept the user object.
 export const AICoach: React.FC<AICoachProps> = ({ user }) => {
     const [messages, setMessages] = useState<Message[]>([
         { sender: 'ai', text: "Welcome to the Coach's Corner! How can we level up your financial game today?" }
@@ -40,7 +37,6 @@ export const AICoach: React.FC<AICoachProps> = ({ user }) => {
         setIsLoading(true);
 
         try {
-            // FIX: Pass financialStatement and accounts to the service call.
             const aiResponse = await getFinancialAdvice(input, user.financialStatement, user.accounts);
             const aiMessage: Message = { sender: 'ai', text: aiResponse };
             setMessages(prev => [...prev, aiMessage]);

@@ -1,6 +1,6 @@
 
+
 import React, { useEffect, memo } from 'react';
-// Fix: Import marketDataService which contains the getLiveStockData function.
 import { marketDataService } from '../services/marketDataService';
 
 export interface LiveStockData {
@@ -22,10 +22,13 @@ export const StockPriceProvider: React.FC<StockPriceProviderProps> = memo(({ tic
         let isMounted = true;
         
         const fetchData = async () => {
-            // Fix: Call getLiveStockData from the imported marketDataService.
             const data = await marketDataService.getLiveStockData(ticker);
             if (isMounted && data) {
-                onDataUpdate(data);
+                onDataUpdate({
+                    price: data.price,
+                    dayChange: data.dayChange,
+                    dayChangePercent: data.price > 0 && data.dayChange != null ? (data.dayChange / (data.price - data.dayChange)) * 100 : 0
+                });
             }
         };
 

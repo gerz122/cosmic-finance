@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect, memo, useMemo } from 'react';
 import type { Asset } from '../types';
 import { marketDataService, type MarketData } from '../services/marketDataService';
@@ -12,7 +13,6 @@ interface StockTableRowProps {
     onOpenLargeChart: (stock: Asset) => void;
 }
 
-// Fix: Export the component so it can be used in other files.
 export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEditStock, onDeleteStock, onLogDividend, onOpenLargeChart }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [liveData, setLiveData] = useState<MarketData | null>(null);
@@ -25,7 +25,7 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
         const fetchData = async () => {
             try {
                 const data = await marketDataService.getLiveStockData(stock.ticker!);
-                if (isMounted) {
+                if (isMounted && data.price > 0) {
                     setLiveData(prevData => {
                         if (prevData && prevData.price && data.price > prevData.price) {
                             setPriceChangeIndicator('up');
@@ -34,9 +34,12 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                         }
                         return data;
                     });
+                } else if(isMounted) {
+                    setLiveData(null); // Set to null if fetch fails or returns 0
                 }
             } catch (error) {
                 console.error(`Failed to fetch data for ${stock.ticker}`, error);
+                 if (isMounted) setLiveData(null);
             }
         };
 
@@ -58,9 +61,8 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
 
     const toggleRow = () => setIsExpanded(prev => !prev);
 
-    // Fix: useMemo was used but not imported.
     const { plValue, plPercent, plColor, dayChangeColor, dayChangePercent } = useMemo(() => {
-        if (!liveData || !stock.purchasePrice || !stock.numberOfShares) {
+        if (!liveData || liveData.price === 0 || !stock.purchasePrice || !stock.numberOfShares) {
             return { plValue: 0, plPercent: 0, plColor: 'text-cosmic-text-secondary', dayChangeColor: 'text-cosmic-text-secondary', dayChangePercent: 0 };
         }
         const value = (liveData.price - stock.purchasePrice) * stock.numberOfShares;
@@ -85,7 +87,7 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                 <td className="px-6 py-4">{stock.numberOfShares}</td>
                 <td className="px-6 py-4">${stock.purchasePrice?.toFixed(2)}</td>
                 <td className={`px-6 py-4 font-bold text-cosmic-text-primary transition-colors duration-300 ${priceIndicatorClass}`}>
-                     {liveData ? `$${liveData.price.toFixed(2)}` : <span className="text-xs animate-pulse">Loading...</span>}
+                     {liveData ? `$${liveData.price.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
                 <td className={`px-6 py-4 ${dayChangeColor}`}>
                     {liveData ? (
@@ -93,10 +95,10 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                             <p className="font-semibold">{liveData.dayChange >= 0 ? '+' : ''}{liveData.dayChange.toFixed(2)}</p>
                             <p className="text-xs">({dayChangePercent.toFixed(2)}%)</p>
                         </>
-                    ) : <span className="text-xs animate-pulse">Loading...</span>}
+                    ) : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
                 <td className={`px-6 py-4 font-bold ${plColor}`}>
-                    {liveData ? `${plValue >= 0 ? '+' : ''}${plValue.toFixed(2)}` : <span className="text-xs animate-pulse">Loading...</span>}
+                    {liveData ? `${plValue >= 0 ? '+' : ''}${plValue.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
                 <td className="px-6 py-4 text-green-400">
                     {stock.takeProfit ? `$${stock.takeProfit.toFixed(2)}` : '---'}

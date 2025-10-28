@@ -9,10 +9,10 @@ export interface TickerSearchResult {
     name: string;
 }
 
-// Using a free, open-source proxy for Yahoo Finance data.
-// This is more reliable and sustainable than using the Gemini API for financial data.
-const API_BASE_URL = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=';
-const SEARCH_API_URL = 'https://query2.finance.yahoo.com/v1/finance/search?q=';
+// Using a CORS proxy to bypass browser security restrictions when deployed.
+const PROXY_URL = 'https://corsproxy.io/?';
+const API_BASE_URL = `${PROXY_URL}https://query1.finance.yahoo.com/v7/finance/quote?symbols=`;
+const SEARCH_API_URL = `${PROXY_URL}https://query2.finance.yahoo.com/v1/finance/search?q=`;
 
 
 const getLiveStockData = async (ticker: string): Promise<MarketData> => {
@@ -24,14 +24,15 @@ const getLiveStockData = async (ticker: string): Promise<MarketData> => {
         const data = await response.json();
         const result = data.quoteResponse?.result?.[0];
 
-        if (!result) {
-            throw new Error(`Ticker not found or invalid response for ${ticker}`);
+        if (!result || !result.regularMarketPrice) {
+            console.warn(`No valid data for ticker ${ticker}.`);
+            return { ticker, price: 0, dayChange: 0 };
         }
 
         return {
             ticker: result.symbol,
             price: result.regularMarketPrice,
-            dayChange: result.regularMarketChange,
+            dayChange: result.regularMarketChange || 0,
         };
     } catch (error) {
         console.error(`Error fetching live stock data for ${ticker}:`, error);
@@ -50,11 +51,13 @@ const getMultipleStockData = async (tickers: string[]): Promise<MarketData[]> =>
         const data = await response.json();
         const results = data.quoteResponse?.result || [];
 
-        return results.map((result: any) => ({
-             ticker: result.symbol,
-             price: result.regularMarketPrice,
-             dayChange: result.regularMarketChange,
-        }));
+        return results
+            .filter((result: any) => result && result.regularMarketPrice)
+            .map((result: any) => ({
+                 ticker: result.symbol,
+                 price: result.regularMarketPrice,
+                 dayChange: result.regularMarketChange || 0,
+            }));
     } catch (error) {
         console.error(`Error fetching multiple stock data:`, error);
         return [];

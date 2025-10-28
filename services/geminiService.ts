@@ -1,16 +1,13 @@
 
+
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType } from '../types';
 
-// Per coding guidelines, the API key must come from process.env.API_KEY.
-const apiKey = process.env.API_KEY;
-
-if (!apiKey) {
-    // This will now correctly trigger if the API_KEY is not set.
-    throw new Error("API_KEY environment variable not set.");
-}
-const ai = new GoogleGenAI({ apiKey });
+// Fix: Per coding guidelines, initialize GoogleGenAI directly with process.env.API_KEY.
+// The API key's availability is assumed to be handled externally.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 
 function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {

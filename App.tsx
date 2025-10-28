@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint } from './types';
 import { AssetType } from './types';
-import { dbService as db } from './db'; 
+import { dbService } from './services/dbService'; 
 import { getCosmicEvent } from './services/geminiService';
 import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
@@ -84,13 +84,13 @@ const App: React.FC = () => {
             setIsLoading(true);
             setError(null);
             try {
-                const fetchedUsers = await db.getUsers();
+                const fetchedUsers = await dbService.getUsers();
                 setUsers(fetchedUsers);
                 
                 if (fetchedUsers.length > 0) {
                     const currentActiveId = fetchedUsers[0].id;
                     setActiveUserId(currentActiveId);
-                    const fetchedTeams = await db.getTeamsForUser(currentActiveId);
+                    const fetchedTeams = await dbService.getTeamsForUser(currentActiveId);
                     setTeams(fetchedTeams);
                 }
             } catch (e) {
@@ -156,15 +156,15 @@ const App: React.FC = () => {
         if (!activeUser) return;
         
         if ('id' in transaction) { // Editing existing transaction
-            const { updatedUsers, updatedTeams } = await db.updateTransaction(transaction, users, teams);
+            const { updatedUsers, updatedTeams } = await dbService.updateTransaction(transaction, users, teams);
             updateMultipleUsersState(updatedUsers);
             updateMultipleTeamsState(updatedTeams);
         } else { // Adding new transaction
             if(transaction.teamId) {
-                const updatedTeam = await db.addTeamTransaction(transaction);
+                const updatedTeam = await dbService.addTeamTransaction(transaction);
                 updateTeamState(updatedTeam);
             } else {
-                const updatedUsers = await db.addTransaction(activeUser.id, transaction, users);
+                const updatedUsers = await dbService.addTransaction(activeUser.id, transaction, users);
                 updateMultipleUsersState(updatedUsers);
             }
         }
@@ -172,15 +172,15 @@ const App: React.FC = () => {
     
     const handleDeleteTransaction = async (transactionId: string) => {
         if (!window.confirm("Are you sure you want to delete this transaction? This action cannot be undone.")) return;
-        const { updatedUsers, updatedTeams } = await db.deleteTransaction(transactionId, users, teams);
+        const { updatedUsers, updatedTeams } = await dbService.deleteTransaction(transactionId, users, teams);
         updateMultipleUsersState(updatedUsers);
         updateMultipleTeamsState(updatedTeams);
     };
 
-    const handleTransfer = async (fromAccountId: string, toAccountId: string, amount: number, isSettleUp: boolean = false) => {
+    const handleTransfer = async (fromAccountId: string, toAccountId: string, amount: number) => {
         if (!activeUserId) return;
         try {
-             const updatedUser = await db.performTransfer(activeUserId, fromAccountId, toAccountId, amount, isSettleUp);
+             const updatedUser = await dbService.performTransfer(activeUserId, fromAccountId, toAccountId, amount);
             updateUserState(updatedUser);
         } catch (error) {
             alert((error as Error).message);
@@ -201,7 +201,7 @@ const App: React.FC = () => {
     const handleCosmicEventResolution = async (outcome: EventOutcome) => {
         if (!activeUser) return;
         try {
-            const updatedUser = await db.applyEventOutcome(activeUser, outcome);
+            const updatedUser = await dbService.applyEventOutcome(activeUser, outcome);
             updateUserState(updatedUser);
         } catch (error) {
             alert((error as Error).message);
@@ -213,13 +213,13 @@ const App: React.FC = () => {
         try {
             if(teamId) {
                 const updatedTeam = assetLiabilityToAdd === 'asset'
-                    ? await db.addTeamAsset(teamId, data as Partial<Asset>)
-                    : await db.addTeamLiability(teamId, data as Partial<Liability>);
+                    ? await dbService.addTeamAsset(teamId, data as Partial<Asset>)
+                    : await dbService.addTeamLiability(teamId, data as Partial<Liability>);
                 updateTeamState(updatedTeam);
             } else {
                  const updatedUser = assetLiabilityToAdd === 'asset'
-                    ? await db.addAsset(activeUser.id, data as Partial<Asset>)
-                    : await db.addLiability(activeUser.id, data as Partial<Liability>);
+                    ? await dbService.addAsset(activeUser.id, data as Partial<Asset>)
+                    : await dbService.addLiability(activeUser.id, data as Partial<Liability>);
                 updateUserState(updatedUser);
             }
         } catch(e) {
@@ -233,14 +233,14 @@ const App: React.FC = () => {
             if (assetLiabilityToEdit.teamId) {
                 const isAsset = 'value' in assetLiabilityToEdit;
                 const updatedTeam = isAsset
-                    ? await db.updateTeamAsset(assetLiabilityToEdit.teamId, assetLiabilityToEdit.id, data)
-                    : await db.updateTeamLiability(assetLiabilityToEdit.teamId, assetLiabilityToEdit.id, data);
+                    ? await dbService.updateTeamAsset(assetLiabilityToEdit.teamId, assetLiabilityToEdit.id, data)
+                    : await dbService.updateTeamLiability(assetLiabilityToEdit.teamId, assetLiabilityToEdit.id, data);
                 updateTeamState(updatedTeam);
             } else {
                 const isAsset = 'value' in assetLiabilityToEdit;
                 const updatedUser = isAsset
-                    ? await db.updateAsset(activeUser.id, assetLiabilityToEdit.id, data)
-                    : await db.updateLiability(activeUser.id, assetLiabilityToEdit.id, data);
+                    ? await dbService.updateAsset(activeUser.id, assetLiabilityToEdit.id, data)
+                    : await dbService.updateLiability(activeUser.id, assetLiabilityToEdit.id, data);
                 updateUserState(updatedUser);
             }
         } catch (e) {
@@ -252,14 +252,14 @@ const App: React.FC = () => {
         if (!activeUser) return;
         try {
             if(teamId) {
-                const updatedTeam = await db.addTeamAsset(teamId, {...stockData, type: AssetType.STOCK});
+                const updatedTeam = await dbService.addTeamAsset(teamId, {...stockData, type: AssetType.STOCK});
                 updateTeamState(updatedTeam);
             } else {
                 let updatedUser;
                 if (stockToEdit) { 
-                    updatedUser = await db.updateAsset(activeUser.id, stockToEdit.id, stockData);
+                    updatedUser = await dbService.updateAsset(activeUser.id, stockToEdit.id, stockData);
                 } else { 
-                    updatedUser = await db.addAsset(activeUser.id, {...stockData, type: AssetType.STOCK} as any);
+                    updatedUser = await dbService.addAsset(activeUser.id, {...stockData, type: AssetType.STOCK} as any);
                 }
                 updateUserState(updatedUser);
             }
@@ -271,7 +271,7 @@ const App: React.FC = () => {
     const handleDeleteStock = async (stockId: string) => {
         if (!activeUser || !window.confirm("Are you sure you want to sell this stock? This action cannot be undone.")) return;
         try {
-            const updatedUser = await db.deleteAsset(activeUser.id, stockId);
+            const updatedUser = await dbService.deleteAsset(activeUser.id, stockId);
             updateUserState(updatedUser);
         } catch (e) {
             alert((e as Error).message);
@@ -281,7 +281,7 @@ const App: React.FC = () => {
     const handleLogDividend = async (amount: number, accountId: string) => {
         if (!activeUser || !stockForDividend) return;
         try {
-            const updatedUser = await db.logDividend(activeUser, stockForDividend.id, amount, accountId);
+            const updatedUser = await dbService.logDividend(activeUser, stockForDividend.id, amount, accountId);
             updateUserState(updatedUser);
         } catch (e) {
             alert((e as Error).message);
@@ -291,7 +291,7 @@ const App: React.FC = () => {
     const handleAddAccount = async (accountData: Omit<Account, 'id' | 'balance' | 'ownerIds'> & {balance: number}) => {
         if (!activeUser) return;
         try {
-            const updatedUser = await db.addAccount(activeUser.id, accountData);
+            const updatedUser = await dbService.addAccount(activeUser.id, accountData);
             updateUserState(updatedUser);
         } catch (e) {
             alert((e as Error).message);
@@ -308,7 +308,7 @@ const App: React.FC = () => {
     
     const handleCreateTeam = async(name: string, memberIds: string[]) => {
         if(!activeUser) return;
-        const newTeam = await db.createTeam(name, [...memberIds, activeUser.id]);
+        const newTeam = await dbService.createTeam(name, [...memberIds, activeUser.id]);
         setTeams(current => [...current, newTeam]);
     };
 

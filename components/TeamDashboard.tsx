@@ -57,7 +57,6 @@ export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, on
                 </div>
             </div>
 
-            {/* FIX: Pass required props to enable editing and deleting transactions. */}
             <FinancialStatement statement={team.financialStatement} user={members[0]} teamMates={[]} team={team} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
