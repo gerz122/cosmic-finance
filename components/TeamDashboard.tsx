@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Team, User, Asset, Liability, Transaction } from '../types';
 import { FinancialStatement } from './FinancialStatement';

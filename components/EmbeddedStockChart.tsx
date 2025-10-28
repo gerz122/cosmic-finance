@@ -1,4 +1,3 @@
-
 import React, { useEffect, memo, useRef } from 'react';
 
 declare global {

@@ -1,4 +1,3 @@
-
 import { db, collection, doc, getDocs, writeBatch, query, where, getDoc, setDoc, deleteDoc } from './firebase';
 import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, Budget, Goal } from '../types';
 import { TransactionType, AssetType, AccountType } from '../types';

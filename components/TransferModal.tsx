@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { User, Account } from '../types';
 import { XIcon } from './icons';

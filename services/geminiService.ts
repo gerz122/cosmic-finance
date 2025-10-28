@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType } from '../types';

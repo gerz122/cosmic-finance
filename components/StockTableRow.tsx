@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, memo, useMemo } from 'react';
 import type { Asset } from '../types';
 import { marketDataService, type MarketData } from '../services/marketDataService';

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { getFinancialAdvice } from '../services/geminiService';
 import type { User } from '../types';

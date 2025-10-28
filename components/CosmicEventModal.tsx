@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { CosmicEvent, EventChoice, EventOutcome } from '../types';
 import { XIcon, SparklesIcon } from './icons';

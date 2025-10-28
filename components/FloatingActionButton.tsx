@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { PlusIcon, XIcon, CreditCardIcon, TeamsIcon } from './icons';
 

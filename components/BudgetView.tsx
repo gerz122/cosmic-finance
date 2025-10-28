@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import type { User, Budget, BudgetCategory } from '../types';
 import { PlusIcon } from './icons';
@@ -24,6 +23,13 @@ const ProgressBar: React.FC<{ value: number; max: number; color: string }> = ({ 
         </div>
     );
 };
+
+const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ title, value, color }) => (
+    <div className="bg-cosmic-surface p-4 rounded-lg border border-cosmic-border">
+        <h3 className="text-cosmic-text-secondary text-sm">{title}</h3>
+        <p className={`text-2xl font-bold ${color}`}>{value}</p>
+    </div>
+);
 
 export const BudgetView: React.FC<BudgetViewProps> = ({ user, onSaveBudget, onOpenBudgetModal }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7)); // "YYYY-MM"
@@ -58,58 +64,57 @@ export const BudgetView: React.FC<BudgetViewProps> = ({ user, onSaveBudget, onOp
     return (
         <div className="animate-fade-in space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
-                <div>
+                <div className="flex items-center gap-4">
                     <h1 className="text-3xl font-bold text-cosmic-text-primary">Monthly Budget</h1>
                     <input 
                         type="month" 
                         value={currentMonth}
+                        // FIX: Corrected the onChange handler and completed the input element.
                         onChange={(e) => setCurrentMonth(e.target.value)}
-                        className="bg-cosmic-surface border border-cosmic-border rounded-md p-1 mt-2 text-cosmic-text-secondary"
+                        className="bg-cosmic-surface border border-cosmic-border rounded-md p-2 text-cosmic-text-primary"
                     />
                 </div>
-                <button onClick={onOpenBudgetModal} className="flex items-center gap-2 bg-cosmic-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-400 transition-colors">
+                 <button onClick={onOpenBudgetModal} className="flex items-center gap-2 bg-cosmic-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-400 transition-colors">
                     <PlusIcon className="w-5 h-5" />
                     Set/Edit Budget
                 </button>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-cosmic-surface p-6 rounded-xl border border-cosmic-border">
-                    <h2 className="text-cosmic-text-secondary font-medium">Total Spent This Month</h2>
-                    <p className="text-4xl font-bold text-cosmic-text-primary mt-2">${totalSpent.toFixed(2)}</p>
-                </div>
-                <div className="bg-cosmic-surface p-6 rounded-xl border border-cosmic-border">
-                    <h2 className="text-cosmic-text-secondary font-medium">Total Budget for Month</h2>
-                    <p className={`text-4xl font-bold mt-2 ${totalSpent > totalBudgeted ? 'text-cosmic-danger' : 'text-cosmic-success'}`}>
-                        ${totalBudgeted.toFixed(2)}
-                    </p>
-                </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <StatCard title="Total Budgeted" value={`$${totalBudgeted.toFixed(2)}`} color="text-cosmic-primary" />
+                <StatCard title="Total Spent" value={`$${totalSpent.toFixed(2)}`} color="text-cosmic-secondary" />
+                <StatCard title="Remaining" value={`$${(totalBudgeted - totalSpent).toFixed(2)}`} color={(totalBudgeted - totalSpent) >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'} />
             </div>
 
             <div className="bg-cosmic-surface p-4 rounded-xl border border-cosmic-border">
-                <h2 className="text-xl font-bold text-cosmic-text-primary mb-4 px-2">Budget Categories</h2>
-                <div className="space-y-4">
-                    {allCategories.map(category => {
+                <h2 className="text-xl font-bold text-cosmic-text-primary mb-2 px-2">Budget Breakdown</h2>
+                <div className="space-y-3">
+                     {allCategories.map(category => {
                         const spent = monthlyExpenses[category] || 0;
                         const limit = budget.limits[category] || 0;
-                        if(limit === 0 && spent === 0) return null;
-
+                        if (limit === 0 && spent === 0) return null; // Don't show empty categories
+                        
+                        const isOver = spent > limit && limit > 0;
+                        const remaining = limit - spent;
+                        
                         return (
-                            <div key={category} className="p-3 bg-cosmic-bg rounded-lg">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="font-semibold text-cosmic-text-primary">{category}</span>
-                                    <div className="text-sm">
-                                        <span className={spent > limit ? 'text-cosmic-danger' : 'text-cosmic-text-primary'}>${spent.toFixed(2)}</span>
-                                        <span className="text-cosmic-text-secondary"> / ${limit.toFixed(2)}</span>
-                                    </div>
+                            <div key={category} className="p-2 rounded-lg">
+                                <div className="flex justify-between items-center mb-1 text-sm">
+                                    <span className="font-medium text-cosmic-text-primary">{category}</span>
+                                    <span className={`font-semibold ${isOver ? 'text-cosmic-danger' : 'text-cosmic-text-secondary'}`}>
+                                        ${spent.toFixed(2)} / ${limit > 0 ? limit.toFixed(2) : 'no limit'}
+                                    </span>
                                 </div>
-                                <ProgressBar value={spent} max={limit} color="bg-cosmic-primary" />
+                                {limit > 0 && <ProgressBar value={spent} max={limit} color="bg-cosmic-primary" />}
+                                {limit > 0 && (
+                                    <p className={`text-xs mt-1 text-right ${remaining >= 0 ? 'text-cosmic-text-secondary' : 'text-cosmic-danger'}`}>
+                                        {remaining >= 0 ? `$${remaining.toFixed(2)} remaining` : `$${Math.abs(remaining).toFixed(2)} over budget`}
+                                    </p>
+                                )}
                             </div>
-                        );
+                        )
                     })}
-                     {totalBudgeted === 0 && (
-                        <p className="text-center py-8 text-cosmic-text-secondary">You haven't set a budget for this month yet. Click 'Set/Edit Budget' to start!</p>
-                    )}
+                    {totalBudgeted === 0 && <p className="text-cosmic-text-secondary text-center py-8">No budget set for this month. Click 'Set/Edit Budget' to get started.</p>}
                 </div>
             </div>
         </div>

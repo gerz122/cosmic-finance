@@ -1,4 +1,3 @@
-
 export interface MarketData {
     ticker: string;
     price: number;

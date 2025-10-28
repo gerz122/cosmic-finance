@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { Asset, Liability, Team } from '../types';
 import { AssetType } from '../types';

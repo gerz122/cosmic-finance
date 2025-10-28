@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Transaction } from '../types';
 import { TransactionType } from '../types';
