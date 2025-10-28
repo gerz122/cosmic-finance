@@ -45,34 +45,61 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
         totalExpenses,
         netWorth,
     } = useMemo(() => {
-        let userTotalIncome = 0;
-        let userPassiveIncome = 0;
-        let userTotalExpenses = 0;
+        // If a team is passed, calculate totals for the entire team.
+        // Otherwise, calculate totals for the current user's share.
+        if (team) {
+            const teamPassiveIncome = statement.transactions
+                .filter(t => t.type === TransactionType.INCOME && t.isPassive)
+                .reduce((sum, t) => sum + t.amount, 0);
+            const teamTotalExpenses = statement.transactions
+                .filter(t => t.type === TransactionType.EXPENSE)
+                .reduce((sum, t) => sum + t.amount, 0);
+            const teamTotalIncome = statement.transactions
+                .filter(t => t.type === TransactionType.INCOME)
+                .reduce((sum, t) => sum + t.amount, 0);
+            const teamMonthlyCashflow = teamTotalIncome - teamTotalExpenses;
+            
+            const totalAssets = statement.assets.reduce((sum, a) => sum + a.value, 0);
+            const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
+            const teamNetWorth = totalAssets - totalLiabilities;
+            
+            return {
+                passiveIncome: teamPassiveIncome,
+                totalExpenses: teamTotalExpenses,
+                monthlyCashflow: teamMonthlyCashflow,
+                netWorth: teamNetWorth
+            };
 
-        statement.transactions.forEach(t => {
-            const userPaymentShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
-            const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
+        } else {
+            // User-specific calculation
+            let userTotalIncome = 0;
+            let userPassiveIncome = 0;
+            let userTotalExpenses = 0;
 
-            if (t.type === TransactionType.INCOME) {
-                userTotalIncome += userPaymentShare;
-                if (t.isPassive) userPassiveIncome += userPaymentShare;
-            } else {
-                userTotalExpenses += userExpenseShare;
-            }
-        });
+            statement.transactions.forEach(t => {
+                const userPaymentShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
+                const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
 
-        const monthlyCashflow = userTotalIncome - userTotalExpenses;
-        const totalAssets = statement.assets.reduce((sum, a) => sum + a.value, 0);
-        const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
-        const netWorth = totalAssets - totalLiabilities;
-        return { 
-            totalIncome: userTotalIncome, 
-            passiveIncome: userPassiveIncome,
-            totalExpenses: userTotalExpenses, 
-            monthlyCashflow, 
-            netWorth 
-        };
-    }, [statement, user.id]);
+                if (t.type === TransactionType.INCOME) {
+                    userTotalIncome += userPaymentShare;
+                    if (t.isPassive) userPassiveIncome += userPaymentShare;
+                } else {
+                    userTotalExpenses += userExpenseShare;
+                }
+            });
+
+            const monthlyCashflow = userTotalIncome - userTotalExpenses;
+            const totalAssets = statement.assets.reduce((sum, a) => sum + a.value, 0);
+            const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
+            const netWorth = totalAssets - totalLiabilities;
+            return {
+                passiveIncome: userPassiveIncome,
+                totalExpenses: userTotalExpenses,
+                monthlyCashflow,
+                netWorth
+            };
+        }
+    }, [statement, user.id, team]);
 
     const sortedTransactions = useMemo(() => {
         return [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());

@@ -9,6 +9,8 @@ interface LargeChartModalProps {
 }
 
 export const LargeChartModal: React.FC<LargeChartModalProps> = ({ stock, onClose }) => {
+    if (!stock.ticker) return null;
+
     return (
         <div 
             className="fixed inset-0 bg-cosmic-bg bg-opacity-80 flex items-center justify-center z-50 animate-fade-in" 
@@ -19,14 +21,14 @@ export const LargeChartModal: React.FC<LargeChartModalProps> = ({ stock, onClose
                 onClick={e => e.stopPropagation()}
             >
                 <div className="flex justify-between items-center mb-2 flex-shrink-0">
-                    <h2 className="text-xl font-bold text-cosmic-text-primary">Chart: {stock.ticker}</h2>
+                    <h2 className="text-xl font-bold text-cosmic-text-primary">Chart: {stock.name} ({stock.ticker})</h2>
                     <button onClick={onClose} className="text-cosmic-text-secondary hover:text-cosmic-text-primary">
                         <XIcon className="w-6 h-6" />
                     </button>
                 </div>
                 <div className="flex-grow w-full h-full min-h-0">
                     <EmbeddedStockChart 
-                        ticker={stock.ticker!} 
+                        ticker={stock.ticker}
                         height="100%" 
                         takeProfit={stock.takeProfit}
                         stopLoss={stock.stopLoss}

@@ -1,5 +1,7 @@
+
 import React, { useEffect, memo } from 'react';
-import { getLiveStockData } from '../services/geminiService';
+// Fix: Import marketDataService which contains the getLiveStockData function.
+import { marketDataService } from '../services/marketDataService';
 
 export interface LiveStockData {
     price: number | null;
@@ -20,7 +22,8 @@ export const StockPriceProvider: React.FC<StockPriceProviderProps> = memo(({ tic
         let isMounted = true;
         
         const fetchData = async () => {
-            const data = await getLiveStockData(ticker);
+            // Fix: Call getLiveStockData from the imported marketDataService.
+            const data = await marketDataService.getLiveStockData(ticker);
             if (isMounted && data) {
                 onDataUpdate(data);
             }

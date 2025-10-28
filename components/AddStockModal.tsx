@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Asset, Account, Team } from '../types';
 import { XIcon } from './icons';
-import { searchTickers, getLiveStockData } from '../services/geminiService';
+import { marketDataService } from '../services/marketDataService';
 
 interface AddStockModalProps {
     isOpen: boolean;
@@ -42,7 +42,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
 
     useEffect(() => {
         if (isOpen) {
-            if (isEditing) {
+            if (isEditing && stockToEdit) {
                 setTicker(stockToEdit.ticker || '');
                 setName(stockToEdit.name || '');
                 setNumberOfShares(String(stockToEdit.numberOfShares || ''));
@@ -70,15 +70,21 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
     const handleTickerSearch = async (query: string) => {
         if (query.length > 0) {
             setIsSearching(true);
-            const results = await searchTickers(query);
-            setSearchResults(results);
-            setIsSearching(false);
+            try {
+                const results = await marketDataService.searchTickers(query);
+                setSearchResults(results);
+            } catch (error) {
+                console.error("Ticker search failed", error);
+                setSearchResults([]);
+            } finally {
+                setIsSearching(false);
+            }
         } else {
             setSearchResults([]);
         }
     };
 
-    const debouncedSearch = useCallback(debounce(handleTickerSearch, 500), []);
+    const debouncedSearch = useCallback(debounce(handleTickerSearch, 300), []);
 
     const handleTickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const query = e.target.value.toUpperCase();
@@ -91,10 +97,13 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
         setName(result.name);
         setSearchResults([]);
         
-        // New: Fetch live price and pre-fill
-        const liveData = await getLiveStockData(result.ticker);
-        if (liveData && liveData.price) {
-            setPurchasePrice(liveData.price.toFixed(2));
+        try {
+            const liveData = await marketDataService.getLiveStockData(result.ticker);
+            if (liveData && liveData.price) {
+                setPurchasePrice(liveData.price.toFixed(2));
+            }
+        } catch (error) {
+            console.error(`Could not pre-fill price for ${result.ticker}`, error);
         }
     }
 
@@ -111,7 +120,8 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
             takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
             stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
             strategy: strategy || undefined,
-            teamId: teamId || undefined
+            teamId: teamId || undefined,
+            value: (parseFloat(numberOfShares) || 0) * (parseFloat(purchasePrice) || 0) // Set initial value
         };
         
         // Basic validation

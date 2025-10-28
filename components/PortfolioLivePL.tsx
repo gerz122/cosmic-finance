@@ -1,56 +1,78 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Asset } from '../types';
-import { StockPriceProvider, type LiveStockData } from './RealTimeStockData';
+import { marketDataService } from '../services/marketDataService';
 
 interface PortfolioLivePLProps {
     stocks: Asset[];
 }
 
 export const PortfolioLivePL: React.FC<PortfolioLivePLProps> = ({ stocks }) => {
-    const [livePrices, setLivePrices] = useState<Record<string, number | null>>({});
-    const [pricesLoaded, setPricesLoaded] = useState<Set<string>>(new Set());
+    const [liveData, setLiveData] = useState<Record<string, { price: number; dayChange: number }>>({});
+    const [isLoading, setIsLoading] = useState(true);
 
-    const handleDataUpdate = (stockId: string, data: LiveStockData) => {
-        setLivePrices(prevPrices => ({ ...prevPrices, [stockId]: data.price }));
-        setPricesLoaded(prevLoaded => new Set(prevLoaded).add(stockId));
-    };
+    useEffect(() => {
+        let isMounted = true;
+        setIsLoading(true);
+
+        const fetchAllStockData = async () => {
+            if (stocks.length === 0) {
+                setIsLoading(false);
+                return;
+            }
+            try {
+                const results = await marketDataService.getMultipleStockData(stocks.map(s => s.ticker).filter(Boolean) as string[]);
+                if (isMounted) {
+                    const dataMap: Record<string, { price: number; dayChange: number }> = {};
+                    stocks.forEach(stock => {
+                        const data = results.find(r => r.ticker === stock.ticker);
+                        if (data) {
+                            dataMap[stock.id] = { price: data.price, dayChange: data.dayChange };
+                        }
+                    });
+                    setLiveData(dataMap);
+                }
+            } catch (error) {
+                console.error("Failed to fetch portfolio data", error);
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        fetchAllStockData();
+        const intervalId = setInterval(fetchAllStockData, 60000); // Refresh every minute
+
+        return () => {
+            isMounted = false;
+            clearInterval(intervalId);
+        };
+    }, [stocks]);
 
     const totalPL = useMemo(() => {
         return stocks.reduce((acc, stock) => {
-            const livePrice = livePrices[stock.id];
-            // FIX: Use numberOfShares for calculation
-            if (livePrice && stock.purchasePrice && stock.numberOfShares) {
-                const pl = (livePrice - stock.purchasePrice) * stock.numberOfShares;
+            const data = liveData[stock.id];
+            if (data && stock.numberOfShares) {
+                const pl = data.dayChange * stock.numberOfShares;
                 return acc + pl;
             }
             return acc;
         }, 0);
-    }, [livePrices, stocks]);
-    
-    const dataProviders = stocks.map(stock => (
-        stock.ticker ? <StockPriceProvider 
-            key={stock.id} 
-            ticker={stock.ticker} 
-            onDataUpdate={(data) => handleDataUpdate(stock.id, data)}
-        /> : null
-    ));
+    }, [liveData, stocks]);
 
     if (stocks.length === 0) {
         return <span>$0.00</span>;
     }
 
-    if (pricesLoaded.size < stocks.length) {
+    if (isLoading) {
         return <span className="text-sm animate-pulse-fast">Calculating...</span>;
     }
 
     const plColor = totalPL >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
 
     return (
-        <>
-            <div style={{ display: 'none' }}>{dataProviders}</div>
-            <span className={plColor}>
-                {totalPL >= 0 ? '+' : ''}${totalPL.toFixed(2)}
-            </span>
-        </>
+        <span className={plColor}>
+            {totalPL >= 0 ? '+' : ''}${totalPL.toFixed(2)}
+        </span>
     );
 };

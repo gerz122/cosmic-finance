@@ -24,7 +24,6 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height 
             // Clear previous widget if it exists
             containerRef.current.innerHTML = '';
 
-            // FIX: Explicitly type 'studies' as any[] to allow pushing objects into it.
             const studies: any[] = [
                 "MAExp@tv-basicstudies",
                 "MACD@tv-basicstudies",
@@ -32,29 +31,25 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height 
                 "Volume@tv-basicstudies"
             ];
 
+            const horzLines: any[] = [];
             if (takeProfit) {
-                studies.push({
-                    id: "hline@tv-basicstudies",
-                    description: "Take Profit",
-                    inputs: { price: takeProfit },
-                    styles: { "hline.linecolor": "#22c55e", "hline.linestyle": 2, "hline.linewidth": 2 },
-                    // Not a standard feature, but some widget versions might support it
-                    // @ts-ignore
-                    priceAxisProperties: {
-                        "color": "#22c55e"
-                    }
+                horzLines.push({
+                    price: takeProfit,
+                    color: "#22c55e",
+                    width: 2,
+                    style: 2, // 0-solid, 1-dotted, 2-dashed
+                    text: "Take Profit",
+                    axisLabelVisible: true,
                 });
             }
             if (stopLoss) {
-                studies.push({
-                    id: "hline@tv-basicstudies",
-                    description: "Stop Loss",
-                    inputs: { price: stopLoss },
-                    styles: { "hline.linecolor": "#ef4444", "hline.linestyle": 2, "hline.linewidth": 2 },
-                     // @ts-ignore
-                    priceAxisProperties: {
-                        "color": "#ef4444"
-                    }
+                horzLines.push({
+                    price: stopLoss,
+                    color: "#ef4444",
+                    width: 2,
+                    style: 2,
+                    text: "Stop Loss",
+                    axisLabelVisible: true,
                 });
             }
             
@@ -75,6 +70,7 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height 
                 "container_id": containerRef.current.id,
                 "backgroundColor": "rgba(13, 17, 23, 1)",
                 "gridColor": "rgba(48, 54, 61, 0.5)",
+                "horz_lines": horzLines,
             });
         };
         
@@ -91,6 +87,9 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height 
             if (widgetRef.current && typeof widgetRef.current.remove === 'function') {
                 widgetRef.current.remove();
                 widgetRef.current = null;
+            }
+             if (containerRef.current) {
+                containerRef.current.innerHTML = '';
             }
         };
 

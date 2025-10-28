@@ -74,7 +74,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, o
                                 <th scope="col" className="px-6 py-3">Ticker</th>
                                 <th scope="col" className="px-6 py-3">Shares</th>
                                 <th scope="col" className="px-6 py-3">Cost Basis</th>
-                                <th scope="col" className="px-6 py-3">Live Price</th>
+                                <th scope="col" className="px-6 py-3">Current Price</th>
                                 <th scope="col" className="px-6 py-3">Day's Change</th>
                                 <th scope="col" className="px-6 py-3">P/L ($)</th>
                                 <th scope="col" className="px-6 py-3">Take Profit</th>

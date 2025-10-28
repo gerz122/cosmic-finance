@@ -1,11 +1,13 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType } from '../types';
-import type { LiveStockData } from '../components/RealTimeStockData';
 
-// FIX: Per coding guidelines, the API key MUST be read from `process.env.API_KEY`.
+// Per coding guidelines, the API key must come from process.env.API_KEY.
 const apiKey = process.env.API_KEY;
+
 if (!apiKey) {
+    // This will now correctly trigger if the API_KEY is not set.
     throw new Error("API_KEY environment variable not set.");
 }
 const ai = new GoogleGenAI({ apiKey });
@@ -139,47 +141,4 @@ export const getCosmicEvent = async (statement: FinancialStatement, accounts: Ac
       ]
     };
   }
-};
-
-export const searchTickers = async (query: string): Promise<{ticker: string, name: string}[]> => {
-    if (!query || query.length < 1) return [];
-    const prompt = `
-        Based on the search query "${query}", find up to 5 relevant stock tickers and their company names.
-        Provide the response ONLY in the specified JSON format.
-        If you can't find anything, return an empty array.
-    `;
-    const responseSchema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { ticker: { type: Type.STRING }, name: { type: Type.STRING } } } };
-    try {
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema } });
-        return JSON.parse(response.text);
-    } catch (error) {
-        console.error("Error searching for tickers:", error);
-        return [];
-    }
-};
-
-export const getLiveStockData = async (ticker: string): Promise<LiveStockData> => {
-    const fallbackData: LiveStockData = { price: null, dayChange: null, dayChangePercent: null };
-    if (!ticker) return fallbackData;
-
-    const prompt = `
-      You are an API that provides stock data. Your data source is Google Finance.
-      For the ticker symbol: ${ticker}, provide the latest market data.
-      Respond ONLY with the specified JSON format.
-      If Google Finance does not recognize the ticker or no data is available, return nulls for all values.
-    `;
-    const responseSchema = { type: Type.OBJECT, properties: { price: { type: Type.NUMBER, nullable: true }, dayChange: { type: Type.NUMBER, nullable: true, description: "The change in price for the day." }, dayChangePercent: { type: Type.NUMBER, nullable: true, description: "The percentage change for the day." } } };
-
-    try {
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema } });
-        const result = JSON.parse(response.text) as LiveStockData;
-        if (result.price === null) {
-            console.warn(`Could not fetch live data for ticker from Google Finance: ${ticker}`);
-            return fallbackData;
-        }
-        return result;
-    } catch (error) {
-        console.error(`Error fetching live stock data for ${ticker}:`, error);
-        return fallbackData;
-    }
 };
