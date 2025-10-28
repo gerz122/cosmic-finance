@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { auth, GoogleAuthProvider } from './services/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { auth, firebaseAuth } from './services/firebase';
 import * as dbService from './services/dbService';
 import { StarIcon } from './components/icons';
 
@@ -21,10 +20,12 @@ const Auth: React.FC = () => {
 
         try {
             if (isLogin) {
-                await signInWithEmailAndPassword(auth, email, password);
+                // FIX: Use functions from the firebaseAuth namespace.
+                await firebaseAuth.signInWithEmailAndPassword(auth, email, password);
             } else {
                 if (!name) throw new Error("Please enter your player name.");
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                // FIX: Use functions from the firebaseAuth namespace.
+                const userCredential = await firebaseAuth.createUserWithEmailAndPassword(auth, email, password);
                 await dbService.createNewUser(userCredential.user.uid, name, email);
             }
         } catch (err) {
@@ -37,9 +38,11 @@ const Auth: React.FC = () => {
     const handleGoogleSignIn = async () => {
         setIsLoading(true);
         setError(null);
-        const provider = new GoogleAuthProvider();
+        // FIX: Use functions from the firebaseAuth namespace.
+        const provider = new firebaseAuth.GoogleAuthProvider();
         try {
-            const result = await signInWithPopup(auth, provider);
+            // FIX: Use functions from the firebaseAuth namespace.
+            const result = await firebaseAuth.signInWithPopup(auth, provider);
             // Check if user is new
             const userExists = await dbService.getUserData(result.user.uid).catch(() => null);
             if (!userExists) {

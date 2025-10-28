@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { auth } from './services/firebase';
+import { auth, firebaseAuth } from './services/firebase';
+import type { User as FirebaseUser } from './services/firebase';
 import * as dbService from './services/dbService';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
 import { generateHistoricalData } from './utils/financialCalculations';
@@ -45,18 +45,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [modalData, setModalData] = useState<Record<string, any>>({});
 
     const refreshData = useCallback(async (uid: string) => {
-        const userData = await dbService.getUserData(uid);
-        setActiveUser(userData);
-        const fetchedTeams = await dbService.getTeamsForUser(uid);
-        setTeams(fetchedTeams);
-        const memberIds = new Set(fetchedTeams.flatMap(t => t.memberIds));
-        memberIds.add(uid);
-        const allTeamUsers = await dbService.getUsers(Array.from(memberIds));
-        setUsers(allTeamUsers);
+        setIsLoading(true);
+        try {
+            const userData = await dbService.getUserData(uid);
+            setActiveUser(userData);
+            const fetchedTeams = await dbService.getTeamsForUser(uid);
+            setTeams(fetchedTeams);
+            const memberIds = new Set(fetchedTeams.flatMap(t => t.memberIds));
+            memberIds.add(uid);
+            const allTeamUsers = await dbService.getUsers(Array.from(memberIds));
+            setUsers(allTeamUsers);
+        } catch (e) {
+            setError("Failed to refresh data.");
+            console.error(e);
+        } finally {
+            setIsLoading(false);
+        }
     }, []);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        // FIX: Use onAuthStateChanged from the firebaseAuth namespace.
+        const unsubscribe = firebaseAuth.onAuthStateChanged(auth, (user) => {
             setFirebaseUser(user);
             setAuthReady(true);
         });
@@ -67,15 +76,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!authReady) return;
         const loadData = async () => {
             if (firebaseUser) {
-                setIsLoading(true);
                 setError(null);
-                try {
-                    await refreshData(firebaseUser.uid);
-                } catch (e) {
-                    setError("Failed to load your financial data.");
-                } finally {
-                    setIsLoading(false);
-                }
+                await refreshData(firebaseUser.uid);
             } else {
                 setIsLoading(false);
                 setActiveUser(null);
@@ -87,7 +89,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [authReady, firebaseUser, refreshData]);
 
     const handleLogout = async () => {
-        await signOut(auth);
+        // FIX: Use signOut from the firebaseAuth namespace.
+        await firebaseAuth.signOut(auth);
         setActiveUser(null);
         setActiveView('dashboard');
     };
@@ -97,21 +100,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const effectiveFinancialStatement = useMemo(() => {
         if (!activeUser) return { transactions: [], assets: [], liabilities: [] };
-        const personalStatement = JSON.parse(JSON.stringify(activeUser.financialStatement));
+        
+        const personalStatement = {
+            transactions: activeUser.financialStatement.transactions,
+            assets: activeUser.financialStatement.assets,
+            liabilities: activeUser.financialStatement.liabilities
+        };
+
         const userTeams = teams.filter(t => t.memberIds.includes(activeUser.id));
+        
+        const allTransactions = [...personalStatement.transactions];
+        const allAssets = [...personalStatement.assets];
+        const allLiabilities = [...personalStatement.liabilities];
+
         for(const team of userTeams) {
-            personalStatement.transactions.push(...team.financialStatement.transactions);
-            team.financialStatement.assets.forEach(a => personalStatement.assets.push({ ...a }));
-            team.financialStatement.liabilities.forEach(l => personalStatement.liabilities.push({ ...l }));
+            allTransactions.push(...team.financialStatement.transactions);
+            allAssets.push(...team.financialStatement.assets);
+            allLiabilities.push(...team.financialStatement.liabilities);
         }
-        personalStatement.transactions = Array.from(new Map(personalStatement.transactions.map((t: Transaction) => [t.id, t])).values());
-        return personalStatement;
+        
+        return {
+            transactions: Array.from(new Map(allTransactions.map((t: Transaction) => [t.id, t])).values()),
+            assets: Array.from(new Map(allAssets.map((a: Asset) => [a.id, a])).values()),
+            liabilities: Array.from(new Map(allLiabilities.map((l: Liability) => [l.id, l])).values())
+        };
     }, [activeUser, teams]);
 
     const historicalData = useMemo(() => activeUser ? generateHistoricalData(activeUser, teams) : [], [activeUser, teams]);
     
     // ACTIONS
     const setModalOpen = (modal: string, isOpen: boolean) => setModalStates(prev => ({ ...prev, [modal]: isOpen }));
+    const setModalDataField = (field: string, value: any) => setModalData(p => ({...p, [field]: value}));
 
     const handleCreateTeam = async (name: string, invitedEmails: string[]) => {
         if (!activeUser) return;
@@ -144,18 +163,258 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await refreshData(activeUser.id);
     };
 
-    // Placeholder for many more actions...
-    const actions = {
-        setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding,
-        // ... stubs for all other actions from App.tsx ...
-        handleTeamClick: (teamId: string) => { setActiveView('team-detail'); setSelectedTeamId(teamId); },
-        handleBackToTeams: () => { setActiveView('teams'); setSelectedTeamId(null); },
-        handleOpenAddTransactionModal: (teamId?: string) => { setModalData(p => ({...p, transactionToEdit: null, modalDefaultTeamId: teamId})); setModalOpen('isAddTransactionModalOpen', true); },
+    const handleSaveTransaction = async (transaction: Omit<Transaction, 'id'> | Transaction) => {
+        if (!activeUser) return;
+        const isEditing = 'id' in transaction;
+        try {
+            if (isEditing) {
+                await dbService.updateTransaction(transaction as Transaction);
+            } else {
+                if (transaction.teamId) {
+                    await dbService.addTeamTransaction(transaction);
+                } else {
+                    await dbService.addTransaction(activeUser.id, transaction);
+                }
+            }
+            await refreshData(activeUser.id);
+            if (!isEditing) {
+                const unlocked = await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_TRANSACTION');
+                if (unlocked) setActiveUser(unlocked); // Optimistic update
+            }
+        } catch(e) { console.error(e); alert('Failed to save transaction.'); }
     };
+    
+    const handleDeleteTransaction = async (transactionId: string) => {
+        if (!activeUser) return;
+        const tx = effectiveFinancialStatement.transactions.find((t: Transaction) => t.id === transactionId);
+        if (tx && window.confirm(`Are you sure you want to delete "${tx.description}"?`)) {
+            try {
+                await dbService.deleteTransaction(tx);
+                await refreshData(activeUser.id);
+            } catch(e) { console.error(e); alert('Failed to delete transaction.'); }
+        }
+    };
+    
+    const handleTransfer = async (fromAccountId: string, toAccountId: string, amount: number) => {
+        if (!activeUser) return;
+        try {
+            const updatedUser = await dbService.performTransfer(activeUser.id, fromAccountId, toAccountId, amount);
+            setActiveUser(updatedUser); // Optimistic update
+            await refreshData(activeUser.id);
+        } catch(e) { console.error(e); alert((e as Error).message); }
+    };
+    
+    const handleDrawCosmicCard = async () => {
+        if (!activeUser) return;
+        setModalOpen('isCosmicEventModalOpen', true);
+        setModalDataField('isGeneratingCosmicEvent', true);
+        setModalDataField('currentCosmicEvent', null);
+        try {
+            const event = await getCosmicEvent(effectiveFinancialStatement, activeUser.accounts);
+            setModalDataField('currentCosmicEvent', event);
+        } catch(e) {
+            console.error(e);
+            setModalDataField('currentCosmicEvent', { title: 'Error', description: 'Could not generate event.', choices: [{ text: 'OK', outcome: { message: 'Please try again later.'}}]});
+        } finally {
+            setModalDataField('isGeneratingCosmicEvent', false);
+        }
+    };
+    
+    const handleCosmicEventResolution = async (outcome: EventOutcome) => {
+        if (!activeUser) return;
+        try {
+            const updatedUser = await dbService.applyEventOutcome(activeUser, outcome);
+            setActiveUser(updatedUser); // Optimistic update
+            await refreshData(activeUser.id);
+        } catch(e) { console.error(e); alert('Failed to apply event outcome.'); }
+    };
+    
+    const handleAddAccount = async (account: Omit<Account, 'id' | 'ownerIds'>) => {
+        if (!activeUser) return;
+        try {
+            const updatedUser = await dbService.addAccount(activeUser.id, account);
+            setActiveUser(updatedUser); // Optimistic update
+            await refreshData(activeUser.id);
+        } catch(e) { console.error(e); alert('Failed to add account.'); }
+    };
+
+    const handleUpdateAccount = async (account: Account) => {
+        try {
+            const updatedUsers = await dbService.updateAccount(account, users);
+            setUsers(updatedUsers); // Optimistic update
+            if (activeUser) await refreshData(activeUser.id);
+        } catch (e) { console.error(e); alert("Failed to update account."); }
+    };
+
+    const handleSaveBudget = async (budget: Budget) => {
+        if (!activeUser) return;
+        try {
+            const updatedUser = await dbService.saveBudget(activeUser.id, budget);
+            setActiveUser(updatedUser);
+        } catch (e) { console.error(e); alert("Failed to save budget."); }
+    };
+    
+    const handleSaveGoal = async (goalData: Omit<Goal, 'id' | 'currentAmount'>) => {
+        if (!activeUser) return;
+        try {
+            const updatedUser = await dbService.addGoal(activeUser.id, goalData);
+            setActiveUser(updatedUser);
+        } catch (e) { console.error(e); alert("Failed to save goal."); }
+    };
+    
+    const handleDeleteGoal = async (goalId: string) => {
+        if (!activeUser) return;
+        try {
+            const updatedUser = await dbService.deleteGoal(activeUser.id, goalId);
+            setActiveUser(updatedUser);
+        } catch (e) { console.error(e); alert("Failed to delete goal."); }
+    };
+    
+    const handleContributeToGoal = async (goal: Goal, amount: number, fromAccountId: string) => {
+        if (!activeUser) return;
+        try {
+            const fromAccount = activeUser.accounts.find(a => a.id === fromAccountId);
+            if (!fromAccount || fromAccount.balance < amount) throw new Error("Insufficient funds");
+            fromAccount.balance -= amount;
+            const updatedGoal = { ...goal, currentAmount: goal.currentAmount + amount };
+            const updatedUser = await dbService.updateGoal(activeUser.id, updatedGoal);
+            setActiveUser(updatedUser);
+            await dbService.updateAccount(fromAccount, [activeUser]);
+            await refreshData(activeUser.id);
+        } catch(e) { console.error(e); alert((e as Error).message); }
+    };
+
+    const handleSaveStock = async (stockData: Partial<Asset>, teamId?: string) => {
+        if (!activeUser) return;
+        const isEditing = modalData.stockToEdit;
+        try {
+            if (teamId) {
+                if (isEditing) await dbService.updateTeamAsset(teamId, modalData.stockToEdit.id, stockData);
+                else await dbService.addTeamAsset(teamId, stockData);
+            } else {
+                if (isEditing) await dbService.updateAsset(activeUser.id, modalData.stockToEdit.id, stockData);
+                // FIX: Changed to call the correctly exported `addAsset` function.
+                else await dbService.addAsset(activeUser.id, stockData);
+            }
+            await refreshData(activeUser.id);
+            if (!isEditing) {
+                const unlocked = await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_INVESTMENT');
+                if (unlocked) setActiveUser(unlocked); // Optimistic update
+            }
+        } catch (e) { console.error(e); alert("Failed to save stock."); }
+    };
+
+    const handleLogDividend = async (amount: number, accountId: string) => {
+        if (!activeUser || !modalData.stockForDividend) return;
+        try {
+            const updatedUser = await dbService.logDividend(activeUser, modalData.stockForDividend.id, amount, accountId);
+            setActiveUser(updatedUser); // Optimistic update
+            await refreshData(activeUser.id);
+        } catch (e) { console.error(e); alert((e as Error).message); }
+    };
+
+    const handleDeleteStock = async (stockId: string) => {
+        if (!activeUser) return;
+        if (window.confirm("Are you sure you want to sell this stock? This will remove it from your portfolio.")) {
+            try {
+                await dbService.deleteAsset(activeUser.id, stockId);
+                await refreshData(activeUser.id);
+            } catch (e) { console.error(e); alert("Failed to delete stock."); }
+        }
+    };
+
+    const handleAddAssetLiability = async (data: Partial<Asset | Liability>, teamId?: string) => {
+        if (!activeUser) return;
+        try {
+            if (teamId) {
+                if ('value' in data) await dbService.addTeamAsset(teamId, data);
+                else await dbService.addTeamLiability(teamId, data);
+            } else {
+                // FIX: Changed to call the correctly exported `addAsset` function.
+                if ('value' in data) await dbService.addAsset(activeUser.id, data);
+                else await dbService.addLiability(activeUser.id, data);
+            }
+            await refreshData(activeUser.id);
+        } catch (e) { console.error(e); alert("Failed to add item."); }
+    };
+    
+    const handleUpdateAssetLiability = async (data: Partial<Asset | Liability>, teamId?: string) => {
+        if (!activeUser || !modalData.assetLiabilityToEdit) return;
+        const itemId = modalData.assetLiabilityToEdit.id;
+        try {
+            if (teamId) {
+                if ('value' in data) await dbService.updateTeamAsset(teamId, itemId, data);
+                else await dbService.updateTeamLiability(teamId, itemId, data);
+            } else {
+                if ('value' in data) await dbService.updateAsset(activeUser.id, itemId, data);
+                else await dbService.updateLiability(activeUser.id, itemId, data);
+            }
+            await refreshData(activeUser.id);
+        } catch (e) { console.error(e); alert("Failed to update item."); }
+    };
+    
+    const handleAddCategory = (category: string) => {
+        // This is a client-side only operation for now.
+        // In a real app, you might save this to user preferences in the DB.
+        alert(`Category "${category}" added to selection lists! (demo)`);
+    };
+
+    const handleImportTransactions = (transactions: any[]) => {
+        // This is a client-side only operation for now.
+        // It would batch-add these to the database.
+        alert(`Simulating import of ${transactions.length} transactions.`);
+        console.log("Transactions to import:", transactions);
+    };
+
 
     if (!authReady) {
          return <div className="flex items-center justify-center h-screen bg-cosmic-bg text-lg animate-pulse-fast">Initializing Authentication...</div>;
     }
+
+    const actions = {
+        setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding,
+        handleTeamClick: (teamId: string) => { setActiveView('team-detail'); setSelectedTeamId(teamId); },
+        handleBackToTeams: () => { setActiveView('teams'); setSelectedTeamId(null); },
+        handleOpenAddTransactionModal: (teamId?: string) => { setModalData({ transactionToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddTransactionModalOpen', true); },
+        handleOpenEditTransactionModal: (transaction: Transaction) => { setModalData({ transactionToEdit: transaction, modalDefaultTeamId: transaction.teamId }); setModalOpen('isAddTransactionModalOpen', true); },
+        handleSaveTransaction,
+        handleDeleteTransaction,
+        handleTransfer,
+        handleDrawCosmicCard,
+        handleCosmicEventResolution,
+        handleSaveStock,
+        handleDeleteStock,
+        handleLogDividend,
+        handleAddAccount,
+        handleUpdateAccount,
+        handleAddAssetLiability,
+        handleUpdateAssetLiability,
+        handleSaveBudget,
+        handleSaveGoal,
+        handleDeleteGoal,
+        handleContributeToGoal,
+        handleImportTransactions,
+        handleAddCategory,
+        handleTransactionClick: (transaction: Transaction) => { setModalData({ selectedTransaction: transaction }); setModalOpen('isTransactionDetailModalOpen', true); },
+        handleCategoryClick: (category: string) => { setModalData({ selectedCategory: category }); setModalOpen('isCategoryModalOpen', true); },
+        handleStatCardClick: () => setModalOpen('isNetWorthBreakdownModalOpen', true),
+        handleViewReceipt: (url: string) => { setModalData({ receiptUrlToView: url }); setModalOpen('isReceiptModalOpen', true); },
+        handleViewSplitDetails: (transaction: Transaction) => { setModalData({ selectedTransaction: transaction }); setModalOpen('isSplitDetailModalOpen', true); },
+        handleOpenAddStockModal: (teamId?: string) => { setModalData({ stockToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddStockModalOpen', true); },
+        handleOpenEditStockModal: (stock: Asset) => { setModalData({ stockToEdit: stock, modalDefaultTeamId: stock.teamId }); setModalOpen('isAddStockModalOpen', true); },
+        handleOpenLogDividendModal: (stock: Asset) => { setModalData({ stockForDividend: stock }); setModalOpen('isLogDividendModalOpen', true); },
+        openLargeChartModal: (stock: Asset) => setModalData(p=> ({...p, stockForLargeChart: stock })),
+        closeLargeChartModal: () => setModalData(p=> ({...p, stockForLargeChart: null })),
+        handleOpenAccountTransactionsModal: (account: Account) => { setModalData({ accountForTransactionList: account }); setModalOpen('isAccountTransactionsModalOpen', true); },
+        handleOpenEditAccountModal: (account: Account) => { setModalData({ accountToEdit: account }); setModalOpen('isEditAccountModalOpen', true); },
+        handleOpenAddAssetLiabilityModal: (type: 'asset' | 'liability', teamId?: string) => { setModalData({ assetLiabilityToAdd: type, assetLiabilityToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
+        handleOpenEditAssetLiabilityModal: (item: Asset | Liability) => { setModalData({ assetLiabilityToAdd: 'value' in item ? 'asset' : 'liability', assetLiabilityToEdit: item, modalDefaultTeamId: item.teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
+        handleOpenContributeToGoalModal: (goal: Goal) => { setModalData({ goalToContribute: goal }); setModalOpen('isContributeToGoalModalOpen', true); },
+        setStockForDividend: (stock: Asset | null) => setModalDataField('stockForDividend', stock),
+        setSelectedTransaction: (tx: Transaction | null) => setModalDataField('selectedTransaction', tx),
+        setSelectedCategory: (cat: string | null) => setModalDataField('selectedCategory', cat),
+        setAssetLiabilityToEdit: (item: Asset | Liability | null) => setModalDataField('assetLiabilityToEdit', item),
+    };
 
     return (
         <AppContext.Provider value={{

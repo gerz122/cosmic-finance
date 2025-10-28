@@ -1,10 +1,9 @@
 import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, Budget, Goal } from '../types';
 import { TransactionType } from '../types';
-import { auth, db, storage } from './firebase';
+import { auth, db, storage, firebaseAuth } from './firebase';
 import { collection, getDocs, getDoc, doc, where, query, writeBatch, setDoc, deleteDoc, runTransaction, documentId, addDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from "firebase/storage";
 import { initialDataForGerman, initialDataForValeria } from './initial.data';
-import { sendPasswordResetEmail } from 'firebase/auth';
 
 
 // --- AUTHENTICATION & USER DATA ---
@@ -41,7 +40,8 @@ export const createNewUser = async (uid: string, name: string, email: string): P
 };
 
 export const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
+    // FIX: Use sendPasswordResetEmail from the exported firebaseAuth namespace.
+    await firebaseAuth.sendPasswordResetEmail(auth, email);
 };
 
 
@@ -204,4 +204,5 @@ export const uploadReceipt = async (base64Image: string, userId: string): Promis
 
 // --- MOCK/TODO FUNCTIONS ---
 // These are placeholders that need full Firestore implementation
-export { checkAndUnlockAchievement, saveBudget, addGoal, deleteGoal, updateGoal, addTeamAsset, addTeamLiability, updateTeamAsset, updateTeamLiability, createTeam, logDividend, updateAccount, addAccount, deleteAsset, updateLiability, updateAsset, addLiability, applyEventOutcome, performTransfer } from './dbService.mock';
+// FIX: Added addAsset to the export list.
+export { checkAndUnlockAchievement, saveBudget, addGoal, deleteGoal, updateGoal, addTeamAsset, addTeamLiability, updateTeamAsset, updateTeamLiability, createTeam, logDividend, updateAccount, addAccount, deleteAsset, updateLiability, updateAsset, addAsset, addLiability, applyEventOutcome, performTransfer } from './dbService.mock';

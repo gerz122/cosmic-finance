@@ -59,27 +59,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
 
         statement.transactions.forEach(t => {
             if (!t.date.startsWith(currentMonth)) return;
-
+        
+            // Determine the user's share of an expense
+            const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount;
+            
+            // Determine the user's share of income (payment is from their perspective)
+            const userIncomeShare = t.paymentShares?.find(s => s.userId === user.id)?.amount;
+        
             if (t.type === TransactionType.INCOME) {
-                let incomeShare = 0;
-                 const userShare = t.paymentShares?.find(ps => ps.userId === user.id)?.amount;
-                 if (userShare !== undefined) {
-                     incomeShare = userShare;
-                 } else if (t.teamId) {
-                    const team = teams.find(tm => tm.id === t.teamId);
-                    if (team && team.memberIds.includes(user.id)) {
-                        incomeShare = t.amount / team.memberIds.length;
+                if (userIncomeShare !== undefined) {
+                    calculatedTotalIncome += userIncomeShare;
+                    if (t.isPassive) {
+                        calculatedPassiveIncome += userIncomeShare;
                     }
                 }
-                calculatedTotalIncome += incomeShare;
-                if (t.isPassive) {
-                    calculatedPassiveIncome += incomeShare;
-                }
+                // No fallback for income, as it must be explicitly assigned.
             } else { // EXPENSE
-                const expenseShare = t.expenseShares?.find(es => es.userId === user.id)?.amount || 0;
-                calculatedTotalExpenses += expenseShare;
-                if (expenseShare > 0) {
-                    calculatedExpenseBreakdown[t.category] = (calculatedExpenseBreakdown[t.category] || 0) + expenseShare;
+                if (userExpenseShare !== undefined) {
+                    calculatedTotalExpenses += userExpenseShare;
+                    calculatedExpenseBreakdown[t.category] = (calculatedExpenseBreakdown[t.category] || 0) + userExpenseShare;
+                } else if (t.teamId && (!t.expenseShares || t.expenseShares.length === 0)) {
+                    // Fallback for team transactions without explicit splits
+                    const team = teams.find(tm => tm.id === t.teamId);
+                    if (team && team.memberIds.includes(user.id)) {
+                        const equalShare = t.amount / team.memberIds.length;
+                        calculatedTotalExpenses += equalShare;
+                        calculatedExpenseBreakdown[t.category] = (calculatedExpenseBreakdown[t.category] || 0) + equalShare;
+                    }
                 }
             }
         });
@@ -92,7 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
             if(a.shares) share = (a.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
             else if (a.teamId) {
                 const team = teams.find(t => t.id === a.teamId);
-                if(team) share = 1 / team.memberIds.length; else share = 0;
+                if(team && team.memberIds.includes(user.id)) share = 1 / team.memberIds.length; else share = 0;
             }
             totalAssets += a.value * share;
         });
@@ -103,7 +109,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
             if(l.shares) share = (l.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
             else if (l.teamId) {
                 const team = teams.find(t => t.id === l.teamId);
-                if(team) share = 1 / team.memberIds.length; else share = 0;
+                if(team && team.memberIds.includes(user.id)) share = 1 / team.memberIds.length; else share = 0;
             }
             totalLiabilities += l.balance * share;
         });
