@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
 import { AssetType, TransactionType } from './types';
-import { dbService } from './services/dbService'; 
+// FIX: Module '"./services/dbService"' has no exported member 'dbService'. Changed to a namespace import.
+import * as dbService from './services/dbService'; 
 import { getCosmicEvent } from './services/geminiService';
 import { generateHistoricalData } from './utils/financialCalculations';
 import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon, HistoryIcon, TrophyIcon } from './components/icons';
