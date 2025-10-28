@@ -1,44 +1,65 @@
 import React, { useMemo, useState } from 'react';
-import type { FinancialStatement as FinancialStatementType, User, Team, Transaction } from '../types';
+import type { FinancialStatement as FinancialStatementType, User, Team, Transaction, Asset, Liability } from '../types';
 import { TransactionType } from '../types';
 
 interface FinancialStatementProps {
     statement: FinancialStatementType;
     user: User;
+    allUsers: User[];
     teams: Team[];
     team?: Team;
     onEditTransaction: (transaction: Transaction) => void;
     onDeleteTransaction: (transactionId: string) => void;
+    onViewReceipt: (url: string) => void;
 }
 
-const StatCard: React.FC<{ title: string; value: string; color: string; }> = ({ title, value, color }) => (
-    <div className="bg-cosmic-surface p-4 rounded-lg border border-cosmic-border">
-        <h3 className="text-cosmic-text-secondary text-sm">{title}</h3>
-        <p className={`text-2xl font-bold ${color}`}>{value}</p>
-    </div>
-);
-
-const TransactionRow: React.FC<{ tx: Transaction, onEdit: () => void, onDelete: () => void }> = ({ tx, onEdit, onDelete }) => {
+const TransactionRowWithDetails: React.FC<{ tx: Transaction, allUsers: User[], onEdit: () => void, onDelete: () => void, onViewReceipt: (url: string) => void }> = ({ tx, allUsers, onEdit, onDelete, onViewReceipt }) => {
     const isIncome = tx.type === TransactionType.INCOME;
+    
+    const findUserAvatar = (userId: string) => allUsers.find(u => u.id === userId)?.avatar;
+
     return (
-        <tr className="border-b border-cosmic-border last:border-b-0 hover:bg-cosmic-bg group">
-            <td className="px-4 py-3 text-cosmic-text-primary">{new Date(tx.date).toLocaleDateString()}</td>
-            <td className="px-4 py-3 text-cosmic-text-primary">{tx.description}</td>
-            <td className="px-4 py-3 text-cosmic-text-secondary">{tx.category}</td>
-            <td className={`px-4 py-3 font-semibold ${isIncome ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>
+        <tr className="border-b border-cosmic-border last:border-b-0 hover:bg-cosmic-bg group text-sm">
+            <td className="px-2 py-2 text-cosmic-text-secondary">{new Date(tx.date).toLocaleDateString()}</td>
+            <td className="px-2 py-2 text-cosmic-text-primary font-medium">{tx.description}</td>
+            <td className="px-2 py-2 text-cosmic-text-secondary">{tx.category}</td>
+             <td className="px-2 py-2">
+                <div className="flex -space-x-2">
+                    {tx.paymentShares.map(ps => {
+                        const avatar = findUserAvatar(ps.userId);
+                        return avatar ? <img key={ps.userId} src={avatar} alt={ps.userId} className="w-6 h-6 rounded-full border-2 border-cosmic-surface" title={`${allUsers.find(u => u.id === ps.userId)?.name} paid $${ps.amount.toFixed(2)}`} /> : null;
+                    })}
+                </div>
+            </td>
+             <td className="px-2 py-2">
+                <div className="flex -space-x-2">
+                    {tx.expenseShares?.map(es => {
+                         const avatar = findUserAvatar(es.userId);
+                         return avatar ? <img key={es.userId} src={avatar} alt={es.userId} className="w-6 h-6 rounded-full border-2 border-cosmic-surface" title={`${allUsers.find(u => u.id === es.userId)?.name}'s share was $${es.amount.toFixed(2)}`} /> : null;
+                    })}
+                </div>
+            </td>
+            <td className={`px-2 py-2 font-semibold text-right ${isIncome ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>
                 {isIncome ? '+' : '-'}${tx.amount.toFixed(2)}
             </td>
-            <td className="px-4 py-3 text-right">
+             <td className="px-2 py-2 text-center">
+                {tx.receiptUrl && (
+                    <button onClick={() => onViewReceipt(tx.receiptUrl!)} className="text-cosmic-text-secondary hover:text-cosmic-primary">
+                        📎
+                    </button>
+                )}
+            </td>
+            <td className="px-2 py-2 text-right">
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity space-x-2">
-                    <button onClick={onEdit} className="text-yellow-500 hover:underline text-sm font-semibold">Edit</button>
-                    <button onClick={onDelete} className="text-red-500 hover:underline text-sm font-semibold">Delete</button>
+                    <button onClick={onEdit} className="text-yellow-500 hover:underline text-xs font-semibold">EDIT</button>
+                    <button onClick={onDelete} className="text-red-500 hover:underline text-xs font-semibold">DEL</button>
                 </div>
             </td>
         </tr>
     );
 };
 
-export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, teams, team, onEditTransaction, onDeleteTransaction }) => {
+export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, allUsers, teams, team, onEditTransaction, onDeleteTransaction, onViewReceipt }) => {
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [categoryFilter, setCategoryFilter] = useState('all');
 
@@ -53,7 +74,6 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
 
     const filteredTransactions = useMemo(() => {
         return statement.transactions.filter(tx => {
-            // Adjust date to avoid timezone issues where '2023-10-01' becomes '2023-09-30T20:00:00'
             const txDate = new Date(tx.date + 'T00:00:00');
             const start = dateRange.start ? new Date(dateRange.start + 'T00:00:00') : null;
             const end = dateRange.end ? new Date(dateRange.end + 'T00:00:00') : null;
@@ -61,89 +81,54 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
             if (end && txDate > end) return false;
             if (categoryFilter !== 'all' && tx.category !== categoryFilter) return false;
             return true;
-        });
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [statement.transactions, dateRange, categoryFilter]);
 
+    const { income, passiveIncome, expenses, monthlyCashflow, netWorth, assets, liabilities } = useMemo(() => {
+        let totalIncome = 0, totalPassive = 0, totalExpenses = 0;
 
-    const {
-        monthlyCashflow,
-        passiveIncome,
-        totalExpenses,
-        netWorth,
-    } = useMemo(() => {
-        if (team) {
-            const teamPassiveIncome = filteredTransactions
-                .filter(t => t.type === TransactionType.INCOME && t.isPassive)
-                .reduce((sum, t) => sum + t.amount, 0);
-            const teamTotalExpenses = filteredTransactions
-                .filter(t => t.type === TransactionType.EXPENSE)
-                .reduce((sum, t) => sum + t.amount, 0);
-            const teamTotalIncome = filteredTransactions
-                .filter(t => t.type === TransactionType.INCOME)
-                .reduce((sum, t) => sum + t.amount, 0);
-            const teamMonthlyCashflow = teamTotalIncome - teamTotalExpenses;
-            
-            const totalAssets = statement.assets.reduce((sum, a) => sum + a.value, 0);
-            const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
-            const teamNetWorth = totalAssets - totalLiabilities;
-            
-            return {
-                passiveIncome: teamPassiveIncome,
-                totalExpenses: teamTotalExpenses,
-                monthlyCashflow: teamMonthlyCashflow,
-                netWorth: teamNetWorth
-            };
-
-        } else {
-            let userTotalIncome = 0;
-            let userPassiveIncome = 0;
-            let userTotalExpenses = 0;
-
-            filteredTransactions.forEach(t => {
-                if (t.type === TransactionType.INCOME) {
-                    let incomeShare = 0;
-                    if (t.teamId) {
-                        const teamContext = teams.find(team => team.id === t.teamId);
-                        if (teamContext && teamContext.memberIds.includes(user.id)) {
-                            // Assume equal share of team income
-                            incomeShare = t.amount / teamContext.memberIds.length;
-                        }
-                    } else {
-                        // Personal income is based on payment shares
-                        incomeShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
-                    }
-                    userTotalIncome += incomeShare;
-                    if (t.isPassive) userPassiveIncome += incomeShare;
-                } else { // EXPENSE
-                    // Expenses are always based on explicit expense shares
-                    const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
-                    userTotalExpenses += userExpenseShare;
+        filteredTransactions.forEach(t => {
+            if (t.type === TransactionType.INCOME) {
+                 let incomeShare = t.amount;
+                 if(!team) { // Personal view aggregates shares
+                    incomeShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
+                 }
+                totalIncome += incomeShare;
+                if(t.isPassive) totalPassive += incomeShare;
+            } else { // EXPENSE
+                let expenseShare = t.amount;
+                if(!team) { // Personal view aggregates shares
+                    expenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
                 }
-            });
+                totalExpenses += expenseShare;
+            }
+        });
 
-            const monthlyCashflow = userTotalIncome - userTotalExpenses;
-            const totalAssets = statement.assets.reduce((sum, a) => sum + a.value, 0);
-            const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
-            const netWorth = totalAssets - totalLiabilities;
-            return {
-                passiveIncome: userPassiveIncome,
-                totalExpenses: userTotalExpenses,
-                monthlyCashflow,
-                netWorth
-            };
-        }
-    }, [filteredTransactions, statement.assets, statement.liabilities, user.id, team, teams]);
+        const cashflow = totalIncome - totalExpenses;
+        const totalAssets = statement.assets.reduce((sum, a) => sum + a.value, 0);
+        const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
+        const totalNetWorth = totalAssets - totalLiabilities;
+        
+        return {
+            income: totalIncome,
+            passiveIncome: totalPassive,
+            expenses: totalExpenses,
+            monthlyCashflow: cashflow,
+            netWorth: totalNetWorth,
+            assets: statement.assets,
+            liabilities: statement.liabilities,
+        };
+    }, [filteredTransactions, statement.assets, statement.liabilities, user.id, team]);
 
-    const sortedTransactions = useMemo(() => {
-        return [...filteredTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [filteredTransactions]);
+    const incomeTransactions = filteredTransactions.filter(t => t.type === TransactionType.INCOME);
+    const expenseTransactions = filteredTransactions.filter(t => t.type === TransactionType.EXPENSE);
 
     return (
         <div className="animate-fade-in space-y-6">
             <h1 className="text-3xl font-bold text-cosmic-text-primary">Financial Statement</h1>
             
             <div className="bg-cosmic-surface p-4 rounded-lg border border-cosmic-border flex items-center gap-4 flex-wrap text-sm">
-                <h3 className="text-cosmic-text-secondary font-semibold">Filter by:</h3>
+                 <h3 className="text-cosmic-text-secondary font-semibold">Filter by:</h3>
                 <div className="flex items-center gap-2">
                     <label htmlFor="startDate" className="text-cosmic-text-secondary">From:</label>
                     <input type="date" name="start" value={dateRange.start} onChange={handleDateChange} className="bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-cosmic-text-primary date-input" />
@@ -159,39 +144,94 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                     </select>
                 </div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Cash Flow (for period)" value={`$${monthlyCashflow.toFixed(2)}`} color={monthlyCashflow >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'} />
-                <StatCard title="Passive Income (for period)" value={`$${passiveIncome.toFixed(2)}`} color="text-cosmic-primary" />
-                <StatCard title="Expenses (for period)" value={`$${totalExpenses.toFixed(2)}`} color="text-cosmic-secondary" />
-                <StatCard title="Total Net Worth" value={`$${netWorth.toFixed(2)}`} color="text-white" />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Income Statement */}
+                <div className="bg-cosmic-surface rounded-lg border border-cosmic-border space-y-4 p-4">
+                    <h2 className="text-xl font-bold text-center text-cosmic-text-primary">Income Statement</h2>
+                    {/* Income */}
+                    <div className="bg-cosmic-bg p-3 rounded-lg">
+                        <h3 className="font-semibold text-cosmic-success mb-2">Income</h3>
+                        <div className="max-h-60 overflow-y-auto pr-2">
+                            {incomeTransactions.map(tx => <p key={tx.id} className="flex justify-between text-sm py-1 border-b border-cosmic-border last:border-0"><span>{tx.description}</span><span>+${tx.amount.toFixed(2)}</span></p>)}
+                            {incomeTransactions.length === 0 && <p className="text-xs text-cosmic-text-secondary">No income this period.</p>}
+                        </div>
+                        <div className="font-bold text-right mt-2 text-cosmic-success">Total: ${income.toFixed(2)}</div>
+                        <div className="font-semibold text-right mt-1 text-sm text-cosmic-primary">Passive: ${passiveIncome.toFixed(2)}</div>
+                    </div>
+                     {/* Expenses */}
+                    <div className="bg-cosmic-bg p-3 rounded-lg">
+                        <h3 className="font-semibold text-cosmic-danger mb-2">Expenses</h3>
+                         <div className="max-h-60 overflow-y-auto pr-2">
+                           {expenseTransactions.map(tx => <p key={tx.id} className="flex justify-between text-sm py-1 border-b border-cosmic-border last:border-0"><span>{tx.description}</span><span>-${tx.amount.toFixed(2)}</span></p>)}
+                           {expenseTransactions.length === 0 && <p className="text-xs text-cosmic-text-secondary">No expenses this period.</p>}
+                        </div>
+                        <div className="font-bold text-right mt-2 text-cosmic-danger">Total: ${expenses.toFixed(2)}</div>
+                    </div>
+                     {/* Cashflow */}
+                     <div className="text-center bg-cosmic-bg p-4 rounded-lg">
+                        <h3 className="font-semibold text-cosmic-text-secondary">Monthly Cash Flow</h3>
+                        <p className={`text-3xl font-bold ${monthlyCashflow >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>${monthlyCashflow.toFixed(2)}</p>
+                    </div>
+                </div>
+
+                {/* Balance Sheet */}
+                <div className="bg-cosmic-surface rounded-lg border border-cosmic-border space-y-4 p-4">
+                    <h2 className="text-xl font-bold text-center text-cosmic-text-primary">Balance Sheet</h2>
+                    {/* Assets */}
+                    <div className="bg-cosmic-bg p-3 rounded-lg">
+                        <h3 className="font-semibold text-cosmic-primary mb-2">Assets</h3>
+                        <div className="max-h-60 overflow-y-auto pr-2">
+                           {assets.map(a => <p key={a.id} className="flex justify-between text-sm py-1 border-b border-cosmic-border last:border-0"><span>{a.name}</span><span>${a.value.toLocaleString()}</span></p>)}
+                        </div>
+                        <div className="font-bold text-right mt-2 text-cosmic-primary">Total: ${assets.reduce((s,a)=>s+a.value,0).toLocaleString()}</div>
+                    </div>
+                    {/* Liabilities */}
+                    <div className="bg-cosmic-bg p-3 rounded-lg">
+                        <h3 className="font-semibold text-cosmic-secondary mb-2">Liabilities</h3>
+                        <div className="max-h-60 overflow-y-auto pr-2">
+                            {liabilities.map(l => <p key={l.id} className="flex justify-between text-sm py-1 border-b border-cosmic-border last:border-0"><span>{l.name}</span><span>${l.balance.toLocaleString()}</span></p>)}
+                        </div>
+                         <div className="font-bold text-right mt-2 text-cosmic-secondary">Total: ${liabilities.reduce((s,l)=>s+l.balance,0).toLocaleString()}</div>
+                    </div>
+                     {/* Net Worth */}
+                     <div className="text-center bg-cosmic-bg p-4 rounded-lg">
+                        <h3 className="font-semibold text-cosmic-text-secondary">Net Worth</h3>
+                        <p className="text-3xl font-bold text-white">${netWorth.toLocaleString()}</p>
+                    </div>
+                </div>
             </div>
 
             <div className="bg-cosmic-surface rounded-lg border border-cosmic-border overflow-hidden">
-                <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Transactions (for period)</h3>
+                <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Transaction Ledger (for period)</h3>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-xs">
                         <thead className="bg-cosmic-bg text-left text-cosmic-text-secondary">
                             <tr>
-                                <th className="px-4 py-2 font-semibold">Date</th>
-                                <th className="px-4 py-2 font-semibold">Description</th>
-                                <th className="px-4 py-2 font-semibold">Category</th>
-                                <th className="px-4 py-2 font-semibold">Amount</th>
-                                <th className="px-4 py-2 font-semibold text-right">Actions</th>
+                                <th className="px-2 py-2 font-semibold">Date</th>
+                                <th className="px-2 py-2 font-semibold">Description</th>
+                                <th className="px-2 py-2 font-semibold">Category</th>
+                                <th className="px-2 py-2 font-semibold">Paid By</th>
+                                <th className="px-2 py-2 font-semibold">For Whom</th>
+                                <th className="px-2 py-2 font-semibold text-right">Amount</th>
+                                <th className="px-2 py-2 font-semibold text-center">Receipt</th>
+                                <th className="px-2 py-2 font-semibold text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {sortedTransactions.map(tx => (
-                                <TransactionRow 
-                                    key={tx.id} 
-                                    tx={tx} 
-                                    onEdit={() => onEditTransaction(tx)} 
+                            {filteredTransactions.map(tx => (
+                                <TransactionRowWithDetails
+                                    key={tx.id}
+                                    tx={tx}
+                                    allUsers={allUsers}
+                                    onEdit={() => onEditTransaction(tx)}
                                     onDelete={() => onDeleteTransaction(tx.id)}
+                                    onViewReceipt={onViewReceipt}
                                 />
                             ))}
                         </tbody>
                     </table>
-                     {sortedTransactions.length === 0 && (
+                     {filteredTransactions.length === 0 && (
                         <p className="text-center py-8 text-cosmic-text-secondary">No transactions recorded for this period.</p>
                     )}
                 </div>

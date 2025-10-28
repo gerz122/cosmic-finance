@@ -15,6 +15,7 @@ interface TeamDashboardProps {
     onEditLiability: (liability: Liability) => void;
     onEditTransaction: (transaction: Transaction) => void;
     onDeleteTransaction: (transactionId: string) => void;
+    onViewReceipt: (url: string) => void;
 }
 
 const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; isNegative?: boolean; onEdit: () => void }> = ({ label, value, isPositive, isNegative, onEdit }) => (
@@ -27,7 +28,7 @@ const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; is
     </div>
 );
 
-export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock, onEditAsset, onEditLiability, onEditTransaction, onDeleteTransaction }) => {
+export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock, onEditAsset, onEditLiability, onEditTransaction, onDeleteTransaction, onViewReceipt }) => {
     const members = allUsers.filter(u => team.memberIds.includes(u.id));
     const { assets, liabilities } = team.financialStatement;
 
@@ -57,8 +58,16 @@ export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, on
                 </div>
             </div>
 
-            {/* FIX: Corrected prop from `teamMates` to `teams` to match FinancialStatementProps. */}
-            <FinancialStatement statement={team.financialStatement} user={members[0]} teams={[]} team={team} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />
+            <FinancialStatement 
+                statement={team.financialStatement} 
+                user={members[0]} 
+                allUsers={allUsers}
+                teams={[]} 
+                team={team} 
+                onEditTransaction={onEditTransaction} 
+                onDeleteTransaction={onDeleteTransaction} 
+                onViewReceipt={onViewReceipt}
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">

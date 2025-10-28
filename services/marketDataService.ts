@@ -29,10 +29,7 @@ const ensureApiRateLimit = async () => {
 
 const getLiveStockData = async (ticker: string): Promise<MarketData> => {
     if (!API_KEY) {
-        console.warn("Alpha Vantage API key is not set. Returning mock data.");
-        const mockPrice = 100 + Math.random() * 20 - 10;
-        const mockPrevClose = mockPrice - (Math.random() * 5 - 2.5);
-        return { ticker, price: mockPrice, dayChange: mockPrice - mockPrevClose, previousClose: mockPrevClose };
+        throw new Error("Alpha Vantage API key is not configured in the environment variables.");
     }
 
     const tryFetch = async (symbol: string) => {
@@ -75,7 +72,6 @@ const getLiveStockData = async (ticker: string): Promise<MarketData> => {
 const getMultipleStockData = async (tickers: string[]): Promise<MarketData[]> => {
     if (tickers.length === 0) return [];
     
-    const results: MarketData[] = [];
     // Use Promise.all for concurrent requests, but ensure rate limit is handled inside getLiveStockData
     const promises = tickers.map(ticker => getLiveStockData(ticker));
     return Promise.all(promises);

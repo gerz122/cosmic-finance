@@ -136,14 +136,20 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             finalExpenseShares = expenseShares;
         }
 
-        const transactionData = {
-            description, amount: numericAmount, type, category: categoryInput, date,
-            teamId: teamId || undefined,
-            isPassive: type === TransactionType.INCOME ? isPassive : undefined,
-            paymentShares: paymentShares,
-            expenseShares: finalExpenseShares,
-            receiptUrl: receiptImage || undefined,
+        const transactionData: Omit<Transaction, 'id'> = {
+            description,
+            amount: numericAmount,
+            type,
+            category: categoryInput,
+            date,
+            paymentShares,
         };
+        
+        if (teamId) transactionData.teamId = teamId;
+        if (receiptImage) transactionData.receiptUrl = receiptImage;
+        if (finalExpenseShares) transactionData.expenseShares = finalExpenseShares;
+        if (type === TransactionType.INCOME) transactionData.isPassive = isPassive;
+
 
         if (isEditing && transactionToEdit) {
             onSave({ ...transactionToEdit, ...transactionData });

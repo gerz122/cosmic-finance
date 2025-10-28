@@ -33,6 +33,7 @@ import { AddBudgetModal } from './components/AddBudgetModal';
 import { GoalsView } from './components/GoalsView';
 import { AddGoalModal } from './components/AddGoalModal';
 import { ContributeToGoalModal } from './components/ContributeToGoalModal';
+import { ReceiptModal } from './components/ReceiptModal';
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
     <button
@@ -75,6 +76,7 @@ const App: React.FC = () => {
     const [isAddBudgetModalOpen, setAddBudgetModalOpen] = useState(false);
     const [isAddGoalModalOpen, setAddGoalModalOpen] = useState(false);
     const [isContributeToGoalModalOpen, setContributeToGoalModalOpen] = useState(false);
+    const [isReceiptModalOpen, setReceiptModalOpen] = useState(false);
     
     // Data for Modals
     const [assetLiabilityToAdd, setAssetLiabilityToAdd] = useState<'asset' | 'liability' | null>(null);
@@ -91,6 +93,7 @@ const App: React.FC = () => {
     const [accountToEdit, setAccountToEdit] = useState<Account | null>(null);
     const [accountForTransactionList, setAccountForTransactionList] = useState<Account | null>(null);
     const [goalToContribute, setGoalToContribute] = useState<Goal | null>(null);
+    const [receiptUrlToView, setReceiptUrlToView] = useState('');
 
 
     useEffect(() => {
@@ -371,6 +374,11 @@ const App: React.FC = () => {
         const updatedUser = await dbService.updateGoal(activeUser.id, updatedGoal);
         updateUserState(updatedUser);
     };
+    
+    const handleViewReceipt = (url: string) => {
+        setReceiptUrlToView(url);
+        setReceiptModalOpen(true);
+    };
 
     const handleTeamClick = (teamId: string) => { setSelectedTeamId(teamId); setActiveView('team-detail'); };
     const handleBackToTeams = () => { setSelectedTeamId(null); setActiveView('teams'); };
@@ -419,12 +427,12 @@ const App: React.FC = () => {
 
         switch (activeView) {
             case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
-            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} teams={teams} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction}/>;
+            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt} />;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => setAddAccountModalOpen(true)} onOpenAccountTransactions={handleOpenAccountTransactionsModal} onEditAccount={handleOpenEditAccountModal} />;
             case 'coach': return <AICoach user={activeUser} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} />;
             case 'teams': return <Teams teams={teams} onCreateTeam={() => setCreateTeamModalOpen(true)} onTeamClick={handleTeamClick}/>;
-            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} /> : null;
+            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt}/> : null;
             case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => setTransferModalOpen(true)} />;
             case 'budget': return <BudgetView user={activeUser} onSaveBudget={handleSaveBudget} onOpenBudgetModal={() => setAddBudgetModalOpen(true)} />;
             case 'goals': return <GoalsView user={activeUser} onAddGoal={() => setAddGoalModalOpen(true)} onDeleteGoal={handleDeleteGoal} onContribute={handleOpenContributeToGoalModal} />;
@@ -513,6 +521,7 @@ const App: React.FC = () => {
             {activeUser && <AddBudgetModal isOpen={isAddBudgetModalOpen} onClose={() => setAddBudgetModalOpen(false)} onSave={handleSaveBudget} user={activeUser} />}
             {activeUser && <AddGoalModal isOpen={isAddGoalModalOpen} onClose={() => setAddGoalModalOpen(false)} onSave={handleSaveGoal} />}
             {activeUser && goalToContribute && <ContributeToGoalModal isOpen={isContributeToGoalModalOpen} onClose={() => setContributeToGoalModalOpen(false)} onContribute={handleContributeToGoal} goal={goalToContribute} user={activeUser} />}
+            <ReceiptModal isOpen={isReceiptModalOpen} onClose={() => setReceiptModalOpen(false)} imageUrl={receiptUrlToView} />
         </div>
     );
 };

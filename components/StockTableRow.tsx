@@ -59,15 +59,19 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
 
     const toggleRow = () => setIsExpanded(prev => !prev);
 
-    const { plValue, plColor, dayChangeColor, dayChangePercent, totalValue } = useMemo(() => {
+    const { plValue, plColor, dayChangeColor, dayChangePercent, totalValue, isTakeProfitHit, isStopLossHit } = useMemo(() => {
+        const defaults = { 
+            plValue: 0, 
+            plColor: 'text-cosmic-text-secondary', 
+            dayChangeColor: 'text-cosmic-text-secondary', 
+            dayChangePercent: 0, 
+            totalValue: stock.numberOfShares && stock.purchasePrice ? stock.numberOfShares * stock.purchasePrice : 0,
+            isTakeProfitHit: false,
+            isStopLossHit: false
+        };
+
         if (!liveData || liveData.price === 0 || !stock.purchasePrice || !stock.numberOfShares) {
-            return { 
-                plValue: 0, 
-                plColor: 'text-cosmic-text-secondary', 
-                dayChangeColor: 'text-cosmic-text-secondary', 
-                dayChangePercent: 0, 
-                totalValue: stock.numberOfShares && stock.purchasePrice ? stock.numberOfShares * stock.purchasePrice : 0
-            };
+            return defaults;
         }
         
         const currentTotalValue = liveData.price * stock.numberOfShares;
@@ -76,11 +80,21 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
         
         const pColor = value >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
         const dColor = liveData.dayChange >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
-        
         const dPercent = liveData.previousClose > 0 ? (liveData.dayChange / liveData.previousClose) * 100 : 0;
+        
+        const takeProfitHit = !!(stock.takeProfit && liveData.price >= stock.takeProfit);
+        const stopLossHit = !!(stock.stopLoss && liveData.price <= stock.stopLoss);
 
-        return { plValue: value, plColor: pColor, dayChangeColor: dColor, dayChangePercent: dPercent, totalValue: currentTotalValue };
-    }, [liveData, stock.purchasePrice, stock.numberOfShares]);
+        return { 
+            plValue: value, 
+            plColor: pColor, 
+            dayChangeColor: dColor, 
+            dayChangePercent: dPercent, 
+            totalValue: currentTotalValue,
+            isTakeProfitHit: takeProfitHit,
+            isStopLossHit: stopLossHit,
+        };
+    }, [liveData, stock.purchasePrice, stock.numberOfShares, stock.takeProfit, stock.stopLoss]);
     
     const priceIndicatorClass = priceChangeIndicator === 'up' ? 'bg-green-500/20' : priceChangeIndicator === 'down' ? 'bg-red-500/20' : '';
 
@@ -110,10 +124,10 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                 <td className={`px-6 py-4 font-bold ${plColor}`}>
                     {liveData && liveData.price > 0 ? `${plValue >= 0 ? '+' : ''}${plValue.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
-                <td className="px-6 py-4 text-green-400">
+                <td className={`px-6 py-4 text-green-400 rounded-md ${isTakeProfitHit ? 'bg-green-500/30 animate-pulse' : ''}`}>
                     {stock.takeProfit ? `$${stock.takeProfit.toFixed(2)}` : '---'}
                 </td>
-                <td className="px-6 py-4 text-red-400">
+                <td className={`px-6 py-4 text-red-400 rounded-md ${isStopLossHit ? 'bg-red-500/30 animate-pulse' : ''}`}>
                     {stock.stopLoss ? `$${stock.stopLoss.toFixed(2)}` : '---'}
                 </td>
                 <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
