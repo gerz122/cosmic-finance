@@ -95,7 +95,7 @@ export interface FinancialStatement {
 }
 
 // New: Budgeting interfaces
-export type BudgetCategory = 'Housing' | 'Food' | 'Transportation' | 'Entertainment' | 'Utilities' | 'Shopping' | 'Business Expense' | 'Maintenance' | 'Other' | 'Goals' | 'Job' | 'Investment' | 'Loan' | 'Team Contribution' | 'Transfer' | 'Cosmic Event' | 'Initial Balance' | 'Rental';
+export type BudgetCategory = 'Housing' | 'Food' | 'Transportation' | 'Entertainment' | 'Utilities' | 'Shopping' | 'Business Expense' | 'Maintenance' | 'Other' | 'Goals' | 'Job' | 'Investment' | 'Loan' | 'Team Contribution' | 'Transfer' | 'Cosmic Event' | 'Initial Balance' | 'Rental' | 'Mortgage' | 'Business Income';
 
 export interface Budget {
     month: string; // "YYYY-MM" format
@@ -136,7 +136,7 @@ export interface Team {
   }[];
 }
 
-export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals';
+export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals' | 'history';
 
 export interface EventOutcome {
   message: string;
@@ -155,7 +155,14 @@ export interface CosmicEvent {
   choices: EventChoice[];
 }
 
+// For charts
 export interface HistoricalDataPoint {
-  date: string;
-  value: number;
+  date: string; // YYYY-MM-DD
+  [key: string]: number | string; // e.g., { date: '2023-01-01', netWorth: 5000 }
+}
+
+export interface ChartSeries {
+  key: string;
+  label: string;
+  color: string;
 }

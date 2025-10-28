@@ -3,7 +3,8 @@ import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, A
 import { AssetType, TransactionType } from './types';
 import { dbService } from './services/dbService'; 
 import { getCosmicEvent } from './services/geminiService';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon } from './components/icons';
+import { generateHistoricalData } from './utils/financialCalculations';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon, HistoryIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -34,6 +35,8 @@ import { GoalsView } from './components/GoalsView';
 import { AddGoalModal } from './components/AddGoalModal';
 import { ContributeToGoalModal } from './components/ContributeToGoalModal';
 import { ReceiptModal } from './components/ReceiptModal';
+import { HistoricalPerformance } from './components/HistoricalPerformance';
+import { TransactionSplitDetailModal } from './components/TransactionSplitDetailModal';
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
     <button
@@ -77,6 +80,7 @@ const App: React.FC = () => {
     const [isAddGoalModalOpen, setAddGoalModalOpen] = useState(false);
     const [isContributeToGoalModalOpen, setContributeToGoalModalOpen] = useState(false);
     const [isReceiptModalOpen, setReceiptModalOpen] = useState(false);
+    const [isSplitDetailModalOpen, setSplitDetailModalOpen] = useState(false);
     
     // Data for Modals
     const [assetLiabilityToAdd, setAssetLiabilityToAdd] = useState<'asset' | 'liability' | null>(null);
@@ -123,6 +127,8 @@ const App: React.FC = () => {
     const activeUser = useMemo(() => users.find(u => u.id === activeUserId), [users, activeUserId]);
     const selectedTeam = useMemo(() => teams.find(t => t.id === selectedTeamId), [teams, selectedTeamId]);
     
+    const allUserAccounts = useMemo(() => users.flatMap(u => u.accounts), [users]);
+    
     const effectiveFinancialStatement = useMemo(() => {
         if (!activeUser) return { transactions: [], assets: [], liabilities: [] };
         
@@ -131,9 +137,8 @@ const App: React.FC = () => {
 
         for(const team of userTeams) {
             personalStatement.transactions.push(...team.financialStatement.transactions);
-            const userShare = 1 / team.memberIds.length;
-            team.financialStatement.assets.forEach(a => personalStatement.assets.push({ ...a, value: a.value * userShare, shares: [{userId: activeUser.id, percentage: userShare * 100}] }));
-            team.financialStatement.liabilities.forEach(l => personalStatement.liabilities.push({ ...l, balance: l.balance * userShare, shares: [{userId: activeUser.id, percentage: userShare * 100}] }));
+            team.financialStatement.assets.forEach(a => personalStatement.assets.push({ ...a }));
+            team.financialStatement.liabilities.forEach(l => personalStatement.liabilities.push({ ...l }));
         }
         
         const uniqueTransactions = Array.from(new Map(personalStatement.transactions.map((t: Transaction) => [t.id, t])).values());
@@ -142,21 +147,10 @@ const App: React.FC = () => {
         return personalStatement;
     }, [activeUser, teams]);
 
-    const historicalNetWorth = useMemo((): HistoricalDataPoint[] => {
+    const historicalData = useMemo((): HistoricalDataPoint[] => {
         if (!activeUser) return [];
-        const allTransactions = [...effectiveFinancialStatement.transactions].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        if (allTransactions.length === 0) return [];
-
-        const dataPoints: HistoricalDataPoint[] = [];
-        let runningNetWorth = 0; 
-        allTransactions.forEach(tx => {
-            if(tx.type === 'INCOME') runningNetWorth += tx.amount;
-            else runningNetWorth -= tx.amount;
-            dataPoints.push({date: tx.date, value: runningNetWorth});
-        });
-        
-        return dataPoints;
-    }, [effectiveFinancialStatement.transactions, activeUser]);
+        return generateHistoricalData(activeUser, teams);
+    }, [activeUser, teams]);
 
     const updateUserState = (updatedUser: User) => setUsers(currentUsers => currentUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
     const updateMultipleUsersState = (updatedUsers: User[]) => {
@@ -178,8 +172,9 @@ const App: React.FC = () => {
             updateMultipleTeamsState(updatedTeams);
         } else { // Adding new transaction
             if(transaction.teamId) {
-                const updatedTeam = await dbService.addTeamTransaction(transaction);
+                const { updatedTeam, updatedUsers } = await dbService.addTeamTransaction(transaction, teams, users);
                 updateTeamState(updatedTeam);
+                updateMultipleUsersState(updatedUsers);
             } else {
                 const updatedUsers = await dbService.addTransaction(activeUser.id, transaction, users);
                 updateMultipleUsersState(updatedUsers);
@@ -379,6 +374,11 @@ const App: React.FC = () => {
         setReceiptUrlToView(url);
         setReceiptModalOpen(true);
     };
+    
+    const handleViewSplitDetails = (transaction: Transaction) => {
+        setSelectedTransaction(transaction);
+        setSplitDetailModalOpen(true);
+    };
 
     const handleTeamClick = (teamId: string) => { setSelectedTeamId(teamId); setActiveView('team-detail'); };
     const handleBackToTeams = () => { setSelectedTeamId(null); setActiveView('teams'); };
@@ -388,7 +388,7 @@ const App: React.FC = () => {
     const handleStatCardClick = (stat: 'netWorth' | 'cashflow' | 'passiveIncome') => {
         if (stat === 'netWorth') setNetWorthBreakdownModalOpen(true);
         if (stat === 'cashflow') setActiveView('statement');
-        if (stat === 'passiveIncome') { setSelectedCategory('Passive Income'); setCategoryModalOpen(true); }
+        if (stat === 'passiveIncome') { setActiveView('history'); }
     };
     
     const handleOpenAccountTransactionsModal = (account: Account) => { setAccountForTransactionList(account); setAccountTransactionsModalOpen(true); };
@@ -426,17 +426,18 @@ const App: React.FC = () => {
         if (!activeUser) return <div className="flex items-center justify-center h-full"><p>No Players Found</p></div>;
 
         switch (activeView) {
-            case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
-            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt} />;
+            case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
+            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt} onViewSplitDetails={handleViewSplitDetails}/>;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => setAddAccountModalOpen(true)} onOpenAccountTransactions={handleOpenAccountTransactionsModal} onEditAccount={handleOpenEditAccountModal} />;
             case 'coach': return <AICoach user={activeUser} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} />;
             case 'teams': return <Teams teams={teams} onCreateTeam={() => setCreateTeamModalOpen(true)} onTeamClick={handleTeamClick}/>;
-            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt}/> : null;
+            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt} onViewSplitDetails={handleViewSplitDetails}/> : null;
             case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => setTransferModalOpen(true)} />;
             case 'budget': return <BudgetView user={activeUser} onSaveBudget={handleSaveBudget} onOpenBudgetModal={() => setAddBudgetModalOpen(true)} />;
             case 'goals': return <GoalsView user={activeUser} onAddGoal={() => setAddGoalModalOpen(true)} onDeleteGoal={handleDeleteGoal} onContribute={handleOpenContributeToGoalModal} />;
-            default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
+            case 'history': return <HistoricalPerformance data={historicalData} />;
+            default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
         }
     };
 
@@ -448,6 +449,7 @@ const App: React.FC = () => {
         </div>
         <div className="space-y-2">
             <NavItem icon={<DashboardIcon className="w-6 h-6" />} label="Dashboard" isActive={activeView === 'dashboard'} onClick={() => handleViewChange('dashboard')} />
+            <NavItem icon={<HistoryIcon className="w-6 h-6" />} label="History" isActive={activeView === 'history'} onClick={() => handleViewChange('history')} />
             <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Balances" isActive={activeView === 'balances'} onClick={() => handleViewChange('balances')} />
             <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Statement" isActive={activeView === 'statement'} onClick={() => handleViewChange('statement')} />
             <NavItem icon={<CreditCardIcon className="w-6 h-6" />} label="Accounts" isActive={activeView === 'accounts'} onClick={() => handleViewChange('accounts')} />
@@ -522,6 +524,7 @@ const App: React.FC = () => {
             {activeUser && <AddGoalModal isOpen={isAddGoalModalOpen} onClose={() => setAddGoalModalOpen(false)} onSave={handleSaveGoal} />}
             {activeUser && goalToContribute && <ContributeToGoalModal isOpen={isContributeToGoalModalOpen} onClose={() => setContributeToGoalModalOpen(false)} onContribute={handleContributeToGoal} goal={goalToContribute} user={activeUser} />}
             <ReceiptModal isOpen={isReceiptModalOpen} onClose={() => setReceiptModalOpen(false)} imageUrl={receiptUrlToView} />
+            {selectedTransaction && <TransactionSplitDetailModal isOpen={isSplitDetailModalOpen} onClose={() => { setSplitDetailModalOpen(false); setSelectedTransaction(null); }} transaction={selectedTransaction} allUsers={users} allAccounts={allUserAccounts} />}
         </div>
     );
 };

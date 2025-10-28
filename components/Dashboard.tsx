@@ -4,13 +4,13 @@ import { TransactionType, AssetType } from '../types';
 import { StarIcon, PlusIcon, SparklesIcon } from './icons';
 import { PortfolioLivePL } from './PortfolioLivePL';
 import { DoughnutChart } from './DoughnutChart';
-import { LineChart } from './LineChart';
+import { AdvancedLineChart } from './AdvancedLineChart';
 
 interface DashboardProps {
     user: User;
     teams: Team[];
     effectiveStatement: FinancialStatement;
-    historicalNetWorth: HistoricalDataPoint[];
+    historicalData: HistoricalDataPoint[];
     onAddTransactionClick: () => void;
     onTransferClick: () => void;
     onDrawCosmicCard: () => void;
@@ -44,7 +44,7 @@ const ProgressBar: React.FC<{ value: number; max: number; }> = ({ value, max }) 
     );
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStatement, historicalNetWorth, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStatement, historicalData, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick }) => {
 
     const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks, expenseBreakdown } = useMemo(() => {
         const statement = effectiveStatement;
@@ -54,16 +54,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         let calculatedTotalIncome = 0;
         const calculatedExpenseBreakdown: Record<string, number> = {};
 
+        const currentMonth = new Date().toISOString().slice(0, 7);
+
         statement.transactions.forEach(t => {
+            if (!t.date.startsWith(currentMonth)) return;
+
             if (t.type === TransactionType.INCOME) {
                 let incomeShare = 0;
-                if (t.teamId) {
+                 const userShare = t.paymentShares?.find(ps => ps.userId === user.id)?.amount;
+                 if (userShare !== undefined) {
+                     incomeShare = userShare;
+                 } else if (t.teamId) {
                     const team = teams.find(tm => tm.id === t.teamId);
                     if (team && team.memberIds.includes(user.id)) {
                         incomeShare = t.amount / team.memberIds.length;
                     }
-                } else {
-                    incomeShare = t.paymentShares?.find(ps => ps.userId === user.id)?.amount || 0;
                 }
                 calculatedTotalIncome += incomeShare;
                 if (t.isPassive) {
@@ -80,8 +85,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         
         const calculatedMonthlyCashflow = calculatedTotalIncome - calculatedTotalExpenses;
 
-        const totalAssets = statement.assets.reduce((sum, a) => sum + Number(a.value), 0);
-        const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + Number(l.balance), 0);
+        let totalAssets = 0;
+        statement.assets.forEach(a => {
+            let share = 1.0;
+            if(a.shares) share = (a.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
+            else if (a.teamId) {
+                const team = teams.find(t => t.id === a.teamId);
+                if(team) share = 1 / team.memberIds.length; else share = 0;
+            }
+            totalAssets += a.value * share;
+        });
+        
+        let totalLiabilities = 0;
+        statement.liabilities.forEach(l => {
+            let share = 1.0;
+            if(l.shares) share = (l.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
+            else if (l.teamId) {
+                const team = teams.find(t => t.id === l.teamId);
+                if(team) share = 1 / team.memberIds.length; else share = 0;
+            }
+            totalLiabilities += l.balance * share;
+        });
+        
         const calculatedNetWorth = totalAssets - totalLiabilities;
         
         const recentTransactions = [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
@@ -114,6 +139,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
 
     const totalExpensesForChart = useMemo(() => expenseChartData.reduce((sum, item) => sum + item.value, 0), [expenseChartData]);
 
+    const netWorthChartData = useMemo(() => {
+        let lastKnownNetWorth: number | undefined = undefined;
+        return historicalData.map(point => {
+            if (point.netWorth !== undefined) {
+                lastKnownNetWorth = point.netWorth as number;
+            }
+            return { date: point.date, value: lastKnownNetWorth };
+        }).filter(point => point.value !== undefined);
+    }, [historicalData]);
+
+
     return (
         <div className="animate-fade-in space-y-8">
             <div className="flex justify-between items-center flex-wrap gap-4">
@@ -143,7 +179,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
                 <div className="lg:col-span-3 bg-cosmic-surface p-6 rounded-xl border border-cosmic-border">
                     <h2 className="text-xl font-bold text-cosmic-text-primary mb-4">Net Worth Over Time</h2>
                     <div className="h-64">
-                        <LineChart data={historicalNetWorth} />
+                         <AdvancedLineChart data={historicalData} series={[{ key: 'netWorth', label: 'Net Worth', color: '#58A6FF' }]} />
                     </div>
                 </div>
                 <div className="lg:col-span-2 bg-cosmic-surface p-6 rounded-xl border border-cosmic-border space-y-4">

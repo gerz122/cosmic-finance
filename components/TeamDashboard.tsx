@@ -16,6 +16,7 @@ interface TeamDashboardProps {
     onEditTransaction: (transaction: Transaction) => void;
     onDeleteTransaction: (transactionId: string) => void;
     onViewReceipt: (url: string) => void;
+    onViewSplitDetails: (transaction: Transaction) => void;
 }
 
 const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; isNegative?: boolean; onEdit: () => void }> = ({ label, value, isPositive, isNegative, onEdit }) => (
@@ -28,7 +29,7 @@ const DataRow: React.FC<{ label: string; value: string; isPositive?: boolean; is
     </div>
 );
 
-export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock, onEditAsset, onEditLiability, onEditTransaction, onDeleteTransaction, onViewReceipt }) => {
+export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock, onEditAsset, onEditLiability, onEditTransaction, onDeleteTransaction, onViewReceipt, onViewSplitDetails }) => {
     const members = allUsers.filter(u => team.memberIds.includes(u.id));
     const { assets, liabilities } = team.financialStatement;
 
@@ -67,6 +68,7 @@ export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, on
                 onEditTransaction={onEditTransaction} 
                 onDeleteTransaction={onDeleteTransaction} 
                 onViewReceipt={onViewReceipt}
+                onViewSplitDetails={onViewSplitDetails}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

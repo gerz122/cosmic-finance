@@ -29,7 +29,14 @@ const ensureApiRateLimit = async () => {
 
 const getLiveStockData = async (ticker: string): Promise<MarketData> => {
     if (!API_KEY) {
-        throw new Error("Alpha Vantage API key is not configured in the environment variables.");
+        // Return mock data if API key is not set
+        console.warn("Alpha Vantage API key not configured. Using mock data for stocks.");
+        return {
+            ticker,
+            price: Math.random() * 500 + 50,
+            dayChange: (Math.random() - 0.5) * 20,
+            previousClose: Math.random() * 500 + 50,
+        };
     }
 
     const tryFetch = async (symbol: string) => {
@@ -78,7 +85,15 @@ const getMultipleStockData = async (tickers: string[]): Promise<MarketData[]> =>
 };
 
 const searchTickers = async (query: string): Promise<TickerSearchResult[]> => {
-    if (!query || !API_KEY) return [];
+     if (!query) return [];
+    if (!API_KEY) {
+         console.warn("Alpha Vantage API key not configured. Using mock data for ticker search.");
+         return [
+            { ticker: "AAPL.MOCK", name: "Apple Inc. (Mock)"},
+            { ticker: "GOOG.MOCK", name: "Alphabet Inc. (Mock)"},
+            { ticker: "TSLA.MOCK", name: "Tesla Inc. (Mock)"},
+         ].filter(t => t.ticker.includes(query.toUpperCase()) || t.name.toUpperCase().includes(query.toUpperCase()));
+    }
 
     try {
         await ensureApiRateLimit();

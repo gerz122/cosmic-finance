@@ -11,9 +11,10 @@ interface FinancialStatementProps {
     onEditTransaction: (transaction: Transaction) => void;
     onDeleteTransaction: (transactionId: string) => void;
     onViewReceipt: (url: string) => void;
+    onViewSplitDetails: (transaction: Transaction) => void;
 }
 
-const TransactionRowWithDetails: React.FC<{ tx: Transaction, allUsers: User[], onEdit: () => void, onDelete: () => void, onViewReceipt: (url: string) => void }> = ({ tx, allUsers, onEdit, onDelete, onViewReceipt }) => {
+const TransactionRowWithDetails: React.FC<{ tx: Transaction, allUsers: User[], onEdit: () => void, onDelete: () => void, onViewReceipt: (url: string) => void, onViewSplitDetails: (transaction: Transaction) => void }> = ({ tx, allUsers, onEdit, onDelete, onViewReceipt, onViewSplitDetails }) => {
     const isIncome = tx.type === TransactionType.INCOME;
     
     const findUserAvatar = (userId: string) => allUsers.find(u => u.id === userId)?.avatar;
@@ -24,20 +25,20 @@ const TransactionRowWithDetails: React.FC<{ tx: Transaction, allUsers: User[], o
             <td className="px-2 py-2 text-cosmic-text-primary font-medium">{tx.description}</td>
             <td className="px-2 py-2 text-cosmic-text-secondary">{tx.category}</td>
              <td className="px-2 py-2">
-                <div className="flex -space-x-2">
+                <button onClick={() => onViewSplitDetails(tx)} className="flex -space-x-2 hover:opacity-80 transition-opacity">
                     {tx.paymentShares.map(ps => {
                         const avatar = findUserAvatar(ps.userId);
                         return avatar ? <img key={ps.userId} src={avatar} alt={ps.userId} className="w-6 h-6 rounded-full border-2 border-cosmic-surface" title={`${allUsers.find(u => u.id === ps.userId)?.name} paid $${ps.amount.toFixed(2)}`} /> : null;
                     })}
-                </div>
+                </button>
             </td>
              <td className="px-2 py-2">
-                <div className="flex -space-x-2">
+                <button onClick={() => onViewSplitDetails(tx)} className="flex -space-x-2 hover:opacity-80 transition-opacity">
                     {tx.expenseShares?.map(es => {
                          const avatar = findUserAvatar(es.userId);
                          return avatar ? <img key={es.userId} src={avatar} alt={es.userId} className="w-6 h-6 rounded-full border-2 border-cosmic-surface" title={`${allUsers.find(u => u.id === es.userId)?.name}'s share was $${es.amount.toFixed(2)}`} /> : null;
                     })}
-                </div>
+                </button>
             </td>
             <td className={`px-2 py-2 font-semibold text-right ${isIncome ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>
                 {isIncome ? '+' : '-'}${tx.amount.toFixed(2)}
@@ -59,7 +60,7 @@ const TransactionRowWithDetails: React.FC<{ tx: Transaction, allUsers: User[], o
     );
 };
 
-export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, allUsers, teams, team, onEditTransaction, onDeleteTransaction, onViewReceipt }) => {
+export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, allUsers, teams, team, onEditTransaction, onDeleteTransaction, onViewReceipt, onViewSplitDetails }) => {
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [categoryFilter, setCategoryFilter] = useState('all');
 
@@ -86,27 +87,74 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
 
     const { income, passiveIncome, expenses, monthlyCashflow, netWorth, assets, liabilities } = useMemo(() => {
         let totalIncome = 0, totalPassive = 0, totalExpenses = 0;
+        
+        const relevantTransactions = dateRange.start || dateRange.end || categoryFilter !== 'all' ? filteredTransactions : statement.transactions;
 
-        filteredTransactions.forEach(t => {
+        relevantTransactions.forEach(t => {
             if (t.type === TransactionType.INCOME) {
-                 let incomeShare = t.amount;
-                 if(!team) { // Personal view aggregates shares
-                    incomeShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
-                 }
+                let incomeShare = 0;
+                if(team) {
+                    incomeShare = t.amount;
+                } else {
+                    const userShare = t.paymentShares.find(s => s.userId === user.id)?.amount;
+                    if(userShare) {
+                        incomeShare = userShare;
+                    } else if (t.teamId) {
+                        const team = teams.find(tm => tm.id === t.teamId);
+                        if(team) incomeShare = t.amount / team.memberIds.length;
+                    }
+                }
                 totalIncome += incomeShare;
                 if(t.isPassive) totalPassive += incomeShare;
             } else { // EXPENSE
-                let expenseShare = t.amount;
-                if(!team) { // Personal view aggregates shares
-                    expenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
+                let expenseShare = 0;
+                 if(team) {
+                    expenseShare = t.amount;
+                 } else {
+                    const userShare = t.expenseShares?.find(s => s.userId === user.id)?.amount;
+                     if (userShare) {
+                        expenseShare = userShare;
+                    } else if (t.teamId) {
+                        const team = teams.find(tm => tm.id === t.teamId);
+                        if(team) expenseShare = t.amount / team.memberIds.length;
+                    }
                 }
                 totalExpenses += expenseShare;
             }
         });
 
         const cashflow = totalIncome - totalExpenses;
-        const totalAssets = statement.assets.reduce((sum, a) => sum + a.value, 0);
-        const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
+        
+        let totalAssets = 0;
+        statement.assets.forEach(a => {
+            if(team) {
+                totalAssets += a.value;
+            } else {
+                 let share = 1.0;
+                if(a.shares) share = (a.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
+                else if (a.teamId) {
+                    const team = teams.find(t => t.id === a.teamId);
+                    if(team) share = 1 / team.memberIds.length; else share = 0;
+                }
+                totalAssets += a.value * share;
+            }
+        });
+        
+        let totalLiabilities = 0;
+        statement.liabilities.forEach(l => {
+             if(team) {
+                totalLiabilities += l.balance;
+            } else {
+                let share = 1.0;
+                if(l.shares) share = (l.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
+                else if (l.teamId) {
+                    const team = teams.find(t => t.id === l.teamId);
+                    if(team) share = 1 / team.memberIds.length; else share = 0;
+                }
+                totalLiabilities += l.balance * share;
+            }
+        });
+
         const totalNetWorth = totalAssets - totalLiabilities;
         
         return {
@@ -118,7 +166,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
             assets: statement.assets,
             liabilities: statement.liabilities,
         };
-    }, [filteredTransactions, statement.assets, statement.liabilities, user.id, team]);
+    }, [filteredTransactions, statement, user.id, team, teams, dateRange, categoryFilter]);
 
     const incomeTransactions = filteredTransactions.filter(t => t.type === TransactionType.INCOME);
     const expenseTransactions = filteredTransactions.filter(t => t.type === TransactionType.EXPENSE);
@@ -227,6 +275,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                                     onEdit={() => onEditTransaction(tx)}
                                     onDelete={() => onDeleteTransaction(tx.id)}
                                     onViewReceipt={onViewReceipt}
+                                    onViewSplitDetails={onViewSplitDetails}
                                 />
                             ))}
                         </tbody>
