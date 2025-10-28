@@ -22,6 +22,7 @@ export interface Account {
   ownerIds: string[];
   teamId?: string;
   sharedWith?: string[];
+  shares?: Share[];
 }
 
 export interface Share {

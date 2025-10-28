@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { FinancialStatement as FinancialStatementType, User, Team, Transaction } from '../types';
 import { TransactionType } from '../types';
 
@@ -39,22 +39,42 @@ const TransactionRow: React.FC<{ tx: Transaction, onEdit: () => void, onDelete: 
 };
 
 export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statement, user, team, onEditTransaction, onDeleteTransaction }) => {
+    const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
+    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setDateRange(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const filteredTransactions = useMemo(() => {
+        if (!dateRange.start && !dateRange.end) {
+            return statement.transactions;
+        }
+        return statement.transactions.filter(tx => {
+            // Adjust date to avoid timezone issues where '2023-10-01' becomes '2023-09-30T20:00:00'
+            const txDate = new Date(tx.date + 'T00:00:00');
+            const start = dateRange.start ? new Date(dateRange.start + 'T00:00:00') : null;
+            const end = dateRange.end ? new Date(dateRange.end + 'T00:00:00') : null;
+            if (start && txDate < start) return false;
+            if (end && txDate > end) return false;
+            return true;
+        });
+    }, [statement.transactions, dateRange]);
+
+
     const {
         monthlyCashflow,
         passiveIncome,
         totalExpenses,
         netWorth,
     } = useMemo(() => {
-        // If a team is passed, calculate totals for the entire team.
-        // Otherwise, calculate totals for the current user's share.
         if (team) {
-            const teamPassiveIncome = statement.transactions
+            const teamPassiveIncome = filteredTransactions
                 .filter(t => t.type === TransactionType.INCOME && t.isPassive)
                 .reduce((sum, t) => sum + t.amount, 0);
-            const teamTotalExpenses = statement.transactions
+            const teamTotalExpenses = filteredTransactions
                 .filter(t => t.type === TransactionType.EXPENSE)
                 .reduce((sum, t) => sum + t.amount, 0);
-            const teamTotalIncome = statement.transactions
+            const teamTotalIncome = filteredTransactions
                 .filter(t => t.type === TransactionType.INCOME)
                 .reduce((sum, t) => sum + t.amount, 0);
             const teamMonthlyCashflow = teamTotalIncome - teamTotalExpenses;
@@ -71,12 +91,11 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
             };
 
         } else {
-            // User-specific calculation
             let userTotalIncome = 0;
             let userPassiveIncome = 0;
             let userTotalExpenses = 0;
 
-            statement.transactions.forEach(t => {
+            filteredTransactions.forEach(t => {
                 const userPaymentShare = t.paymentShares.find(s => s.userId === user.id)?.amount || 0;
                 const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
 
@@ -99,25 +118,37 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                 netWorth
             };
         }
-    }, [statement, user.id, team]);
+    }, [filteredTransactions, statement.assets, statement.liabilities, user.id, team]);
 
     const sortedTransactions = useMemo(() => {
-        return [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [statement.transactions]);
+        return [...filteredTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [filteredTransactions]);
 
     return (
         <div className="animate-fade-in space-y-6">
             <h1 className="text-3xl font-bold text-cosmic-text-primary">Financial Statement</h1>
             
+            <div className="bg-cosmic-surface p-4 rounded-lg border border-cosmic-border flex items-center gap-4 flex-wrap text-sm">
+                <h3 className="text-cosmic-text-secondary font-semibold">Filter by date:</h3>
+                <div className="flex items-center gap-2">
+                    <label htmlFor="startDate" className="text-cosmic-text-secondary">From:</label>
+                    <input type="date" name="start" value={dateRange.start} onChange={handleDateChange} className="bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-cosmic-text-primary date-input" />
+                </div>
+                 <div className="flex items-center gap-2">
+                    <label htmlFor="endDate" className="text-cosmic-text-secondary">To:</label>
+                    <input type="date" name="end" value={dateRange.end} onChange={handleDateChange} className="bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-cosmic-text-primary date-input" />
+                </div>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Monthly Cash Flow" value={`$${monthlyCashflow.toFixed(2)}`} color={monthlyCashflow >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'} />
-                <StatCard title="Passive Income" value={`$${passiveIncome.toFixed(2)}`} color="text-cosmic-primary" />
-                <StatCard title="Total Expenses" value={`$${totalExpenses.toFixed(2)}`} color="text-cosmic-secondary" />
-                <StatCard title="Net Worth" value={`$${netWorth.toFixed(2)}`} color="text-white" />
+                <StatCard title="Cash Flow (for period)" value={`$${monthlyCashflow.toFixed(2)}`} color={monthlyCashflow >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'} />
+                <StatCard title="Passive Income (for period)" value={`$${passiveIncome.toFixed(2)}`} color="text-cosmic-primary" />
+                <StatCard title="Expenses (for period)" value={`$${totalExpenses.toFixed(2)}`} color="text-cosmic-secondary" />
+                <StatCard title="Total Net Worth" value={`$${netWorth.toFixed(2)}`} color="text-white" />
             </div>
 
             <div className="bg-cosmic-surface rounded-lg border border-cosmic-border overflow-hidden">
-                <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">All Transactions</h3>
+                <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Transactions (for period)</h3>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-cosmic-bg text-left text-cosmic-text-secondary">
@@ -141,10 +172,11 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                         </tbody>
                     </table>
                      {sortedTransactions.length === 0 && (
-                        <p className="text-center py-8 text-cosmic-text-secondary">No transactions recorded yet.</p>
+                        <p className="text-center py-8 text-cosmic-text-secondary">No transactions recorded for this period.</p>
                     )}
                 </div>
             </div>
+            <style>{`.date-input::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; }`}</style>
         </div>
     );
 };

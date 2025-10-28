@@ -50,8 +50,9 @@ export const BudgetView: React.FC<BudgetViewProps> = ({ user, onSaveBudget, onOp
             return acc;
         }, {} as Partial<Record<BudgetCategory, number>>);
 
-        const totalSpent = Object.values(expensesByCategory).reduce((sum, amount) => sum + amount, 0);
-        const totalBudgeted = Object.values(currentBudget.limits).reduce((sum, limit) => sum + (limit || 0), 0);
+        // FIX: Ensure values are treated as numbers to avoid type errors.
+        const totalSpent = Object.values(expensesByCategory).reduce((sum, amount) => sum + Number(amount || 0), 0);
+        const totalBudgeted = Object.values(currentBudget.limits).reduce((sum, limit) => sum + Number(limit || 0), 0);
 
         return {
             budget: currentBudget,

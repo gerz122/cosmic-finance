@@ -7,27 +7,33 @@ interface AccountsViewProps {
     accounts: Account[];
     onAddAccount: () => void;
     onOpenAccountTransactions: (account: Account) => void;
+    onEditAccount: (account: Account) => void;
 }
 
-const AccountCard: React.FC<{account: Account, onClick: () => void}> = ({ account, onClick }) => {
+const AccountCard: React.FC<{account: Account, onClick: () => void, onEdit: (e: React.MouseEvent) => void}> = ({ account, onClick, onEdit }) => {
     const isNegative = account.balance < 0 && account.type !== AccountType.LOAN && account.type !== AccountType.CREDIT_CARD;
     const isLiability = account.type === AccountType.LOAN || account.type === AccountType.CREDIT_CARD;
     const balanceColor = isNegative || isLiability ? 'text-cosmic-danger' : 'text-cosmic-success';
 
     return (
-        <button onClick={onClick} className="bg-cosmic-surface p-4 rounded-lg border border-cosmic-border flex justify-between items-center w-full text-left hover:border-cosmic-primary transition-colors transform hover:-translate-y-1">
-            <div>
-                <p className="font-bold text-cosmic-text-primary">{account.name}</p>
-                <p className="text-sm text-cosmic-text-secondary">{account.type}</p>
-            </div>
-            <p className={`text-2xl font-semibold ${balanceColor}`}>
-                {isLiability && account.balance > 0 ? `-$${account.balance.toFixed(2)}` : `$${account.balance.toFixed(2)}`}
-            </p>
-        </button>
+        <div className="bg-cosmic-surface p-4 rounded-lg border border-cosmic-border flex flex-col justify-between w-full text-left hover:border-cosmic-primary transition-colors transform hover:-translate-y-1 group">
+            <button onClick={onClick} className="w-full text-left flex justify-between items-start">
+                 <div>
+                    <p className="font-bold text-cosmic-text-primary">{account.name}</p>
+                    <p className="text-sm text-cosmic-text-secondary">{account.type}</p>
+                </div>
+                <p className={`text-2xl font-semibold ${balanceColor}`}>
+                    {isLiability && account.balance > 0 ? `-$${account.balance.toFixed(2)}` : `$${account.balance.toFixed(2)}`}
+                </p>
+            </button>
+            <button onClick={onEdit} className="text-xs text-yellow-500 hover:underline self-start mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                Edit
+            </button>
+        </div>
     );
 }
 
-export const AccountsView: React.FC<AccountsViewProps> = ({ accounts = [], onAddAccount, onOpenAccountTransactions }) => {
+export const AccountsView: React.FC<AccountsViewProps> = ({ accounts = [], onAddAccount, onOpenAccountTransactions, onEditAccount }) => {
     return (
         <div className="animate-fade-in space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
@@ -43,7 +49,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({ accounts = [], onAdd
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {accounts.length > 0 ? (
-                    accounts.map(acc => <AccountCard key={acc.id} account={acc} onClick={() => onOpenAccountTransactions(acc)} />)
+                    accounts.map(acc => <AccountCard key={acc.id} account={acc} onClick={() => onOpenAccountTransactions(acc)} onEdit={(e) => { e.stopPropagation(); onEditAccount(acc); }} />)
                 ) : (
                     <div className="col-span-full bg-cosmic-surface p-8 rounded-lg border border-dashed border-cosmic-border text-center">
                         <CreditCardIcon className="w-12 h-12 mx-auto text-cosmic-text-secondary mb-4" />

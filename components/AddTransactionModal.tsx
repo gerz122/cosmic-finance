@@ -28,6 +28,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
     const [isPassive, setIsPassive] = useState(false);
     const [teamId, setTeamId] = useState(defaultTeamId || '');
+    const [receiptImage, setReceiptImage] = useState<string | null>(null);
 
     const [paymentShares, setPaymentShares] = useState<PaymentShare[]>([{ userId: currentUser.id, accountId: '', amount: 0 }]);
     const [expenseShares, setExpenseShares] = useState<ExpenseShare[]>([{ userId: currentUser.id, amount: 0 }]);
@@ -53,12 +54,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                 setTeamId(transactionToEdit.teamId || '');
                 setPaymentShares(transactionToEdit.paymentShares);
                 setExpenseShares(transactionToEdit.expenseShares || contextMembers.map(m => ({ userId: m.id, amount: 0 })));
+                setReceiptImage(transactionToEdit.receiptUrl || null);
                 setSplitEqually(false); // Default to custom split when editing
             } else {
                 setDescription(''); setTotalAmount(''); setCategoryInput('');
                 setDate(new Date().toISOString().split('T')[0]);
                 setType(TransactionType.EXPENSE); setIsPassive(false);
                 setTeamId(defaultTeamId || '');
+                setReceiptImage(null);
                 const initialAccountId = teamId 
                     ? teams.find(t => t.id === teamId)?.accounts[0]?.id || ''
                     : currentUser.accounts?.[0]?.id || '';
@@ -92,6 +95,17 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         const newShares = [...expenseShares];
         newShares[index].amount = parseFloat(value) || 0;
         setExpenseShares(newShares);
+    };
+    
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setReceiptImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -128,6 +142,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             isPassive: type === TransactionType.INCOME ? isPassive : undefined,
             paymentShares: paymentShares,
             expenseShares: finalExpenseShares,
+            receiptUrl: receiptImage || undefined,
         };
 
         if (isEditing && transactionToEdit) {
@@ -171,6 +186,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div><label htmlFor="date" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Date</label><input type="date" id="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary date-input" required /></div>
                          {type === TransactionType.INCOME && (<div className="self-center"><label className="flex items-center"><input type="checkbox" checked={isPassive} onChange={(e) => setIsPassive(e.target.checked)} className="w-4 h-4 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary" /><span className="ml-2 text-sm text-cosmic-text-secondary">Is this passive income?</span></label></div>)}
+                    </div>
+
+                    <div>
+                        <label htmlFor="receipt" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Receipt (Optional)</label>
+                        <div className="flex items-center gap-4">
+                            <input type="file" id="receipt" onChange={handleFileChange} accept="image/*" className="w-full text-sm text-cosmic-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cosmic-primary file:text-white hover:file:bg-blue-400"/>
+                            {receiptImage && <img src={receiptImage} alt="Receipt preview" className="w-16 h-16 object-cover rounded-md border border-cosmic-border" />}
+                        </div>
                     </div>
 
                     <div className="space-y-3 pt-3 border-t border-cosmic-border">

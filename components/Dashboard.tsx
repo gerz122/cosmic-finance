@@ -50,6 +50,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, effectiveStatement, 
         const passiveIncome = statement.transactions.filter(t => t.type === TransactionType.INCOME && t.isPassive).reduce((sum, t) => sum + Number(t.amount), 0);
         const totalExpenses = statement.transactions.filter(t => t.type === TransactionType.EXPENSE).reduce((sum, t) => sum + Number(t.amount), 0);
         const totalIncome = statement.transactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + Number(t.amount), 0);
+        // FIX: Ensure values are treated as numbers during arithmetic operations.
         const totalAssets = statement.assets.reduce((sum, a) => sum + Number(a.value), 0);
         const totalLiabilities = statement.liabilities.reduce((sum, l) => sum + Number(l.balance), 0);
         const netWorth = totalAssets - totalLiabilities;

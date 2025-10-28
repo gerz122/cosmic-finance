@@ -17,7 +17,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ 
 
     return (
         <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
-            <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-lg shadow-2xl p-6 m-4 animate-slide-in-up" onClick={e => e.stopPropagation()}>
+            <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-lg shadow-2xl p-6 m-4 animate-slide-in-up max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold text-cosmic-text-primary">Transaction Details</h2>
                     <button onClick={onClose} className="text-cosmic-text-secondary hover:text-cosmic-text-primary">
@@ -78,6 +78,15 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ 
                             </div>
                         )}
                     </div>
+
+                    {transaction.receiptUrl && (
+                        <div className="p-4 bg-cosmic-bg rounded-lg">
+                            <p className="text-sm text-cosmic-text-secondary mb-2">Receipt</p>
+                            <a href={transaction.receiptUrl} target="_blank" rel="noopener noreferrer">
+                                <img src={transaction.receiptUrl} alt="Receipt" className="max-w-full h-auto rounded-md border border-cosmic-border" />
+                            </a>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

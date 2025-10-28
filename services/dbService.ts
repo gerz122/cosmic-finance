@@ -243,6 +243,40 @@ export const dbService = {
         await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
+
+    updateAccount: async (updatedAccount: Account, allUsers: User[]): Promise<User[]> => {
+        const usersToUpdate = new Map<string, User>();
+        updatedAccount.ownerIds.forEach(ownerId => {
+            const user = allUsers.find(u => u.id === ownerId);
+            if(user) {
+                usersToUpdate.set(ownerId, JSON.parse(JSON.stringify(user)));
+            }
+        });
+
+        if (usersToUpdate.size === 0) throw new Error("Account owner(s) not found");
+
+        usersToUpdate.forEach(user => {
+            const accountIndex = user.accounts.findIndex(a => a.id === updatedAccount.id);
+            if (accountIndex > -1) {
+                user.accounts[accountIndex] = updatedAccount;
+            } else {
+                // This case should ideally not happen if data is consistent
+                user.accounts.push(updatedAccount);
+            }
+        });
+        
+        const batchOp = writeBatch(db);
+        usersToUpdate.forEach(user => {
+            const userRef = doc(db, 'users', user.id);
+            batchOp.set(userRef, sanitizeForFirestore(user));
+        });
+
+        await batchOp.commit();
+
+        // Return a fresh copy of all users reflecting the change
+        const finalUsers = allUsers.map(u => usersToUpdate.get(u.id) || u);
+        return finalUsers;
+    },
     
     _findTransactionAndContext: (txId: string, users: User[], teams: Team[]): { transaction: Transaction, context: User | Team, isTeam: boolean } | null => {
         for (const user of users) {
