@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SparklesIcon, UploadIcon } from './icons';
 import { parseStatementWithGemini } from '../services/geminiService';
+import type { User } from '../types';
 
 interface ParsedTransaction {
     id: number;
@@ -14,7 +15,13 @@ interface ParsedTransaction {
 
 const defaultCategories = ['Food', 'Transportation', 'Shopping', 'Job', 'Utilities', 'Entertainment', 'Transfer', 'Other'];
 
-export const StatementImporter: React.FC = () => {
+// FIX: Added props to the component to accept `user` and `onImport`.
+interface StatementImporterProps {
+    user: User;
+    onImport: (transactions: ParsedTransaction[]) => void;
+}
+
+export const StatementImporter: React.FC<StatementImporterProps> = ({ user, onImport }) => {
     const [text, setText] = useState('');
     const [fileName, setFileName] = useState('');
     const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
@@ -66,8 +73,9 @@ export const StatementImporter: React.FC = () => {
         );
     };
 
-    const handleImport = () => {
+    const handleImportClick = () => {
         // In a real implementation, this would save the `parsedTransactions` array to the database.
+        onImport(parsedTransactions);
         alert(`Importing ${parsedTransactions.length} transactions! (This is a demo)`);
         setParsedTransactions([]);
         setText('');
@@ -182,7 +190,7 @@ export const StatementImporter: React.FC = () => {
                         </table>
                     </div>
                     <div className="flex justify-end mt-4">
-                        <button onClick={handleImport} className="bg-cosmic-success text-white font-bold py-2 px-6 rounded-lg hover:bg-green-600 transition-colors">
+                        <button onClick={handleImportClick} className="bg-cosmic-success text-white font-bold py-2 px-6 rounded-lg hover:bg-green-600 transition-colors">
                             Import {parsedTransactions.length} Transactions
                         </button>
                     </div>

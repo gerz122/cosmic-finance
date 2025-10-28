@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import type { User, Transaction, FinancialStatement, HistoricalDataPoint, Team } from '../types';
 import { TransactionType, AssetType } from '../types';
 import { StarIcon, PlusIcon, SparklesIcon } from './icons';
@@ -17,6 +17,7 @@ interface DashboardProps {
     onCategoryClick: (category: string) => void;
     onTransactionClick: (transaction: Transaction) => void;
     onStatCardClick: (stat: 'netWorth' | 'cashflow' | 'passiveIncome') => void;
+    onShowFreedomModal: () => void;
 }
 
 const StatCard: React.FC<{ title: string; value: React.ReactNode; subtitle?: string; color: string; onClick?: () => void }> = ({ title, value, subtitle, color, onClick }) => (
@@ -44,7 +45,7 @@ const ProgressBar: React.FC<{ value: number; max: number; }> = ({ value, max }) 
     );
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStatement, historicalData, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStatement, historicalData, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick, onShowFreedomModal }) => {
 
     const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks, expenseBreakdown } = useMemo(() => {
         const statement = effectiveStatement;
@@ -110,7 +111,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         const calculatedNetWorth = totalAssets - totalLiabilities;
         
         const recentTransactions = [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
-        const stocks = user.financialStatement.assets.filter(a => a.type === AssetType.STOCK); // Portfolio PL should only show personal stocks
+        const stocks = user.financialStatement.assets.filter(a => a.type === AssetType.STOCK);
         
         return { 
             passiveIncome: calculatedPassiveIncome, 
@@ -122,9 +123,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
             expenseBreakdown: calculatedExpenseBreakdown
         };
     }, [user, teams, effectiveStatement]);
+    
+    // Check for financial freedom
+    useEffect(() => {
+        if (passiveIncome > 0 && totalExpenses > 0 && passiveIncome >= totalExpenses) {
+            onShowFreedomModal();
+        }
+    }, [passiveIncome, totalExpenses, onShowFreedomModal]);
 
     const freedomPercentage = totalExpenses > 0 ? Math.round((passiveIncome / totalExpenses) * 100) : (passiveIncome > 0 ? 100 : 0);
-
     const expenseChartColors = ['#58A6FF', '#F778BA', '#3FB950', '#F85149', '#A371F7', '#E3B341', '#1F6FEB', '#F28C38'];
 
     const expenseChartData = useMemo(() => {
@@ -138,17 +145,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
     }, [expenseBreakdown]);
 
     const totalExpensesForChart = useMemo(() => expenseChartData.reduce((sum, item) => sum + item.value, 0), [expenseChartData]);
-
-    const netWorthChartData = useMemo(() => {
-        let lastKnownNetWorth: number | undefined = undefined;
-        return historicalData.map(point => {
-            if (point.netWorth !== undefined) {
-                lastKnownNetWorth = point.netWorth as number;
-            }
-            return { date: point.date, value: lastKnownNetWorth };
-        }).filter(point => point.value !== undefined);
-    }, [historicalData]);
-
 
     return (
         <div className="animate-fade-in space-y-8">

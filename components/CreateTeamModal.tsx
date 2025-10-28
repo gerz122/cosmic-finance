@@ -1,42 +1,43 @@
 import React, { useState } from 'react';
 import type { User } from '../types';
-import { XIcon } from './icons';
+import { XIcon, PlusIcon } from './icons';
 
 interface CreateTeamModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onCreateTeam: (name: string, memberIds: string[]) => void;
-    allUsers: User[];
+    onCreateTeam: (name: string, invitedEmails: string[]) => void;
     currentUser: User;
 }
 
-export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClose, onCreateTeam, allUsers, currentUser }) => {
+export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClose, onCreateTeam, currentUser }) => {
     const [name, setName] = useState('');
-    const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
-    
+    const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
+    const [currentEmail, setCurrentEmail] = useState('');
+
     if (!isOpen) return null;
 
-    const handleToggleMember = (userId: string) => {
-        setSelectedMemberIds(prev => {
-            const newSet = new Set(prev);
-            if(newSet.has(userId)) {
-                newSet.delete(userId);
-            } else {
-                newSet.add(userId);
-            }
-            return newSet;
-        });
+    const handleAddEmail = () => {
+        // FIX: Check if currentUser.email exists before comparing.
+        if (currentEmail && !invitedEmails.includes(currentEmail) && currentEmail !== currentUser.email) { // Assuming user has an email property
+            setInvitedEmails([...invitedEmails, currentEmail]);
+            setCurrentEmail('');
+        }
+    };
+
+    const handleRemoveEmail = (emailToRemove: string) => {
+        setInvitedEmails(invitedEmails.filter(email => email !== emailToRemove));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if(!name || (selectedMemberIds.size === 0 && allUsers.length > 1)) {
-            alert("Please provide a team name and select at least one other member.");
+        if (!name) {
+            alert("Please provide a team name.");
             return;
         }
-        onCreateTeam(name, Array.from(selectedMemberIds));
+        onCreateTeam(name, invitedEmails);
         setName('');
-        setSelectedMemberIds(new Set());
+        setInvitedEmails([]);
+        setCurrentEmail('');
         onClose();
     };
 
@@ -55,22 +56,33 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
                         <input type="text" id="teamName" value={name} onChange={e => setName(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" required />
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-cosmic-text-secondary mb-2">Invite Members</label>
-                        <div className="space-y-2 bg-cosmic-bg p-3 rounded-lg max-h-48 overflow-y-auto">
-                            {allUsers.filter(u => u.id !== currentUser.id).map(user => (
-                                <label key={user.id} className="flex items-center gap-3 p-2 rounded hover:bg-cosmic-border cursor-pointer">
-                                     <input 
-                                        type="checkbox"
-                                        checked={selectedMemberIds.has(user.id)}
-                                        onChange={() => handleToggleMember(user.id)}
-                                        className="w-5 h-5 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary"
-                                    />
-                                    <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full" />
-                                    <span className="text-cosmic-text-primary">{user.name}</span>
-                                </label>
-                            ))}
+                        <label htmlFor="inviteEmail" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Invite Members by Email</label>
+                        <div className="flex gap-2">
+                            <input
+                                type="email"
+                                id="inviteEmail"
+                                value={currentEmail}
+                                onChange={e => setCurrentEmail(e.target.value)}
+                                placeholder="player@email.com"
+                                className="flex-grow bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary"
+                            />
+                            <button type="button" onClick={handleAddEmail} className="p-2 bg-cosmic-primary rounded-md text-white hover:bg-blue-400">
+                                <PlusIcon className="w-5 h-5" />
+                            </button>
                         </div>
                     </div>
+                    {invitedEmails.length > 0 && (
+                        <div className="space-y-2 bg-cosmic-bg p-3 rounded-lg max-h-40 overflow-y-auto">
+                            {invitedEmails.map(email => (
+                                <div key={email} className="flex items-center justify-between p-1">
+                                    <span className="text-sm text-cosmic-text-primary">{email}</span>
+                                    <button type="button" onClick={() => handleRemoveEmail(email)} className="text-cosmic-text-secondary hover:text-cosmic-danger">
+                                        <XIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border">Cancel</button>
                         <button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400">Create Team</button>

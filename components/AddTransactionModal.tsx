@@ -26,6 +26,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     const [isPassive, setIsPassive] = useState(false);
     const [teamId, setTeamId] = useState(defaultTeamId || '');
     const [receiptImage, setReceiptImage] = useState<string | null>(null);
+    const [isTaxDeductible, setIsTaxDeductible] = useState(false);
+
 
     const [paymentShares, setPaymentShares] = useState<PaymentShare[]>([{ userId: currentUser.id, accountId: '', amount: 0 }]);
     const [expenseShares, setExpenseShares] = useState<ExpenseShare[]>([{ userId: currentUser.id, amount: 0 }]);
@@ -116,6 +118,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             paymentShares,
             expenseShares,
             receiptUrl: finalReceiptUrl,
+            isTaxDeductible,
         };
 
         if (isEditing) {
@@ -158,13 +161,65 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* ... (other form fields like description, amount, etc.) */}
-                    {/* For brevity, keeping only changed parts */}
 
-                    <div>
-                        <label htmlFor="receipt" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Receipt</label>
-                        <input type="file" id="receipt" onChange={handleFileChange} accept="image/*" className="w-full text-sm text-cosmic-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cosmic-primary file:text-white hover:file:bg-blue-400"/>
-                        {receiptImage && <img src={receiptImage} alt="Receipt preview" className="mt-2 h-24 w-auto rounded" />}
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center gap-4 bg-cosmic-bg border border-cosmic-border rounded-md p-1">
+                            <button type="button" onClick={() => setType(TransactionType.EXPENSE)} className={`w-1/2 rounded p-2 font-semibold text-sm ${type === TransactionType.EXPENSE ? 'bg-cosmic-danger text-white' : 'text-cosmic-text-secondary'}`}>Expense</button>
+                            <button type="button" onClick={() => setType(TransactionType.INCOME)} className={`w-1/2 rounded p-2 font-semibold text-sm ${type === TransactionType.INCOME ? 'bg-cosmic-success text-white' : 'text-cosmic-text-secondary'}`}>Income</button>
+                        </div>
+                         <div>
+                            <label htmlFor="teamId" className="block text-sm font-medium text-cosmic-text-secondary mb-1">For</label>
+                            <select id="teamId" value={teamId} onChange={e => setTeamId(e.target.value)} disabled={!!defaultTeamId} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 disabled:bg-cosmic-border">
+                                <option value="">Personal</option>
+                                {teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                            </select>
+                        </div>
                     </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="md:col-span-2">
+                             <label htmlFor="description" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Description</label>
+                            <input type="text" id="description" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required/>
+                        </div>
+                        <div>
+                             <label htmlFor="amount" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Total Amount</label>
+                            <input type="number" id="amount" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} min="0.01" step="0.01" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required/>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                             <label htmlFor="category" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Category</label>
+                            <input type="text" id="category" value={categoryInput} onChange={e => setCategoryInput(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required/>
+                        </div>
+                        <div>
+                            <label htmlFor="date" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Date</label>
+                            <input type="date" id="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 date-input" required/>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                        {type === TransactionType.INCOME &&
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={isPassive} onChange={e => setIsPassive(e.target.checked)} className="w-5 h-5 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary" />
+                                <span className="text-sm font-medium text-cosmic-text-primary">Is this passive income?</span>
+                            </label>
+                        }
+                         {type === TransactionType.EXPENSE &&
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={isTaxDeductible} onChange={e => setIsTaxDeductible(e.target.checked)} className="w-5 h-5 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary" />
+                                <span className="text-sm font-medium text-cosmic-text-primary">Is this tax deductible?</span>
+                            </label>
+                        }
+                         <div>
+                            <label htmlFor="receipt" className="cursor-pointer text-sm text-cosmic-primary hover:underline">
+                                {receiptImage ? 'Change Receipt' : 'Attach Receipt'}
+                            </label>
+                            <input type="file" id="receipt" onChange={handleFileChange} accept="image/*" className="hidden"/>
+                            {receiptImage && <img src={receiptImage} alt="Receipt preview" className="mt-2 h-16 w-auto rounded" />}
+                        </div>
+                    </div>
+                    
 
                     {type === TransactionType.EXPENSE && (
                          <div className="space-y-3 pt-3 border-t border-cosmic-border">

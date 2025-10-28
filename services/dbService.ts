@@ -1,23 +1,10 @@
 import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, Budget, Goal } from '../types';
 import { TransactionType } from '../types';
-import { db, storage } from './firebase';
-import { collection, getDocs, getDoc, doc, where, query, writeBatch, setDoc, deleteDoc, runTransaction, documentId, addDoc } from 'firebase/firestore';
+import { auth, db, storage } from './firebase';
+import { collection, getDocs, getDoc, doc, where, query, writeBatch, setDoc, deleteDoc, runTransaction, documentId, addDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from "firebase/storage";
-
-// This data is ONLY used to populate a fresh database for a NEW user.
-const initialUserData = {
-    accounts: [
-        { name: 'My Checking Account', type: 'Checking', balance: 1000 },
-        { name: 'My Savings Account', type: 'Savings', balance: 5000 },
-        { name: 'My Credit Card', type: 'Credit Card', balance: 500 },
-    ],
-    financialStatement: {
-        transactions: [], assets: [], liabilities: []
-    },
-    budgets: [],
-    goals: [],
-    achievements: []
-};
+import { initialDataForGerman, initialDataForValeria } from './initial.data';
+import { sendPasswordResetEmail } from 'firebase/auth';
 
 
 // --- AUTHENTICATION & USER DATA ---
@@ -26,25 +13,37 @@ export const createNewUser = async (uid: string, name: string, email: string): P
     const newUserRef = doc(db, 'users', uid);
     const avatar = `https://api.dicebear.com/8.x/pixel-art/svg?seed=${name}`;
     
-    const newUser: Omit<User, 'accounts' | 'financialStatement' | 'budgets' | 'goals'> = {
+    // Special migration for German and Valeria
+    if (email === 'gerzbogado@gmail.com') {
+        await setDoc(newUserRef, initialDataForGerman(uid, name, avatar, email));
+        console.log("Migrated data for German.");
+        return getUserData(uid);
+    }
+    if (email === 'valeriasisterna01@gmail.com') {
+        await setDoc(newUserRef, initialDataForValeria(uid, name, avatar, email));
+        console.log("Migrated data for Valeria.");
+        return getUserData(uid);
+    }
+    
+    // Standard new user setup
+    const newUser: Omit<User, 'financialStatement' | 'accounts' | 'budgets' | 'goals'> = {
         id: uid,
         name,
+        email,
         avatar,
         teamIds: [],
         achievements: [],
+        onboardingCompleted: false,
     };
-    
     await setDoc(newUserRef, newUser);
-
-    const batch = writeBatch(db);
-    initialUserData.accounts.forEach(acc => {
-        const accountRef = doc(collection(db, `users/${uid}/accounts`));
-        batch.set(accountRef, { ...acc, ownerIds: [uid] });
-    });
-    await batch.commit();
-    
+    // You can add default accounts or other initial data here if needed
     return getUserData(uid);
 };
+
+export const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+};
+
 
 export const getUserData = async (uid: string): Promise<User> => {
     const userRef = doc(db, 'users', uid);
@@ -56,15 +55,14 @@ export const getUserData = async (uid: string): Promise<User> => {
 
     const userData = { id: userDoc.id, ...userDoc.data() } as User;
 
-    // Fetch subcollections
+    // Fetch subcollections if they exist, otherwise initialize
     const accountsSnap = await getDocs(collection(db, `users/${uid}/accounts`));
     userData.accounts = accountsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
     
     // In a full implementation, you'd also fetch financialStatement items, budgets, and goals
-    // For now, we initialize them as empty.
-    userData.financialStatement = { transactions: [], assets: [], liabilities: [] };
-    userData.budgets = [];
-    userData.goals = [];
+    userData.financialStatement = { transactions: [], assets: [], liabilities: [] }; // Keep this lightweight for now
+    userData.budgets = userData.budgets || [];
+    userData.goals = userData.goals || [];
 
     return userData;
 };
@@ -76,6 +74,39 @@ export const getUsers = async (uids: string[]): Promise<User[]> => {
     const userSnapshot = await getDocs(usersQuery);
     return userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
 };
+
+export const findUserByEmail = async (email: string): Promise<{id: string, name: string} | null> => {
+    const usersQuery = query(collection(db, 'users'), where('email', '==', email));
+    const snapshot = await getDocs(usersQuery);
+    if (snapshot.empty) {
+        return null;
+    }
+    const userDoc = snapshot.docs[0];
+    return { id: userDoc.id, name: userDoc.data().name };
+};
+
+export const addMemberToTeam = async (teamId: string, userId: string) => {
+    const teamRef = doc(db, 'teams', teamId);
+    const userRef = doc(db, 'users', userId);
+
+    await runTransaction(db, async (transaction) => {
+        const teamDoc = await transaction.get(teamRef);
+        const userDoc = await transaction.get(userRef);
+        if (!teamDoc.exists() || !userDoc.exists()) {
+            throw "Team or User not found!";
+        }
+
+        const teamData = teamDoc.data() as Team;
+        const userData = userDoc.data() as User;
+        
+        const newMemberIds = [...new Set([...teamData.memberIds, userId])];
+        const newTeamIds = [...new Set([...userData.teamIds, teamId])];
+
+        transaction.update(teamRef, { memberIds: newMemberIds });
+        transaction.update(userRef, { teamIds: newTeamIds });
+    });
+};
+
 
 export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
     const teamsQuery = query(collection(db, 'teams'), where('memberIds', 'array-contains', userId));
@@ -102,23 +133,21 @@ export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
 
 // --- TRANSACTIONS ---
 
-export const addTransaction = async (userId: string, transaction: Omit<Transaction, 'id'>, users: User[]): Promise<User[]> => {
-    console.warn("addTransaction (personal) only updates account balances. Persist personal transactions if needed.");
-    const newTx: Transaction = { ...transaction, id: `tx-${Date.now()}` };
-
-    for (const share of newTx.paymentShares) {
+export const addTransaction = async (userId: string, transaction: Omit<Transaction, 'id'>): Promise<void> => {
+     console.warn("addTransaction (personal) only updates account balances. Persist personal transactions if needed.");
+     // This logic would need to be built out to save personal transactions to a subcollection in the user document.
+     // For now, we just update balances.
+    for (const share of transaction.paymentShares) {
         const accountRef = doc(db, `users/${share.userId}/accounts`, share.accountId);
         await runTransaction(db, async (t) => {
             const accountDoc = await t.get(accountRef);
             if (accountDoc.exists()) {
                 const currentBalance = accountDoc.data().balance;
-                const newBalance = currentBalance + (newTx.type === TransactionType.INCOME ? share.amount : -share.amount);
+                const newBalance = currentBalance + (transaction.type === TransactionType.INCOME ? share.amount : -share.amount);
                 t.update(accountRef, { balance: newBalance });
             }
         });
     }
-    // This is a mock update and should be improved
-    return JSON.parse(JSON.stringify(users));
 };
 
 export const addTeamTransaction = async (transaction: Omit<Transaction, 'id'>): Promise<Transaction> => {
@@ -126,26 +155,11 @@ export const addTeamTransaction = async (transaction: Omit<Transaction, 'id'>): 
     
     const collectionRef = collection(db, `teams/${transaction.teamId}/transactions`);
     const newDocRef = await addDoc(collectionRef, transaction);
-    const newTx: Transaction = { ...transaction, id: newDocRef.id };
-
-    // Update account balances
-    for (const share of newTx.paymentShares) {
-        // Assuming team accounts are stored under a 'teams' collection at the root
-        // This logic might need adjustment based on final data structure
-        const ownerId = (await getDoc(doc(db, 'teams', transaction.teamId))).data()?.memberIds[0]; // Simplified assumption
-        const accountRef = doc(db, `users/${ownerId}/accounts`, share.accountId); // This needs fixing if teams have own accounts
-        
-        await runTransaction(db, async (t) => {
-            const accountDoc = await t.get(accountRef);
-            if (accountDoc.exists()) {
-                const currentBalance = accountDoc.data().balance;
-                const newBalance = currentBalance + (newTx.type === TransactionType.INCOME ? share.amount : -share.amount);
-                t.update(accountRef, { balance: newBalance });
-            }
-        });
-    }
     
-    return newTx;
+    // Balance updates are tricky for team accounts. This needs a robust implementation.
+    // For now, team account balances are not updated automatically by transactions.
+    
+    return { ...transaction, id: newDocRef.id };
 };
 
 
@@ -162,15 +176,15 @@ export const updateTransaction = async (transaction: Transaction): Promise<void>
 
 export const deleteTransaction = async (transaction: Transaction): Promise<void> => {
     if (transaction.teamId) {
-        // Reverse balance changes
-        for (const share of transaction.paymentShares) {
-            // This needs similar logic as addTeamTransaction to find the correct owner/account
-             console.warn("Account balance reversal for team transaction deletion is complex and not fully implemented.");
-        }
         await deleteDoc(doc(db, `teams/${transaction.teamId}/transactions`, transaction.id));
     } else {
         console.error("Cannot delete personal transaction or transaction not found.");
     }
+};
+
+export const updateUserField = async (userId: string, field: string, value: any): Promise<void> => {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, { [field]: value });
 };
 
 

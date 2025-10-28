@@ -55,6 +55,7 @@ export interface Transaction {
   receiptUrl?: string;
   paymentShares: PaymentShare[];
   expenseShares?: ExpenseShare[];
+  isTaxDeductible?: boolean;
 }
 
 export enum AssetType {
@@ -123,13 +124,16 @@ export interface Achievement {
 export interface User {
   id: string;
   name: string;
+  // FIX: Added email property to User type.
+  email: string;
   avatar: string;
   financialStatement: FinancialStatement;
   accounts: Account[];
-  teamIds?: string[];
+  teamIds: string[];
   budgets: Budget[];
   goals: Goal[];
   achievements: string[];
+  onboardingCompleted?: boolean;
 }
 
 export interface Team {

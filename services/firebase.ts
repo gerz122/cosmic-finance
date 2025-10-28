@@ -1,9 +1,8 @@
-// Import the functions you need from the SDKs you need
-// Fix: Corrected import statement for Firebase v9+ modular SDK.
-import { initializeApp } from 'firebase/app';
+// FIX: Use a namespace import for firebase/app to resolve a potential module resolution issue.
+import * as firebaseApp from 'firebase/app';
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getAuth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, sendPasswordResetEmail } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -16,13 +15,11 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = firebaseApp.initializeApp(firebaseConfig);
 
-// Initialize Cloud Firestore and get a reference to the service
 const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-
-// Export services for use in the app
-export { db, storage, auth };
+// Export services and providers for use in the app
+export { db, storage, auth, GoogleAuthProvider, sendPasswordResetEmail };

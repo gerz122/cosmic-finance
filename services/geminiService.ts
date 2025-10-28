@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
-import { AccountType } from '../types';
+import { AccountType, TransactionType } from '../types';
 
 let ai: GoogleGenAI | null = null;
 
@@ -17,13 +17,13 @@ if (process.env.API_KEY) {
 
 function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {
     const totalIncome = statement.transactions
-        .filter(t => t.type === 'INCOME' && !t.isPassive)
+        .filter(t => t.type === TransactionType.INCOME && !t.isPassive)
         .reduce((sum, t) => sum + t.amount, 0);
     const passiveIncome = statement.transactions
-        .filter(t => t.type === 'INCOME' && t.isPassive)
+        .filter(t => t.type === TransactionType.INCOME && t.isPassive)
         .reduce((sum, t) => sum + t.amount, 0);
     const totalExpenses = statement.transactions
-        .filter(t => t.type === 'EXPENSE')
+        .filter(t => t.type === TransactionType.EXPENSE)
         .reduce((sum, t) => sum + t.amount, 0);
     const netWorth = statement.assets.reduce((sum, a) => sum + a.value, 0) - statement.liabilities.reduce((sum, l) => sum + l.balance, 0);
     const cash = accounts
@@ -107,7 +107,9 @@ export const getCosmicEvent = async (statement: FinancialStatement, accounts: Ac
                                         type: Type.OBJECT,
                                         properties: {
                                             message: { type: Type.STRING },
-                                            cashChange: { type: Type.NUMBER, nullable: true },
+                                            // FIX: Removed `nullable: true` as it's not a valid property in the responseSchema.
+                                            // The property will be optional if it is not in the `required` array.
+                                            cashChange: { type: Type.NUMBER },
                                         },
                                         required: ['message']
                                     },
