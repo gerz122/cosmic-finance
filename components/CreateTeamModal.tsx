@@ -17,8 +17,7 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
     if (!isOpen) return null;
 
     const handleAddEmail = () => {
-        // FIX: Check if currentUser.email exists before comparing.
-        if (currentEmail && !invitedEmails.includes(currentEmail) && currentEmail !== currentUser.email) { // Assuming user has an email property
+        if (currentEmail && !invitedEmails.includes(currentEmail) && currentEmail !== currentUser.email) {
             setInvitedEmails([...invitedEmails, currentEmail]);
             setCurrentEmail('');
         }

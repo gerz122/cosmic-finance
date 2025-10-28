@@ -4,7 +4,6 @@ import { AccountType, TransactionType } from '../types';
 
 let ai: GoogleGenAI | null = null;
 
-// The environment variable for the Gemini API key is expected to be process.env.API_KEY
 if (process.env.API_KEY) {
   try {
     ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -107,8 +106,6 @@ export const getCosmicEvent = async (statement: FinancialStatement, accounts: Ac
                                         type: Type.OBJECT,
                                         properties: {
                                             message: { type: Type.STRING },
-                                            // FIX: Removed `nullable: true` as it's not a valid property in the responseSchema.
-                                            // The property will be optional if it is not in the `required` array.
                                             cashChange: { type: Type.NUMBER },
                                         },
                                         required: ['message']

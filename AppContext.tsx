@@ -5,6 +5,7 @@ import * as dbService from './services/dbService';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
 import { generateHistoricalData } from './utils/financialCalculations';
 import { getCosmicEvent } from './services/geminiService';
+// FIX: The Auth component now has a default export, so this import is correct.
 import Auth from './Auth';
 import Onboarding from './Onboarding';
 

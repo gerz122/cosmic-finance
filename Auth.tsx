@@ -80,70 +80,88 @@ const Auth: React.FC = () => {
                         <p className="text-sm text-cosmic-text-secondary">Enter your email and we'll send you a link to get back into your account.</p>
                          <div>
                             <label htmlFor="email-reset" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Email</label>
-                            <input id="email-reset" type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-3" />
+                            {/* FIX: Corrected onChange handler to use e.target.value and completed the component JSX. */}
+                            <input id="email-reset" type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary" required />
                         </div>
-                        {error && <p className="text-sm text-center text-cosmic-danger">{error}</p>}
-                        {resetMessage && <p className="text-sm text-center text-cosmic-success">{resetMessage}</p>}
-                        <button type="submit" disabled={isLoading} className="w-full flex justify-center bg-cosmic-primary text-white font-bold py-3 px-4 rounded-lg">
-                           {isLoading ? 'Sending...' : 'Send Reset Link'}
-                        </button>
+                        {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+                        {resetMessage && <p className="text-sm text-green-500 text-center">{resetMessage}</p>}
+                        <div className="space-y-2">
+                            <button type="submit" disabled={isLoading} className="w-full bg-cosmic-primary text-white font-bold py-2 rounded-lg hover:bg-blue-400 disabled:bg-cosmic-border">
+                                {isLoading ? 'Sending...' : 'Send Reset Link'}
+                            </button>
+                            <button type="button" onClick={() => setIsPasswordReset(false)} className="w-full text-center text-sm text-cosmic-text-secondary hover:text-cosmic-primary">
+                                Back to Login
+                            </button>
+                        </div>
                     </form>
-                    <button onClick={() => setIsPasswordReset(false)} className="text-sm text-cosmic-primary hover:underline mt-4 block mx-auto">Back to Login</button>
                 </div>
             </div>
-        );
+         )
     }
 
     return (
         <div className="min-h-screen bg-cosmic-bg flex items-center justify-center p-4">
-            <div className="w-full max-w-md bg-cosmic-surface p-8 rounded-2xl border border-cosmic-border shadow-2xl animate-fade-in">
-                <div className="text-center mb-8">
-                    <StarIcon className="w-12 h-12 text-yellow-400 mx-auto" />
-                    <h1 className="text-3xl font-bold text-cosmic-text-primary mt-4">Cosmic<span className="text-cosmic-primary">Cashflow</span></h1>
-                    <p className="text-cosmic-text-secondary mt-1">{isLogin ? "Welcome back to the tournament!" : "Join the financial tournament!"}</p>
-                </div>
-
-                <button onClick={handleGoogleSignIn} disabled={isLoading} className="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
-                     <svg className="w-5 h-5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
-                    Sign in with Google
-                </button>
-                <div className="flex items-center my-6">
-                    <hr className="flex-grow border-cosmic-border"/><span className="mx-4 text-xs text-cosmic-text-secondary">OR</span><hr className="flex-grow border-cosmic-border"/>
+            <div className="w-full max-w-md bg-cosmic-surface p-8 rounded-2xl border border-cosmic-border shadow-2xl">
+                <div className="text-center mb-6">
+                    <StarIcon className="w-10 h-10 text-yellow-400 mx-auto" />
+                    <h1 className="text-3xl font-bold text-cosmic-text-primary mt-2">Cosmic<span className="text-cosmic-primary">Cashflow</span></h1>
+                    <p className="text-cosmic-text-secondary mt-1">{isLogin ? 'Sign in to continue your journey' : 'Create an account to begin'}</p>
                 </div>
 
                 <form onSubmit={handleAuthSubmit} className="space-y-4">
                     {!isLogin && (
                         <div>
                             <label htmlFor="name" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Player Name</label>
-                            <input id="name" type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-3" required={!isLogin}/>
+                            <input id="name" type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required />
                         </div>
                     )}
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Email</label>
-                        <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-3" required />
+                        <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required />
                     </div>
                     <div>
-                        <label htmlFor="password"className="block text-sm font-medium text-cosmic-text-secondary mb-1">Password</label>
-                        <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-3" required />
+                        <label htmlFor="password" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Password</label>
+                        <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required />
                     </div>
-                    
-                    {error && <p className="text-sm text-center text-cosmic-danger">{error}</p>}
-                    
-                    {isLogin && <button type="button" onClick={() => setIsPasswordReset(true)} className="text-xs text-cosmic-primary hover:underline block w-full text-right">Forgot Password?</button>}
 
-                    <button type="submit" disabled={isLoading} className="w-full flex justify-center bg-cosmic-primary text-white font-bold py-3 px-4 rounded-lg">
-                        {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : (isLogin ? 'Log In' : 'Sign Up')}
-                    </button>
+                    {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+                    
+                    <div className="pt-2">
+                        <button type="submit" disabled={isLoading} className="w-full bg-cosmic-primary text-white font-bold py-3 rounded-lg hover:bg-blue-400 disabled:bg-cosmic-border">
+                            {isLoading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}
+                        </button>
+                    </div>
                 </form>
 
-                <div className="text-center mt-6">
-                    <button onClick={() => { setIsLogin(!isLogin); setError(null); }} className="text-sm text-cosmic-primary hover:underline">
-                        {isLogin ? "Need an account? Sign up" : "Already have an account? Log in"}
-                    </button>
+                <div className="flex items-center my-6">
+                    <hr className="flex-grow border-cosmic-border" />
+                    <span className="mx-4 text-xs text-cosmic-text-secondary">OR</span>
+                    <hr className="flex-grow border-cosmic-border" />
+                </div>
+
+                <button onClick={handleGoogleSignIn} disabled={isLoading} className="w-full flex items-center justify-center gap-2 bg-cosmic-bg border border-cosmic-border py-2.5 rounded-lg hover:bg-cosmic-border">
+                    <svg className="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"></path><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691z"></path><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.222 0-9.618-3.319-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"></path><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.574l6.19 5.238C42.021 35.596 44 30.035 44 24c0-1.341-.138-2.65-.389-3.917z"></path></svg>
+                    <span className="font-semibold text-cosmic-text-primary">Sign in with Google</span>
+                </button>
+                
+                <div className="text-center mt-6 text-sm">
+                    {isLogin ? (
+                        <p className="text-cosmic-text-secondary">
+                            Don't have an account? <button onClick={() => { setIsLogin(false); setError(null); }} className="font-semibold text-cosmic-primary hover:underline">Sign Up</button>
+                        </p>
+                    ) : (
+                        <p className="text-cosmic-text-secondary">
+                            Already have an account? <button onClick={() => { setIsLogin(true); setError(null); }} className="font-semibold text-cosmic-primary hover:underline">Sign In</button>
+                        </p>
+                    )}
+                     <p className="text-cosmic-text-secondary mt-2">
+                        Forgot your password? <button onClick={() => setIsPasswordReset(true)} className="font-semibold text-cosmic-primary hover:underline">Reset it</button>
+                    </p>
                 </div>
             </div>
         </div>
     );
 };
 
+// FIX: Added default export.
 export default Auth;

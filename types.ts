@@ -124,7 +124,6 @@ export interface Achievement {
 export interface User {
   id: string;
   name: string;
-  // FIX: Added email property to User type.
   email: string;
   avatar: string;
   financialStatement: FinancialStatement;

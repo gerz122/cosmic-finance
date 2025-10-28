@@ -1,4 +1,4 @@
-// FIX: Use a namespace import for firebase/app to resolve a potential module resolution issue.
+// FIX: Changed to a namespace import to resolve potential module resolution issues with the bundler.
 import * as firebaseApp from 'firebase/app';
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
@@ -15,6 +15,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+// FIX: Used the namespace import to call initializeApp.
 const app = firebaseApp.initializeApp(firebaseConfig);
 
 const db = getFirestore(app);

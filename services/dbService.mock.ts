@@ -14,8 +14,10 @@ async function getFreshMockData() {
     // This would be a more robust fetch in a real mock setup
     if(mockUsers.length === 0) {
        // A simplified version of the initial data setup
-        const user1: User = { id: 'german', name: 'German', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=german', teamIds: [], accounts: [{id: 'g-cash', name: 'G-Cash', type: AccountType.CASH, balance: 1000, ownerIds: ['german']}], financialStatement: { transactions:[], assets: [], liabilities: []}, budgets: [], goals: [], achievements: [] };
-        const user2: User = { id: 'valeria', name: 'Valeria', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=valeria', teamIds: [], accounts: [{id: 'v-cash', name: 'V-Cash', type: AccountType.CASH, balance: 1200, ownerIds: ['valeria']}], financialStatement: { transactions:[], assets: [], liabilities: []}, budgets: [], goals: [], achievements: [] };
+        // FIX: Added missing 'email' property to satisfy the User type.
+        const user1: User = { id: 'german', name: 'German', email: 'german@example.com', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=german', teamIds: [], accounts: [{id: 'g-cash', name: 'G-Cash', type: AccountType.CASH, balance: 1000, ownerIds: ['german']}], financialStatement: { transactions:[], assets: [], liabilities: []}, budgets: [], goals: [], achievements: [] };
+        // FIX: Added missing 'email' property to satisfy the User type.
+        const user2: User = { id: 'valeria', name: 'Valeria', email: 'valeria@example.com', avatar: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=valeria', teamIds: [], accounts: [{id: 'v-cash', name: 'V-Cash', type: AccountType.CASH, balance: 1200, ownerIds: ['valeria']}], financialStatement: { transactions:[], assets: [], liabilities: []}, budgets: [], goals: [], achievements: [] };
         mockUsers = [user1, user2];
     }
     return {

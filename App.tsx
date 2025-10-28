@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppProvider, useAppContext } from './AppContext';
+// FIX: The Auth component now has a default export, so this import is correct.
 import Auth from './Auth';
 import Onboarding from './Onboarding';
 import type { View } from './types';
@@ -90,7 +91,6 @@ const AppContent: React.FC = () => {
 
     const renderView = () => {
         switch (activeView) {
-            // FIX: Added missing onShowFreedomModal prop.
             case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick} onShowFreedomModal={() => actions.setModalOpen('isFreedomModalOpen', true)} />;
             case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails}/>;
             case 'importer': return <StatementImporter user={activeUser} onImport={actions.handleImportTransactions}/>;
@@ -98,14 +98,12 @@ const AppContent: React.FC = () => {
             case 'coach': return <AICoach user={activeUser} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => actions.handleOpenAddStockModal()} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability')} onEditStock={actions.handleOpenEditStockModal} onDeleteStock={actions.handleDeleteStock} onLogDividend={actions.handleOpenLogDividendModal} onOpenLargeChart={actions.openLargeChartModal} teams={teams} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} />;
             case 'teams': return <Teams teams={teams} onCreateTeam={() => actions.setModalOpen('isCreateTeamModalOpen', true)} onTeamClick={actions.handleTeamClick}/>;
-            // FIX: Added missing onOpenReportModal prop.
             case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={actions.handleBackToTeams} onAddTransaction={() => actions.handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => actions.handleOpenAddStockModal(selectedTeam.id)} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails} onOpenReportModal={() => actions.setModalOpen('isTeamReportModalOpen', true)}/> : null;
             case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => actions.setModalOpen('isTransferModalOpen', true)} />;
             case 'budget': return <BudgetView user={activeUser} onSaveBudget={actions.handleSaveBudget} onOpenBudgetModal={() => actions.setModalOpen('isAddBudgetModalOpen', true)} />;
             case 'goals': return <GoalsView user={activeUser} onAddGoal={() => actions.setModalOpen('isAddGoalModalOpen', true)} onDeleteGoal={actions.handleDeleteGoal} onContribute={actions.handleOpenContributeToGoalModal} />;
             case 'history': return <HistoricalPerformance data={historicalData} />;
             case 'achievements': return <Achievements user={activeUser} />;
-            // FIX: Added missing onShowFreedomModal prop.
             default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick} onShowFreedomModal={() => actions.setModalOpen('isFreedomModalOpen', true)} />;
         }
     };
@@ -166,7 +164,7 @@ const AppContent: React.FC = () => {
             <main className="flex-1 flex flex-col overflow-y-auto relative">
                 <header className="md:hidden sticky top-0 bg-cosmic-surface/80 backdrop-blur-sm z-40 p-2 flex justify-between items-center border-b border-cosmic-border">
                     <button onClick={() => setIsMobileNavOpen(true)} className="p-2">
-                        <svg xmlns="http://www.w.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
                     <div className="flex items-center gap-2">
                          <img src={activeUser.avatar} className="w-8 h-8 rounded-full border-2 border-cosmic-primary" alt={activeUser.name}/>
