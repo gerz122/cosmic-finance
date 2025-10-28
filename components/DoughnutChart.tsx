@@ -13,58 +13,90 @@ interface DoughnutChartProps {
     onSliceClick?: (label: string) => void;
 }
 
-export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, centerLabel = "Total", onSliceClick }) => {
+const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
+    const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+    return {
+        x: centerX + (radius * Math.cos(angleInRadians)),
+        y: centerY + (radius * Math.sin(angleInRadians))
+    };
+};
+
+const describeArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
+    const start = polarToCartesian(x, y, radius, endAngle);
+    const end = polarToCartesian(x, y, radius, startAngle);
+
+    const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+
+    const d = [
+        "M", start.x, start.y,
+        "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+    ].join(" ");
+
+    return d;
+};
+
+export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, centerLabel, onSliceClick }) => {
+    if (!data || data.length === 0) {
+        return (
+            <div style={{ width: size, height: size }} className="flex items-center justify-center">
+                <p className="text-sm text-cosmic-text-secondary">No data</p>
+            </div>
+        );
+    }
+
     const total = data.reduce((sum, item) => sum + item.value, 0);
     if (total === 0) {
-        return <div className="text-cosmic-text-secondary flex items-center justify-center" style={{ width: size, height: size }}>No data</div>;
+         return (
+            <div style={{ width: size, height: size }} className="flex items-center justify-center">
+                <p className="text-sm text-cosmic-text-secondary">No data</p>
+            </div>
+        );
     }
     
-    let cumulative = 0;
-    const radius = 80;
-    const circumference = 2 * Math.PI * radius;
-    const center = size / 2;
+    const radius = size / 2;
+    const strokeWidth = radius * 0.4;
+    const innerRadius = radius - strokeWidth;
+    let startAngle = 0;
 
-    const segments = data.map(item => {
-        const percentage = item.value / total;
-        const dasharray = circumference;
-        const dashoffset = circumference * (1 - percentage);
-        const rotation = cumulative * 360;
-        cumulative += percentage;
-        
-        return {
-            ...item,
-            dasharray,
-            dashoffset,
-            rotation
+    const slices = data.map(item => {
+        const angle = (item.value / total) * 360;
+        const endAngle = startAngle + angle;
+        const pathData = describeArc(radius, radius, innerRadius + strokeWidth / 2, startAngle, endAngle > 359.99 ? 359.99 : endAngle);
+        const slice = {
+            path: pathData,
+            color: item.color,
+            label: item.label
         };
+        startAngle = endAngle;
+        return slice;
     });
 
     return (
-        <div className="relative group" style={{ width: size, height: size }}>
-            <svg viewBox={`0 0 ${size} ${size}`}>
-                {segments.map((segment, index) => (
-                    <circle
-                        key={index}
-                        cx={center}
-                        cy={center}
-                        r={radius}
-                        fill="transparent"
-                        stroke={segment.color}
-                        strokeWidth="20"
-                        strokeDasharray={segment.dasharray}
-                        strokeDashoffset={segment.dashoffset}
-                        transform={`rotate(-90 ${center} ${center}) rotate(${segment.rotation} ${center} ${center})`}
-                        className={onSliceClick ? 'cursor-pointer transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100' : ''}
-                        onClick={() => onSliceClick?.(segment.label)}
-                    >
-                         <title>{`${segment.label}: $${segment.value.toFixed(2)}`}</title>
-                    </circle>
-                ))}
+        <div className="relative" style={{ width: size, height: size }}>
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                <g>
+                    {slices.map((slice, index) => (
+                        <path
+                            key={index}
+                            d={slice.path}
+                            fill="none"
+                            stroke={slice.color}
+                            strokeWidth={strokeWidth}
+                            onClick={() => onSliceClick && onSliceClick(slice.label)}
+                            className={onSliceClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}
+                        >
+                            <title>{`${slice.label}: ${((data[index].value / total) * 100).toFixed(1)}%`}</title>
+                        </path>
+                    ))}
+                </g>
             </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                 <span className="text-cosmic-text-secondary text-sm">{centerLabel}</span>
-                 <span className="text-2xl font-bold text-cosmic-text-primary">${total.toLocaleString()}</span>
-            </div>
+            {centerLabel && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-center">
+                        <span className="text-xs text-cosmic-text-secondary">{centerLabel}</span>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

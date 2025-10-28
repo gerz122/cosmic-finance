@@ -2,8 +2,18 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-// FIX: Use namespace import for auth to fix module resolution errors.
-import * as firebaseAuth from "firebase/auth";
+// FIX: Use named imports for Firebase v9+ modular SDK to resolve errors.
+import {
+    getAuth,
+    sendPasswordResetEmail,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    GoogleAuthProvider,
+    signInWithPopup,
+    onAuthStateChanged,
+    signOut,
+    type User as FirebaseUserType
+} from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -21,8 +31,20 @@ const app = initializeApp(firebaseConfig);
 
 const db = getFirestore(app);
 const storage = getStorage(app);
-const auth = firebaseAuth.getAuth(app);
+// FIX: Call getAuth directly after named import.
+const auth = getAuth(app);
 
 // Export services and providers for use in the app
-export { db, storage, auth, firebaseAuth };
-export type User = firebaseAuth.User;
+// FIX: Re-export auth functions in a namespace-like object to match usage in other files.
+export { db, storage, auth };
+export const firebaseAuth = {
+    sendPasswordResetEmail,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    GoogleAuthProvider,
+    signInWithPopup,
+    onAuthStateChanged,
+    signOut,
+};
+// FIX: Export the aliased User type from firebase/auth.
+export type User = FirebaseUserType;
