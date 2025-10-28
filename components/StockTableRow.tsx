@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, memo, useMemo } from 'react';
 import type { Asset } from '../types';
 import { marketDataService, type MarketData } from '../services/marketDataService';
@@ -94,13 +95,13 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                 <td className="px-6 py-4">{stock.numberOfShares}</td>
                 <td className="px-6 py-4">${stock.purchasePrice?.toFixed(2)}</td>
                 <td className={`px-6 py-4 font-bold text-cosmic-text-primary transition-colors duration-300 ${priceIndicatorClass}`}>
-                     {liveData ? `$${liveData.price.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
+                     {liveData && liveData.price > 0 ? `$${liveData.price.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
                 <td className="px-6 py-4 font-semibold text-cosmic-text-primary">
                     ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td className={`px-6 py-4 ${dayChangeColor}`}>
-                    {liveData ? (
+                    {liveData && liveData.price > 0 ? (
                         <>
                             <p className="font-semibold">{liveData.dayChange >= 0 ? '+' : ''}{liveData.dayChange.toFixed(2)}</p>
                             <p className="text-xs">({dayChangePercent.toFixed(2)}%)</p>
@@ -108,7 +109,7 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                     ) : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
                 <td className={`px-6 py-4 font-bold ${plColor}`}>
-                    {liveData ? `${plValue >= 0 ? '+' : ''}${plValue.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
+                    {liveData && liveData.price > 0 ? `${plValue >= 0 ? '+' : ''}${plValue.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
                 <td className="px-6 py-4 text-green-400">
                     {stock.takeProfit ? `$${stock.takeProfit.toFixed(2)}` : '---'}

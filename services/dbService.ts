@@ -1,3 +1,4 @@
+
 import { db, collection, doc, getDocs, writeBatch, query, where, getDoc, setDoc, deleteDoc } from './firebase';
 import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, Budget, Goal } from '../types';
 import { TransactionType, AssetType, AccountType } from '../types';
@@ -115,6 +116,27 @@ const initialData = {
     }
 };
 
+// CRITICAL FIX: This function removes `undefined` values from any object before it's sent to Firestore.
+// Firestore throws an error for `undefined` fields, which was the root cause of data updates failing.
+const sanitizeForFirestore = (obj: any): any => {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(item => sanitizeForFirestore(item));
+    }
+    const newObj: { [key: string]: any } = {};
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const value = obj[key];
+            if (value !== undefined) {
+                newObj[key] = sanitizeForFirestore(value);
+            }
+        }
+    }
+    return newObj;
+};
+
 const seedInitialData = async () => {
     console.log("Seeding initial, real data to Firestore...");
     const batchOp = writeBatch(db);
@@ -137,12 +159,12 @@ const seedInitialData = async () => {
     
     finalUsers.forEach(user => {
         const userRef = doc(db, "users", user.id);
-        batchOp.set(userRef, user);
+        batchOp.set(userRef, sanitizeForFirestore(user));
     });
     
     initialData.teams.forEach(team => {
         const teamRef = doc(db, "teams", team.id);
-        batchOp.set(teamRef, team);
+        batchOp.set(teamRef, sanitizeForFirestore(team));
     });
     
     await batchOp.commit();
@@ -189,7 +211,7 @@ export const dbService = {
             financialStatement: { transactions: [], assets: [], liabilities: [] },
             goals: [{ description: `Achieve Net Worth of $100,000`, current: 0, target: 100000 }]
         };
-        await setDoc(teamRef, newTeam);
+        await setDoc(teamRef, sanitizeForFirestore(newTeam));
         return newTeam;
     },
 
@@ -215,9 +237,11 @@ export const dbService = {
                 date: new Date().toISOString().split('T')[0],
                 paymentShares: [{ userId, accountId: newAccount.id, amount: newAccount.balance }],
             };
+             const [updatedUser] = await dbService.addTransaction(userId, initialTransaction, [user]);
+             return updatedUser;
         }
 
-        await setDoc(userRef, user);
+        await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
     
@@ -257,7 +281,7 @@ export const dbService = {
         const batchOp = writeBatch(db);
         usersToUpdate.forEach(user => {
             const userRef = doc(db, 'users', user.id);
-            batchOp.set(userRef, user);
+            batchOp.set(userRef, sanitizeForFirestore(user));
         });
         await batchOp.commit();
         
@@ -274,7 +298,7 @@ export const dbService = {
         const newTx: Transaction = { ...transaction, id: `tx_${Date.now()}` };
         team.financialStatement.transactions.push(newTx);
 
-        await setDoc(teamRef, team);
+        await setDoc(teamRef, sanitizeForFirestore(team));
         return team;
     },
 
@@ -286,9 +310,9 @@ export const dbService = {
         found.context.financialStatement.transactions[txIndex] = updatedTx;
 
         if (found.isTeam) {
-            await setDoc(doc(db, 'teams', found.context.id), found.context);
+            await setDoc(doc(db, 'teams', found.context.id), sanitizeForFirestore(found.context));
         } else {
-            await setDoc(doc(db, 'users', found.context.id), found.context);
+            await setDoc(doc(db, 'users', found.context.id), sanitizeForFirestore(found.context));
         }
         
         return { updatedUsers: allUsers, updatedTeams: allTeams };
@@ -315,7 +339,7 @@ export const dbService = {
         if (found.isTeam) {
             const team = found.context as Team;
             team.financialStatement.transactions = team.financialStatement.transactions.filter(t => t.id !== txId);
-            await setDoc(doc(db, 'teams', team.id), team);
+            await setDoc(doc(db, 'teams', team.id), sanitizeForFirestore(team));
         } else {
              const user = usersToUpdate.get(found.context.id);
              if(user) {
@@ -325,7 +349,7 @@ export const dbService = {
         
         const batchOp = writeBatch(db);
         usersToUpdate.forEach(user => {
-            if(user) batchOp.set(doc(db, 'users', user.id), user);
+            if(user) batchOp.set(doc(db, 'users', user.id), sanitizeForFirestore(user));
         });
         await batchOp.commit();
 
@@ -347,7 +371,7 @@ export const dbService = {
         fromAccount.balance -= amount;
         toAccount.balance += amount;
 
-        await setDoc(userRef, user);
+        await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
     
@@ -369,7 +393,7 @@ export const dbService = {
             };
             context.financialStatement.assets.push(newAsset);
         }
-        await setDoc(ref, context);
+        await setDoc(ref, sanitizeForFirestore(context));
         return context;
     },
 
@@ -391,7 +415,7 @@ export const dbService = {
             };
             context.financialStatement.liabilities.push(newLiability);
         }
-        await setDoc(ref, context);
+        await setDoc(ref, sanitizeForFirestore(context));
         return context;
     },
 
@@ -413,7 +437,7 @@ export const dbService = {
         const user = sanitizeUser(userSnap.data());
         user.financialStatement.assets = user.financialStatement.assets.filter(a => a.id !== assetId);
         
-        await setDoc(userRef, user);
+        await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
 
@@ -443,7 +467,7 @@ export const dbService = {
             updatedUser.financialStatement.assets.push(asset);
         }
 
-        await setDoc(doc(db, 'users', user.id), updatedUser);
+        await setDoc(doc(db, 'users', user.id), sanitizeForFirestore(updatedUser));
         return updatedUser;
     },
 
@@ -458,7 +482,7 @@ export const dbService = {
         } else {
             user.budgets.push(budget);
         }
-        await setDoc(userRef, user);
+        await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
     
@@ -473,7 +497,7 @@ export const dbService = {
             ...goalData,
         };
         user.goals.push(newGoal);
-        await setDoc(userRef, user);
+        await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
 
@@ -486,7 +510,7 @@ export const dbService = {
         if (goalIndex > -1) {
             user.goals[goalIndex] = updatedGoal;
         }
-        await setDoc(userRef, user);
+        await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
 
@@ -496,7 +520,7 @@ export const dbService = {
         if (!userSnap.exists()) throw new Error("User not found");
         const user = sanitizeUser(userSnap.data());
         user.goals = user.goals.filter(g => g.id !== goalId);
-        await setDoc(userRef, user);
+        await setDoc(userRef, sanitizeForFirestore(user));
         return user;
     },
 };

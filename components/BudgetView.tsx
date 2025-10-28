@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import type { User, Budget, BudgetCategory } from '../types';
 import { PlusIcon } from './icons';

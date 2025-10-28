@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { User, Team, Asset, Liability } from '../types';
 import { XIcon } from './icons';

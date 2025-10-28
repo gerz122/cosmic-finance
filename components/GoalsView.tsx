@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { User, Goal } from '../types';
 import { PlusIcon, XIcon } from './icons';
@@ -70,12 +71,4 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ user, onAddGoal, onDeleteG
                 ))}
 
                 {user.goals.length === 0 && (
-                    <div className="col-span-full bg-cosmic-surface p-8 rounded-lg border border-dashed border-cosmic-border text-center">
-                        <h3 className="text-xl font-semibold text-cosmic-text-primary">No Goals Set Yet</h3>
-                        <p className="text-cosmic-text-secondary mt-2">What are you saving for? Create your first goal to get started!</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
+                    <div className="

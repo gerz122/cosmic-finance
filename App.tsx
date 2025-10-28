@@ -1,6 +1,6 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
-// Fix: Import TransactionType to use its enum values instead of string literals.
 import { AssetType, TransactionType } from './types';
 import { dbService } from './services/dbService'; 
 import { getCosmicEvent } from './services/geminiService';
@@ -347,7 +347,6 @@ const App: React.FC = () => {
         const contributionTransaction: Omit<Transaction, 'id'> = {
             description: `Contribution to goal: ${goal.name}`,
             amount: amount,
-            // Fix: Use the TransactionType enum for type safety instead of a string literal.
             type: TransactionType.EXPENSE,
             category: 'Goals',
             date: new Date().toISOString().split('T')[0],

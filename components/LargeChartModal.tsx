@@ -1,3 +1,4 @@
+
 import React from 'react';
 import EmbeddedStockChart from './EmbeddedStockChart';
 import { XIcon } from './icons';

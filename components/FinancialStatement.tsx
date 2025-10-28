@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import type { FinancialStatement as FinancialStatementType, User, Team, Transaction } from '../types';
 import { TransactionType } from '../types';

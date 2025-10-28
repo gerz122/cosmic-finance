@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, memo } from 'react';
 import { marketDataService } from '../services/marketDataService';
 
@@ -34,7 +33,7 @@ export const StockPriceProvider: React.FC<StockPriceProviderProps> = memo(({ tic
 
         fetchData(); // Fetch immediately on mount
 
-        const intervalId = setInterval(fetchData, 30000); // Refresh every 30 seconds
+        const intervalId = setInterval(fetchData, 60000); // Refresh every 60 seconds
 
         return () => {
             isMounted = false;

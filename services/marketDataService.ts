@@ -1,3 +1,4 @@
+
 export interface MarketData {
     ticker: string;
     price: number;
@@ -10,7 +11,6 @@ export interface TickerSearchResult {
     name: string;
 }
 
-// Fix: Cast `import.meta` to `any` to access Vite environment variables without causing a TypeScript type error, as adding a new d.ts file is not permitted.
 const API_KEY = (import.meta as any).env.VITE_ALPHA_VANTAGE_API_KEY;
 const BASE_URL = 'https://www.alphavantage.co/query';
 
@@ -28,16 +28,26 @@ const ensureApiRateLimit = async () => {
     lastApiCallTime = Date.now();
 };
 
+// CRITICAL FIX: Add suffix for Argentinian stocks
+const getTickerWithSuffix = (ticker: string) => {
+    const argentinianStocks = ['GGAL', 'PAM', 'YPF', 'SUPV', 'BBAR', 'BMA', 'LOMA', 'VIST'];
+    if (argentinianStocks.includes(ticker.toUpperCase())) {
+        return `${ticker}.BA`;
+    }
+    return ticker;
+};
+
 const getLiveStockData = async (ticker: string): Promise<MarketData> => {
     if (!API_KEY) {
-        console.error("Alpha Vantage API key is not set.");
-        // Return stable mock data if key is missing
+        console.error("Alpha Vantage API key is not set. Returning mock data.");
         return { ticker, price: 100.00, dayChange: 1.50, previousClose: 98.50 };
     }
 
+    const tickerWithSuffix = getTickerWithSuffix(ticker);
+
     try {
         await ensureApiRateLimit();
-        const response = await fetch(`${BASE_URL}?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${API_KEY}`);
+        const response = await fetch(`${BASE_URL}?function=GLOBAL_QUOTE&symbol=${tickerWithSuffix}&apikey=${API_KEY}`);
         if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
         
         const data = await response.json();
@@ -83,7 +93,7 @@ const searchTickers = async (query: string): Promise<TickerSearchResult[]> => {
         const matches = data['bestMatches'] || [];
 
         return matches
-            .filter((match: any) => !match['1. symbol'].includes('.')) // Filter out non-common stocks
+            //.filter((match: any) => !match['1. symbol'].includes('.')) // Allow various markets
             .map((match: any) => ({
                 ticker: match['1. symbol'],
                 name: match['2. name'],

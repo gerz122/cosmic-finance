@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Team } from '../types';
 import { StarIcon, PlusIcon } from './icons';
