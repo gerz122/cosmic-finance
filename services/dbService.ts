@@ -16,12 +16,12 @@ export const createNewUser = async (uid: string, name: string, email: string): P
     if (email === 'gerzbogado@gmail.com') {
         await setDoc(newUserRef, initialDataForGerman(uid, name, avatar, email));
         console.log("Migrated data for German.");
-        return getUserData(uid);
+        return (await getUserData(uid))!;
     }
     if (email === 'valeriasisterna01@gmail.com') {
         await setDoc(newUserRef, initialDataForValeria(uid, name, avatar, email));
         console.log("Migrated data for Valeria.");
-        return getUserData(uid);
+        return (await getUserData(uid))!;
     }
     
     // Standard new user setup
@@ -36,7 +36,7 @@ export const createNewUser = async (uid: string, name: string, email: string): P
     };
     await setDoc(newUserRef, newUser);
     // You can add default accounts or other initial data here if needed
-    return getUserData(uid);
+    return (await getUserData(uid))!;
 };
 
 export const resetPassword = async (email: string) => {
@@ -45,12 +45,13 @@ export const resetPassword = async (email: string) => {
 };
 
 
-export const getUserData = async (uid: string): Promise<User> => {
+export const getUserData = async (uid: string): Promise<User | null> => {
     const userRef = doc(db, 'users', uid);
     const userDoc = await getDoc(userRef);
 
     if (!userDoc.exists()) {
-        throw new Error("User data not found in Firestore.");
+        console.warn(`User data not found in Firestore for UID: ${uid}. This might be a new user.`);
+        return null;
     }
 
     const userData = { id: userDoc.id, ...userDoc.data() } as User;

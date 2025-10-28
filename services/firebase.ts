@@ -1,19 +1,11 @@
+
 // FIX: Changed to a namespace import to resolve potential module resolution issues with the bundler.
-import { initializeApp } from 'firebase/app';
+import * as firebaseApp from 'firebase/app';
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 // FIX: Use named imports for Firebase v9+ modular SDK to resolve errors.
-import {
-    getAuth,
-    sendPasswordResetEmail,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    GoogleAuthProvider,
-    signInWithPopup,
-    onAuthStateChanged,
-    signOut,
-    type User as FirebaseUserType
-} from "firebase/auth";
+// FIX: Switched to namespace import to resolve module resolution errors for auth functions and User type.
+import * as firebaseAuthNs from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -27,24 +19,28 @@ const firebaseConfig = {
 
 // Initialize Firebase
 // FIX: Used initializeApp directly from firebase/app.
-const app = initializeApp(firebaseConfig);
+// FIX: Using initializeApp from the imported namespace.
+const app = firebaseApp.initializeApp(firebaseConfig);
 
 const db = getFirestore(app);
 const storage = getStorage(app);
 // FIX: Call getAuth directly after named import.
-const auth = getAuth(app);
+// FIX: Using getAuth from the imported namespace.
+const auth = firebaseAuthNs.getAuth(app);
 
 // Export services and providers for use in the app
 // FIX: Re-export auth functions in a namespace-like object to match usage in other files.
+// FIX: Referencing functions from the imported namespace.
 export { db, storage, auth };
 export const firebaseAuth = {
-    sendPasswordResetEmail,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    GoogleAuthProvider,
-    signInWithPopup,
-    onAuthStateChanged,
-    signOut,
+    sendPasswordResetEmail: firebaseAuthNs.sendPasswordResetEmail,
+    signInWithEmailAndPassword: firebaseAuthNs.signInWithEmailAndPassword,
+    createUserWithEmailAndPassword: firebaseAuthNs.createUserWithEmailAndPassword,
+    GoogleAuthProvider: firebaseAuthNs.GoogleAuthProvider,
+    signInWithPopup: firebaseAuthNs.signInWithPopup,
+    onAuthStateChanged: firebaseAuthNs.onAuthStateChanged,
+    signOut: firebaseAuthNs.signOut,
 };
 // FIX: Export the aliased User type from firebase/auth.
-export type User = FirebaseUserType;
+// FIX: Exporting User type from the imported namespace.
+export type User = firebaseAuthNs.User;

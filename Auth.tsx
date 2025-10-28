@@ -44,7 +44,7 @@ const Auth: React.FC = () => {
             // FIX: Use functions from the firebaseAuth namespace.
             const result = await firebaseAuth.signInWithPopup(auth, provider);
             // Check if user is new
-            const userExists = await dbService.getUserData(result.user.uid).catch(() => null);
+            const userExists = await dbService.getUserData(result.user.uid);
             if (!userExists) {
                 await dbService.createNewUser(result.user.uid, result.user.displayName || 'New Player', result.user.email!);
             }
