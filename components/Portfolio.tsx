@@ -73,8 +73,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, o
                             <tr>
                                 <th scope="col" className="px-6 py-3">Ticker</th>
                                 <th scope="col" className="px-6 py-3">Shares</th>
-                                <th scope="col" className="px-6 py-3">Cost Basis</th>
-                                <th scope="col" className="px-6 py-3">Current Price</th>
+                                <th scope="col" className="px-6 py-3">Cost Basis / Share</th>
+                                <th scope="col" className="px-6 py-3">Price / Share</th>
+                                <th scope="col" className="px-6 py-3">Total Value</th>
                                 <th scope="col" className="px-6 py-3">Day's Change</th>
                                 <th scope="col" className="px-6 py-3">P/L ($)</th>
                                 <th scope="col" className="px-6 py-3">Take Profit</th>
@@ -95,7 +96,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, o
                             ))}
                              {personalStocks.length === 0 && (
                                 <tr>
-                                    <td colSpan={9} className="text-center py-4">No personal stocks in portfolio.</td>
+                                    <td colSpan={10} className="text-center py-4">No personal stocks in portfolio.</td>
                                 </tr>
                             )}
                         </tbody>

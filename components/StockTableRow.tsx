@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useEffect, memo, useMemo } from 'react';
 import type { Asset } from '../types';
 import { marketDataService, type MarketData } from '../services/marketDataService';
@@ -61,19 +59,29 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
 
     const toggleRow = () => setIsExpanded(prev => !prev);
 
-    const { plValue, plPercent, plColor, dayChangeColor, dayChangePercent } = useMemo(() => {
+    const { plValue, plColor, dayChangeColor, dayChangePercent, totalValue } = useMemo(() => {
         if (!liveData || liveData.price === 0 || !stock.purchasePrice || !stock.numberOfShares) {
-            return { plValue: 0, plPercent: 0, plColor: 'text-cosmic-text-secondary', dayChangeColor: 'text-cosmic-text-secondary', dayChangePercent: 0 };
+            return { 
+                plValue: 0, 
+                plColor: 'text-cosmic-text-secondary', 
+                dayChangeColor: 'text-cosmic-text-secondary', 
+                dayChangePercent: 0, 
+                totalValue: stock.value 
+            };
         }
-        const value = (liveData.price - stock.purchasePrice) * stock.numberOfShares;
-        const percent = stock.purchasePrice > 0 ? ((liveData.price - stock.purchasePrice) / stock.purchasePrice) * 100 : 0;
+        
+        const currentTotalValue = liveData.price * stock.numberOfShares;
+        const purchaseTotalValue = stock.purchasePrice * stock.numberOfShares;
+        const value = currentTotalValue - purchaseTotalValue;
+        
         const pColor = value >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
         const dColor = liveData.dayChange >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
+        
         const previousClose = liveData.price - liveData.dayChange;
         const dPercent = previousClose > 0 ? (liveData.dayChange / previousClose) * 100 : 0;
 
-        return { plValue: value, plPercent: percent, plColor: pColor, dayChangeColor: dColor, dayChangePercent: dPercent };
-    }, [liveData, stock.purchasePrice, stock.numberOfShares]);
+        return { plValue: value, plColor: pColor, dayChangeColor: dColor, dayChangePercent: dPercent, totalValue: currentTotalValue };
+    }, [liveData, stock.purchasePrice, stock.numberOfShares, stock.value]);
     
     const priceIndicatorClass = priceChangeIndicator === 'up' ? 'bg-green-500/20' : priceChangeIndicator === 'down' ? 'bg-red-500/20' : '';
 
@@ -88,6 +96,9 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
                 <td className="px-6 py-4">${stock.purchasePrice?.toFixed(2)}</td>
                 <td className={`px-6 py-4 font-bold text-cosmic-text-primary transition-colors duration-300 ${priceIndicatorClass}`}>
                      {liveData ? `$${liveData.price.toFixed(2)}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
+                </td>
+                <td className="px-6 py-4 font-semibold text-cosmic-text-primary">
+                    {liveData ? `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-xs text-cosmic-text-secondary">N/A</span>}
                 </td>
                 <td className={`px-6 py-4 ${dayChangeColor}`}>
                     {liveData ? (
@@ -114,7 +125,7 @@ export const StockTableRow: React.FC<StockTableRowProps> = memo(({ stock, onEdit
             </tr>
             {isExpanded && (
                 <tr className="bg-cosmic-bg">
-                    <td colSpan={9} className="p-0">
+                    <td colSpan={10} className="p-0">
                          <div className="p-4" style={{ height: '400px' }}>
                             <EmbeddedStockChart ticker={stock.ticker!} takeProfit={stock.takeProfit} stopLoss={stock.stopLoss} />
                             <div className="text-right mt-2">
