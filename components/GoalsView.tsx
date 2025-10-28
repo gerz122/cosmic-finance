@@ -1,7 +1,6 @@
-
 import React from 'react';
 import type { User, Goal } from '../types';
-import { PlusIcon, XIcon } from './icons';
+import { PlusIcon, XIcon, StarIcon } from './icons';
 
 interface GoalsViewProps {
     user: User;
@@ -71,4 +70,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ user, onAddGoal, onDeleteG
                 ))}
 
                 {user.goals.length === 0 && (
-                    <div className="
+                    <div className="col-span-full bg-cosmic-surface p-8 rounded-lg border border-dashed border-cosmic-border text-center">
+                        <StarIcon className="w-12 h-12 mx-auto text-cosmic-text-secondary mb-4" />
+                        <h3 className="text-xl font-semibold text-cosmic-text-primary">No Goals Yet</h3>
+                        <p className="text-cosmic-text-secondary mt-2">Set your first financial goal to start your journey!</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};

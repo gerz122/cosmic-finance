@@ -94,7 +94,7 @@ export interface FinancialStatement {
 }
 
 // New: Budgeting interfaces
-export type BudgetCategory = 'Housing' | 'Food' | 'Transportation' | 'Entertainment' | 'Utilities' | 'Shopping' | 'Business Expense' | 'Maintenance' | 'Other';
+export type BudgetCategory = 'Housing' | 'Food' | 'Transportation' | 'Entertainment' | 'Utilities' | 'Shopping' | 'Business Expense' | 'Maintenance' | 'Other' | 'Goals' | 'Job' | 'Investment' | 'Loan' | 'Team Contribution' | 'Transfer' | 'Cosmic Event' | 'Initial Balance' | 'Rental';
 
 export interface Budget {
     month: string; // "YYYY-MM" format

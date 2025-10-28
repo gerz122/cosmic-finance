@@ -3,7 +3,7 @@ import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, A
 import { AssetType, TransactionType } from './types';
 import { dbService } from './services/dbService'; 
 import { getCosmicEvent } from './services/geminiService';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon } from './components/icons';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -53,6 +53,7 @@ const App: React.FC = () => {
     const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
     // Modal States
     const [isAddTransactionModalOpen, setAddTransactionModalOpen] = useState(false);
@@ -391,6 +392,12 @@ const App: React.FC = () => {
         onAddStock: () => { setIsFabOpen(false); handleOpenAddStockModal(selectedTeamId || undefined); },
         onTransfer: () => { setIsFabOpen(false); setTransferModalOpen(true); }
     };
+    
+    const handleViewChange = (view: View) => {
+        setActiveView(view);
+        setSelectedTeamId(null);
+        setIsMobileNavOpen(false);
+    }
 
     const renderView = () => {
         if (isLoading) return <div className="flex items-center justify-center h-full"><p className="text-lg animate-pulse-fast">Connecting to the Cosmos...</p></div>;
@@ -404,6 +411,7 @@ const App: React.FC = () => {
             case 'coach': return <AICoach user={activeUser} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} />;
             case 'teams': return <Teams teams={teams} onCreateTeam={() => setCreateTeamModalOpen(true)} onTeamClick={handleTeamClick}/>;
+            // FIX: Corrected function name from handleOpenEditLiabilityModal to handleOpenEditAssetLiabilityModal
             case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} /> : null;
             case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => setTransferModalOpen(true)} />;
             case 'budget': return <BudgetView user={activeUser} onSaveBudget={handleSaveBudget} onOpenBudgetModal={() => setAddBudgetModalOpen(true)} />;
@@ -411,39 +419,67 @@ const App: React.FC = () => {
             default: return <Dashboard user={activeUser} effectiveStatement={effectiveFinancialStatement} historicalNetWorth={historicalNetWorth} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
         }
     };
+
+    const navContent = (
+      <>
+        <div className="flex items-center gap-3 mb-8 px-2">
+            <StarIcon className="w-8 h-8 text-yellow-400" />
+            <h1 className="text-xl font-bold text-cosmic-text-primary">Cosmic<span className="text-cosmic-primary">Cashflow</span></h1>
+        </div>
+        <div className="space-y-2">
+            <NavItem icon={<DashboardIcon className="w-6 h-6" />} label="Dashboard" isActive={activeView === 'dashboard'} onClick={() => handleViewChange('dashboard')} />
+            <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Balances" isActive={activeView === 'balances'} onClick={() => handleViewChange('balances')} />
+            <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Statement" isActive={activeView === 'statement'} onClick={() => handleViewChange('statement')} />
+            <NavItem icon={<CreditCardIcon className="w-6 h-6" />} label="Accounts" isActive={activeView === 'accounts'} onClick={() => handleViewChange('accounts')} />
+            <NavItem icon={<PortfolioIcon className="w-6 h-6" />} label="Portfolio" isActive={activeView === 'portfolio'} onClick={() => handleViewChange('portfolio')} />
+            <NavItem icon={<BudgetIcon className="w-6 h-6" />} label="Budget" isActive={activeView === 'budget'} onClick={() => handleViewChange('budget')} />
+            <NavItem icon={<GoalIcon className="w-6 h-6" />} label="Goals" isActive={activeView === 'goals'} onClick={() => handleViewChange('goals')} />
+            <NavItem icon={<TeamsIcon className="w-6 h-6" />} label="Teams" isActive={activeView === 'teams' || activeView === 'team-detail'} onClick={() => handleViewChange('teams')} />
+             {activeView === 'team-detail' && selectedTeam && (
+                <div className="pl-4 mt-1 border-l-2 border-cosmic-primary ml-5">
+                    <NavItem icon={<div className="w-6 h-6" />} label={selectedTeam.name} isActive={true} onClick={() => {}} isSub/>
+                </div>
+             )}
+            <NavItem icon={<CoachIcon className="w-6 h-6" />} label="AI Coach" isActive={activeView === 'coach'} onClick={() => handleViewChange('coach')} />
+        </div>
+        {activeUser && <div className="mt-auto bg-cosmic-bg p-4 rounded-lg border border-cosmic-border"><div className="flex items-center gap-3"><img src={activeUser.avatar} alt={activeUser.name} className="w-12 h-12 rounded-full border-2 border-cosmic-primary" /><div><p className="font-bold text-cosmic-text-primary">{activeUser.name}</p><p className="text-sm text-cosmic-text-secondary">Level 5</p></div></div></div>}
+      </>
+    );
     
     return (
-        <div className="flex h-screen bg-cosmic-bg text-cosmic-text-primary font-sans">
-            <nav className="w-64 bg-cosmic-surface border-r border-cosmic-border p-4 flex flex-col">
-                <div className="flex items-center gap-3 mb-8 px-2">
-                    <StarIcon className="w-8 h-8 text-yellow-400" />
-                    <h1 className="text-xl font-bold text-cosmic-text-primary">Cosmic<span className="text-cosmic-primary">Cashflow</span></h1>
+        <div className="md:flex h-screen bg-cosmic-bg text-cosmic-text-primary font-sans">
+            {/* Mobile Nav */}
+            {isMobileNavOpen && (
+                <div className="fixed inset-0 bg-cosmic-bg bg-opacity-90 z-50 md:hidden" onClick={() => setIsMobileNavOpen(false)}>
+                    <nav className="w-64 bg-cosmic-surface border-r border-cosmic-border p-4 flex flex-col h-full">
+                        {navContent}
+                    </nav>
                 </div>
-                <div className="space-y-2">
-                    <NavItem icon={<DashboardIcon className="w-6 h-6" />} label="Dashboard" isActive={activeView === 'dashboard'} onClick={() => { setActiveView('dashboard'); setSelectedTeamId(null);}} />
-                    <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Balances" isActive={activeView === 'balances'} onClick={() => { setActiveView('balances'); setSelectedTeamId(null);}} />
-                    <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Statement" isActive={activeView === 'statement'} onClick={() => { setActiveView('statement'); setSelectedTeamId(null);}} />
-                    <NavItem icon={<CreditCardIcon className="w-6 h-6" />} label="Accounts" isActive={activeView === 'accounts'} onClick={() => { setActiveView('accounts'); setSelectedTeamId(null);}} />
-                    <NavItem icon={<PortfolioIcon className="w-6 h-6" />} label="Portfolio" isActive={activeView === 'portfolio'} onClick={() => { setActiveView('portfolio'); setSelectedTeamId(null);}} />
-                    <NavItem icon={<BudgetIcon className="w-6 h-6" />} label="Budget" isActive={activeView === 'budget'} onClick={() => { setActiveView('budget'); setSelectedTeamId(null);}} />
-                    <NavItem icon={<GoalIcon className="w-6 h-6" />} label="Goals" isActive={activeView === 'goals'} onClick={() => { setActiveView('goals'); setSelectedTeamId(null);}} />
-                    <NavItem icon={<TeamsIcon className="w-6 h-6" />} label="Teams" isActive={activeView === 'teams' || activeView === 'team-detail'} onClick={() => { setActiveView('teams'); setSelectedTeamId(null);}} />
-                     {activeView === 'team-detail' && selectedTeam && (
-                        <div className="pl-4 mt-1 border-l-2 border-cosmic-primary ml-5">
-                            <NavItem icon={<div className="w-6 h-6" />} label={selectedTeam.name} isActive={true} onClick={() => {}} isSub/>
-                        </div>
-                     )}
-                    <NavItem icon={<CoachIcon className="w-6 h-6" />} label="AI Coach" isActive={activeView === 'coach'} onClick={() => { setActiveView('coach'); setSelectedTeamId(null);}} />
-                </div>
-                {activeUser && <div className="mt-auto bg-cosmic-bg p-4 rounded-lg border border-cosmic-border"><div className="flex items-center gap-3"><img src={activeUser.avatar} alt={activeUser.name} className="w-12 h-12 rounded-full border-2 border-cosmic-primary" /><div><p className="font-bold text-cosmic-text-primary">{activeUser.name}</p><p className="text-sm text-cosmic-text-secondary">Level 5</p></div></div></div>}
+            )}
+
+            {/* Desktop Nav */}
+            <nav className="hidden md:flex w-64 bg-cosmic-surface border-r border-cosmic-border p-4 flex-col flex-shrink-0">
+                {navContent}
             </nav>
 
-            <main className="flex-1 flex flex-col p-8 overflow-y-auto relative">
-                <div className="mb-6 bg-cosmic-surface p-2 rounded-lg border border-cosmic-border self-start flex items-center gap-2">
-                     <label className="text-sm font-semibold text-cosmic-text-secondary mr-2">Active Player:</label>
-                    {users.map(user => <button key={user.id} onClick={() => setActiveUserId(user.id)} className={`px-3 py-1 rounded-md text-sm font-semibold transition-colors ${activeUserId === user.id ? 'bg-cosmic-primary text-white' : 'bg-cosmic-bg text-cosmic-text-primary hover:bg-cosmic-border'}`}>{user.name}</button>)}
+            <main className="flex-1 flex flex-col overflow-y-auto relative">
+                <header className="md:hidden sticky top-0 bg-cosmic-surface/80 backdrop-blur-sm z-40 p-2 flex justify-between items-center border-b border-cosmic-border">
+                    <button onClick={() => setIsMobileNavOpen(true)} className="p-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    </button>
+                    <div className="flex items-center gap-2">
+                        {users.map(user => <button key={user.id} onClick={() => setActiveUserId(user.id)} className={`w-8 h-8 rounded-full transition-all duration-200 ${activeUserId === user.id ? 'border-2 border-cosmic-primary scale-110' : ''}`}><img src={user.avatar} className="w-full h-full rounded-full" alt={user.name}/></button>)}
+                    </div>
+                </header>
+
+                <div className="p-4 md:p-8">
+                    <div className="hidden md:flex mb-6 bg-cosmic-surface p-2 rounded-lg border border-cosmic-border self-start items-center gap-2">
+                         <label className="text-sm font-semibold text-cosmic-text-secondary mr-2">Active Player:</label>
+                        {users.map(user => <button key={user.id} onClick={() => setActiveUserId(user.id)} className={`px-3 py-1 rounded-md text-sm font-semibold transition-colors ${activeUserId === user.id ? 'bg-cosmic-primary text-white' : 'bg-cosmic-bg text-cosmic-text-primary hover:bg-cosmic-border'}`}>{user.name}</button>)}
+                    </div>
+                    <div className="flex-grow">{renderView()}</div>
                 </div>
-                <div className="flex-grow">{renderView()}</div>
+
                 <FloatingActionButton {...fabActions} isOpen={isFabOpen} onToggle={() => setIsFabOpen(prev => !prev)} />
             </main>
             

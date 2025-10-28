@@ -9,7 +9,7 @@ interface BudgetViewProps {
     onOpenBudgetModal: () => void;
 }
 
-const allCategories: BudgetCategory[] = ['Housing', 'Food', 'Transportation', 'Entertainment', 'Utilities', 'Shopping', 'Business Expense', 'Maintenance', 'Other'];
+const allCategories: BudgetCategory[] = ['Housing', 'Food', 'Transportation', 'Entertainment', 'Utilities', 'Shopping', 'Business Expense', 'Maintenance', 'Other', 'Goals'];
 
 const ProgressBar: React.FC<{ value: number; max: number; color: string }> = ({ value, max, color }) => {
     const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
@@ -44,7 +44,7 @@ export const BudgetView: React.FC<BudgetViewProps> = ({ user, onSaveBudget, onOp
         const expensesByCategory = expensesForMonth.reduce((acc, t) => {
             const category = t.category as BudgetCategory;
             if (allCategories.includes(category)) {
-                const userShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || 0;
+                const userShare = t.expenseShares?.find(s => s.userId === user.id)?.amount || t.amount;
                 acc[category] = (acc[category] || 0) + userShare;
             }
             return acc;
@@ -69,7 +69,6 @@ export const BudgetView: React.FC<BudgetViewProps> = ({ user, onSaveBudget, onOp
                     <input 
                         type="month" 
                         value={currentMonth}
-                        // FIX: Corrected the onChange handler and completed the input element.
                         onChange={(e) => setCurrentMonth(e.target.value)}
                         className="bg-cosmic-surface border border-cosmic-border rounded-md p-2 text-cosmic-text-primary"
                     />

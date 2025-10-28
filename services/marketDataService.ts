@@ -38,8 +38,10 @@ const getTickerWithSuffix = (ticker: string) => {
 
 const getLiveStockData = async (ticker: string): Promise<MarketData> => {
     if (!API_KEY) {
-        console.error("Alpha Vantage API key is not set. Returning mock data.");
-        return { ticker, price: 100.00, dayChange: 1.50, previousClose: 98.50 };
+        console.warn("Alpha Vantage API key is not set. Returning mock data.");
+        const mockPrice = 100 + Math.random() * 20 - 10;
+        const mockPrevClose = mockPrice - (Math.random() * 5 - 2.5);
+        return { ticker, price: mockPrice, dayChange: mockPrice - mockPrevClose, previousClose: mockPrevClose };
     }
 
     const tickerWithSuffix = getTickerWithSuffix(ticker);
@@ -92,7 +94,6 @@ const searchTickers = async (query: string): Promise<TickerSearchResult[]> => {
         const matches = data['bestMatches'] || [];
 
         return matches
-            //.filter((match: any) => !match['1. symbol'].includes('.')) // Allow various markets
             .map((match: any) => ({
                 ticker: match['1. symbol'],
                 name: match['2. name'],
