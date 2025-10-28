@@ -145,7 +145,7 @@ export interface Team {
   }[];
 }
 
-export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals' | 'history' | 'achievements';
+export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals' | 'history' | 'achievements' | 'importer';
 
 export interface EventOutcome {
   message: string;

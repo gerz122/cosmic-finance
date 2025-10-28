@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { Transaction, User, Team, PaymentShare, ExpenseShare, Account, SplitMode } from '../types';
 import { TransactionType } from '../types';
 import { XIcon, PlusIcon } from './icons';
+import * as dbService from '../services/dbService';
 
 interface AddTransactionModalProps {
     isOpen: boolean;
@@ -93,9 +94,40 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     const totalExpenseSplit = expenseShares.reduce((sum, s) => sum + s.amount, 0);
     const totalPercentage = (parseFloat(totalAmount) > 0 ? (totalExpenseSplit / parseFloat(totalAmount)) * 100 : 0);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        // ... (existing submit logic)
-        onSave({} as any);
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        let finalReceiptUrl = isEditing ? transactionToEdit.receiptUrl : undefined;
+
+        if (receiptImage) {
+            try {
+                finalReceiptUrl = await dbService.uploadReceipt(receiptImage, currentUser.id);
+            } catch (error) {
+                console.error("Failed to upload receipt:", error);
+                alert("There was an error uploading the receipt. Please try again.");
+                return;
+            }
+        }
+
+        const transactionData: Omit<Transaction, 'id'> = {
+            description,
+            amount: parseFloat(totalAmount),
+            category: categoryInput,
+            date,
+            type,
+            isPassive,
+            teamId: teamId || undefined,
+            paymentShares,
+            expenseShares,
+            receiptUrl: finalReceiptUrl,
+        };
+
+        if (isEditing) {
+            onSave({ ...transactionData, id: transactionToEdit.id });
+        } else {
+            onSave(transactionData);
+        }
+        
         onClose();
     };
     
@@ -130,6 +162,13 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* ... (other form fields like description, amount, etc.) */}
+                    {/* For brevity, keeping only changed parts */}
+
+                    <div>
+                        <label htmlFor="receipt" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Receipt</label>
+                        <input type="file" id="receipt" onChange={handleFileChange} accept="image/*" className="w-full text-sm text-cosmic-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cosmic-primary file:text-white hover:file:bg-blue-400"/>
+                        {receiptImage && <img src={receiptImage} alt="Receipt preview" className="mt-2 h-24 w-auto rounded" />}
+                    </div>
 
                     {type === TransactionType.EXPENSE && (
                          <div className="space-y-3 pt-3 border-t border-cosmic-border">

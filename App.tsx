@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
 import { AssetType, TransactionType } from './types';
-// FIX: Module '"./services/dbService"' has no exported member 'dbService'. Changed to a namespace import.
 import * as dbService from './services/dbService'; 
 import { getCosmicEvent } from './services/geminiService';
 import { generateHistoricalData } from './utils/financialCalculations';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon, HistoryIcon, TrophyIcon } from './components/icons';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon, HistoryIcon, TrophyIcon, UploadIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -39,6 +38,7 @@ import { ReceiptModal } from './components/ReceiptModal';
 import { HistoricalPerformance } from './components/HistoricalPerformance';
 import { TransactionSplitDetailModal } from './components/TransactionSplitDetailModal';
 import { Achievements } from './components/Achievements';
+import { StatementImporter } from './components/StatementImporter';
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
     <button
@@ -448,6 +448,7 @@ const App: React.FC = () => {
         switch (activeView) {
             case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
             case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt} onViewSplitDetails={handleViewSplitDetails}/>;
+            case 'importer': return <StatementImporter />;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => setAddAccountModalOpen(true)} onOpenAccountTransactions={handleOpenAccountTransactionsModal} onEditAccount={handleOpenEditAccountModal} />;
             case 'coach': return <AICoach user={activeUser} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} />;
@@ -473,6 +474,7 @@ const App: React.FC = () => {
             <NavItem icon={<HistoryIcon className="w-6 h-6" />} label="History" isActive={activeView === 'history'} onClick={() => handleViewChange('history')} />
             <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Balances" isActive={activeView === 'balances'} onClick={() => handleViewChange('balances')} />
             <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Statement" isActive={activeView === 'statement'} onClick={() => handleViewChange('statement')} />
+            <NavItem icon={<UploadIcon className="w-6 h-6" />} label="Import" isActive={activeView === 'importer'} onClick={() => handleViewChange('importer')} />
             <NavItem icon={<CreditCardIcon className="w-6 h-6" />} label="Accounts" isActive={activeView === 'accounts'} onClick={() => handleViewChange('accounts')} />
             <NavItem icon={<PortfolioIcon className="w-6 h-6" />} label="Portfolio" isActive={activeView === 'portfolio'} onClick={() => handleViewChange('portfolio')} />
             <NavItem icon={<BudgetIcon className="w-6 h-6" />} label="Budget" isActive={activeView === 'budget'} onClick={() => handleViewChange('budget')} />

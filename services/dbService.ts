@@ -1,9 +1,9 @@
 import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, Budget, Goal } from '../types';
-// FIX: Imported AssetType to resolve reference error.
 import { TransactionType, AccountType, AssetType } from '../types';
 import { ALL_ACHIEVEMENTS } from '../components/Achievements';
-// FIX: Switched to Firebase v8 compat syntax to match firebase.ts initialization.
-import { db } from './firebase';
+import { db, storage } from './firebase';
+import { collection, getDocs, getDoc, doc, where, query, writeBatch, setDoc, deleteDoc, runTransaction } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
 
 // This data is now ONLY used to populate a fresh, empty database.
 const initialData = {
@@ -77,40 +77,40 @@ const initialData = {
 };
 
 const populateDatabaseIfEmpty = async () => {
-    const usersCollection = db.collection('users');
-    const userSnapshot = await usersCollection.get();
+    const usersCollectionRef = collection(db, 'users');
+    const userSnapshot = await getDocs(usersCollectionRef);
     if (userSnapshot.empty) {
         console.log('Database is empty. Populating with initial data...');
-        const batch = db.batch();
+        const batch = writeBatch(db);
 
         // Add users
         initialData.users.forEach(user => {
-            const userRef = db.collection('users').doc(user.id);
+            const userRef = doc(db, 'users', user.id);
             batch.set(userRef, { name: user.name, avatar: user.avatar, teamIds: user.teamIds, achievements: user.achievements });
         });
 
         // Add accounts
         initialData.accounts.forEach(account => {
-            const accountRef = db.collection('accounts').doc(account.id);
+            const accountRef = doc(db, 'accounts', account.id);
             batch.set(accountRef, account);
         });
 
         // Add teams and their subcollections
         initialData.teams.forEach(team => {
-            const teamRef = db.collection('teams').doc(team.id);
+            const teamRef = doc(db, 'teams', team.id);
             const { financialStatement, ...teamData } = team;
             batch.set(teamRef, teamData);
 
             financialStatement.transactions.forEach(tx => {
-                const txRef = db.collection(`teams/${team.id}/transactions`).doc(tx.id);
+                const txRef = doc(db, `teams/${team.id}/transactions`, tx.id);
                 batch.set(txRef, tx);
             });
             financialStatement.assets.forEach(asset => {
-                const assetRef = db.collection(`teams/${team.id}/assets`).doc(asset.id);
+                const assetRef = doc(db, `teams/${team.id}/assets`, asset.id);
                 batch.set(assetRef, asset);
             });
             financialStatement.liabilities.forEach(lia => {
-                const liaRef = db.collection(`teams/${team.id}/liabilities`).doc(lia.id);
+                const liaRef = doc(db, `teams/${team.id}/liabilities`, lia.id);
                 batch.set(liaRef, lia);
             });
         });
@@ -122,14 +122,13 @@ const populateDatabaseIfEmpty = async () => {
     }
 };
 
-
 export const getUsers = async (): Promise<User[]> => {
     await populateDatabaseIfEmpty();
-    const usersCollection = db.collection('users');
-    const userSnapshot = await usersCollection.get();
+    const usersCollection = collection(db, 'users');
+    const userSnapshot = await getDocs(usersCollection);
     const usersList = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as (Omit<User, 'accounts' | 'financialStatement' | 'budgets' | 'goals'> & { id: string })[];
 
-    const accountsSnapshot = await db.collection('accounts').get();
+    const accountsSnapshot = await getDocs(collection(db, 'accounts'));
     const allAccounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Account[];
 
     const enrichedUsers = usersList.map(user => {
@@ -137,9 +136,9 @@ export const getUsers = async (): Promise<User[]> => {
         return {
             ...user,
             accounts: userAccounts,
-            financialStatement: { transactions: [], assets: [], liabilities: [] }, // Populated by teams or personal subcollections
-            budgets: [], // Load from subcollection if needed
-            goals: [], // Load from subcollection if needed
+            financialStatement: { transactions: [], assets: [], liabilities: [] },
+            budgets: [],
+            goals: [],
         } as User;
     });
 
@@ -147,16 +146,16 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
-    const teamsQuery = db.collection('teams').where('memberIds', 'array-contains', userId);
-    const teamsSnapshot = await teamsQuery.get();
+    const teamsQuery = query(collection(db, 'teams'), where('memberIds', 'array-contains', userId));
+    const teamsSnapshot = await getDocs(teamsQuery);
     const teamsList: Team[] = [];
 
     for (const teamDoc of teamsSnapshot.docs) {
         const teamData = { id: teamDoc.id, ...teamDoc.data() } as Team;
 
-        const transactionsSnap = await db.collection(`teams/${teamDoc.id}/transactions`).get();
-        const assetsSnap = await db.collection(`teams/${teamDoc.id}/assets`).get();
-        const liabilitiesSnap = await db.collection(`teams/${teamDoc.id}/liabilities`).get();
+        const transactionsSnap = await getDocs(collection(db, `teams/${teamDoc.id}/transactions`));
+        const assetsSnap = await getDocs(collection(db, `teams/${teamDoc.id}/assets`));
+        const liabilitiesSnap = await getDocs(collection(db, `teams/${teamDoc.id}/liabilities`));
 
         teamData.financialStatement = {
             transactions: transactionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)),
@@ -168,29 +167,21 @@ export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
     return teamsList;
 };
 
-// --- WRITE/UPDATE FUNCTIONS ---
-
 export const addTransaction = async (userId: string, transaction: Omit<Transaction, 'id'>, users: User[]): Promise<User[]> => {
-    // This function is complex as personal transactions might not be stored in Firestore in this model
-    // We will just update account balances for now
-    console.warn("addTransaction (personal) only updates local state. Persist personal transactions if needed.");
+    console.warn("addTransaction (personal) only updates account balances. Persist personal transactions if needed.");
     const newTx: Transaction = { ...transaction, id: `tx-${Date.now()}` };
     const usersCopy = JSON.parse(JSON.stringify(users));
 
     for (const share of newTx.paymentShares) {
-        const docRef = db.collection('accounts').doc(share.accountId);
-        const accountDoc = await docRef.get();
-        if (accountDoc.exists) {
-            const currentBalance = accountDoc.data()!.balance;
-            const newBalance = currentBalance + (newTx.type === TransactionType.INCOME ? share.amount : -share.amount);
-            await docRef.set({ balance: newBalance }, { merge: true });
-            
-            const user = usersCopy.find((u: User) => u.accounts.some(a => a.id === share.accountId));
-            if(user){
-                const acc = user.accounts.find((a: Account) => a.id === share.accountId);
-                if(acc) acc.balance = newBalance;
+        const docRef = doc(db, 'accounts', share.accountId);
+        await runTransaction(db, async (transaction) => {
+            const accountDoc = await transaction.get(docRef);
+            if (accountDoc.exists()) {
+                const currentBalance = accountDoc.data().balance;
+                const newBalance = currentBalance + (newTx.type === TransactionType.INCOME ? share.amount : -share.amount);
+                transaction.update(docRef, { balance: newBalance });
             }
-        }
+        });
     }
     return usersCopy;
 };
@@ -199,44 +190,35 @@ export const addTeamTransaction = async (transaction: Omit<Transaction, 'id'>, t
     const newTx: Transaction = { ...transaction, id: `tx-${Date.now()}` };
     if (!newTx.teamId) throw new Error("Team ID is required for a team transaction");
     
-    // Add transaction to team's subcollection
-    await db.collection(`teams/${newTx.teamId}/transactions`).doc(newTx.id).set(newTx);
+    await setDoc(doc(db, `teams/${newTx.teamId}/transactions`, newTx.id), newTx);
 
-    // Update account balances
     for (const share of newTx.paymentShares) {
-        const docRef = db.collection('accounts').doc(share.accountId);
-        const accountDoc = await docRef.get();
-        if (accountDoc.exists) {
-            const currentBalance = accountDoc.data()!.balance;
-            const newBalance = currentBalance + (newTx.type === TransactionType.INCOME ? share.amount : -share.amount);
-            await docRef.set({ balance: newBalance }, { merge: true });
-        }
+        const docRef = doc(db, 'accounts', share.accountId);
+        await runTransaction(db, async (transaction) => {
+            const accountDoc = await transaction.get(docRef);
+            if (accountDoc.exists()) {
+                const currentBalance = accountDoc.data().balance;
+                const newBalance = currentBalance + (newTx.type === TransactionType.INCOME ? share.amount : -share.amount);
+                transaction.update(docRef, { balance: newBalance });
+            }
+        });
     }
     
-    // Return updated local state
-    const team = teams.find(t => t.id === newTx.teamId);
-    if (!team) throw new Error("Team not found in local state");
-    team.financialStatement.transactions.push(newTx);
-    // This is a simplification. A real app would refetch the user data.
-    const updatedUsers = await getUsers(); 
-
-    return { updatedTeam: team, updatedUsers };
+    const updatedUsers = await getUsers();
+    return { updatedTeam: teams.find(t=>t.id === newTx.teamId)!, updatedUsers };
 };
 
 export const updateTransaction = async (transaction: Transaction, users: User[], teams: Team[]): Promise<{ updatedUsers: User[], updatedTeams: Team[] }> => {
     if (transaction.teamId) {
-        const txRef = db.collection(`teams/${transaction.teamId}/transactions`).doc(transaction.id);
-        await txRef.set(transaction, { merge: true });
+        const txRef = doc(db, `teams/${transaction.teamId}/transactions`, transaction.id);
+        await setDoc(txRef, transaction, { merge: true });
     } else {
         console.error("Updating personal transactions not implemented for Firestore.");
     }
-    // A real app would need to revert old balance changes and apply new ones.
-    // For now, we assume balances are not changed on edit.
     return { updatedUsers: users, updatedTeams: teams };
 };
 
 export const deleteTransaction = async (transactionId: string, users: User[], teams: Team[]): Promise<{ updatedUsers: User[], updatedTeams: Team[] }> => {
-    // Find the transaction to know its team and financial impact
     let txToDelete: Transaction | undefined;
     let teamOfTx: Team | undefined;
     for(const team of teams) {
@@ -249,34 +231,38 @@ export const deleteTransaction = async (transactionId: string, users: User[], te
     }
 
     if (txToDelete && teamOfTx) {
-        // Revert financial impact
-         for (const share of txToDelete.paymentShares) {
-            const docRef = db.collection('accounts').doc(share.accountId);
-            const accountDoc = await docRef.get();
-            if (accountDoc.exists) {
-                const currentBalance = accountDoc.data()!.balance;
-                // Revert the payment: if it was income, subtract; if expense, add back.
-                const newBalance = currentBalance - (txToDelete.type === TransactionType.INCOME ? share.amount : -share.amount);
-                await docRef.set({ balance: newBalance }, { merge: true });
-            }
+        for (const share of txToDelete.paymentShares) {
+            const docRef = doc(db, 'accounts', share.accountId);
+            await runTransaction(db, async (transaction) => {
+                const accountDoc = await transaction.get(docRef);
+                if (accountDoc.exists()) {
+                    const currentBalance = accountDoc.data().balance;
+                    const newBalance = currentBalance - (txToDelete!.type === TransactionType.INCOME ? share.amount : -share.amount);
+                    transaction.update(docRef, { balance: newBalance });
+                }
+            });
         }
-        // Delete the transaction doc
-        await db.collection(`teams/${teamOfTx.id}/transactions`).doc(transactionId).delete();
+        await deleteDoc(doc(db, `teams/${teamOfTx.id}/transactions`, transactionId));
     } else {
         console.error("Cannot delete personal transaction or transaction not found.");
     }
     
     const updatedUsers = await getUsers();
-    let updatedTeams: Team[] = [];
-    if (updatedUsers.length > 0) {
-        updatedTeams = await getTeamsForUser(updatedUsers[0].id);
-    } else if (users.length > 0) {
-        updatedTeams = await getTeamsForUser(users[0].id);
-    }
+    const updatedTeams = teams.length > 0 ? await getTeamsForUser(teams[0].memberIds[0]) : [];
     return { updatedUsers, updatedTeams };
 };
 
+export const uploadReceipt = async (base64Image: string, userId: string): Promise<string> => {
+    const mimeType = base64Image.match(/data:(.*);/)?.[1] || 'image/jpeg';
+    const imageData = base64Image.split(',')[1];
+    
+    const filePath = `receipts/${userId}/${Date.now()}`;
+    const storageRef = ref(storage, filePath);
 
-// Other functions remain largely the same, but would point to Firestore
-// For brevity, we'll keep the mock logic for less critical paths but ensure core functionality uses Firestore.
+    await uploadString(storageRef, imageData, 'base64', { contentType: mimeType });
+    const downloadURL = await getDownloadURL(storageRef);
+    return downloadURL;
+};
+
+
 export { checkAndUnlockAchievement, saveBudget, addGoal, deleteGoal, updateGoal, addTeamAsset, addTeamLiability, updateTeamAsset, updateTeamLiability, createTeam, logDividend, updateAccount, addAccount, deleteAsset, updateLiability, updateAsset, addLiability, addAsset, applyEventOutcome, performTransfer } from './dbService.mock';
