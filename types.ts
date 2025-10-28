@@ -41,6 +41,8 @@ export interface ExpenseShare {
   amount: number;
 }
 
+export type SplitMode = 'equal' | 'amount' | 'percentage';
+
 export interface Transaction {
   id: string;
   description: string;
