@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
-import { AssetType, TransactionType } from './types';
-import * as dbService from './services/dbService'; 
-import { getCosmicEvent } from './services/geminiService';
-import { generateHistoricalData } from './utils/financialCalculations';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, XIcon, HistoryIcon, TrophyIcon, UploadIcon } from './components/icons';
+import React, { useState, useEffect } from 'react';
+import { AppProvider, useAppContext } from './AppContext';
+import Auth from './Auth';
+import type { View, Asset, Account, Liability, Goal } from './types';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, HistoryIcon, TrophyIcon, UploadIcon, LogOutIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -52,414 +50,48 @@ const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolea
     </button>
 );
 
-const App: React.FC = () => {
-    const [activeView, setActiveView] = useState<View>('dashboard');
-    const [users, setUsers] = useState<User[]>([]);
-    const [teams, setTeams] = useState<Team[]>([]);
-    const [activeUserId, setActiveUserId] = useState<string | null>(null);
-    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+const AppContent: React.FC = () => {
+    const {
+        activeView, setActiveView, users, teams, activeUser, selectedTeam,
+        isLoading, error, handleLogout,
+        effectiveFinancialStatement, historicalData, allUserAccounts,
+        
+        // Modals State
+        modalStates,
+        modalData,
+        
+        // Actions
+        actions
+    } = useAppContext();
+    
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-    // Modal States
-    const [isAddTransactionModalOpen, setAddTransactionModalOpen] = useState(false);
-    const [isTransferModalOpen, setTransferModalOpen] = useState(false);
-    const [isCosmicEventModalOpen, setCosmicEventModalOpen] = useState(false);
-    const [isAddStockModalOpen, setAddStockModalOpen] = useState(false);
-    const [isLogDividendModalOpen, setLogDividendModalOpen] = useState(false);
-    const [isAddAccountModalOpen, setAddAccountModalOpen] = useState(false);
-    const [isEditAccountModalOpen, setEditAccountModalOpen] = useState(false);
-    const [isAddAssetLiabilityModalOpen, setAddAssetLiabilityModalOpen] = useState(false);
-    const [isTransactionDetailModalOpen, setTransactionDetailModalOpen] = useState(false);
-    const [isCategoryModalOpen, setCategoryModalOpen] = useState(false);
-    const [isCreateTeamModalOpen, setCreateTeamModalOpen] = useState(false);
-    const [isNetWorthBreakdownModalOpen, setNetWorthBreakdownModalOpen] = useState(false);
-    const [isAddCategoryModalOpen, setAddCategoryModalOpen] = useState(false);
-    const [isAccountTransactionsModalOpen, setAccountTransactionsModalOpen] = useState(false);
-    const [isFabOpen, setIsFabOpen] = useState(false);
-    const [isAddBudgetModalOpen, setAddBudgetModalOpen] = useState(false);
-    const [isAddGoalModalOpen, setAddGoalModalOpen] = useState(false);
-    const [isContributeToGoalModalOpen, setContributeToGoalModalOpen] = useState(false);
-    const [isReceiptModalOpen, setReceiptModalOpen] = useState(false);
-    const [isSplitDetailModalOpen, setSplitDetailModalOpen] = useState(false);
-    
-    // Data for Modals
-    const [assetLiabilityToAdd, setAssetLiabilityToAdd] = useState<'asset' | 'liability' | null>(null);
-    const [assetLiabilityToEdit, setAssetLiabilityToEdit] = useState<Asset | Liability | null>(null);
-    const [stockToEdit, setStockToEdit] = useState<Asset | null>(null);
-    const [stockForDividend, setStockForDividend] = useState<Asset | null>(null);
-    const [stockForLargeChart, setStockForLargeChart] = useState<Asset | null>(null);
-    const [isGeneratingCosmicEvent, setIsGeneratingCosmicEvent] = useState(false);
-    const [currentCosmicEvent, setCurrentCosmicEvent] = useState<CosmicEvent | null>(null);
-    const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-    const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [modalDefaultTeamId, setModalDefaultTeamId] = useState<string | undefined>(undefined);
-    const [accountToEdit, setAccountToEdit] = useState<Account | null>(null);
-    const [accountForTransactionList, setAccountForTransactionList] = useState<Account | null>(null);
-    const [goalToContribute, setGoalToContribute] = useState<Goal | null>(null);
-    const [receiptUrlToView, setReceiptUrlToView] = useState('');
-
-
-    useEffect(() => {
-        const loadData = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const fetchedUsers = await dbService.getUsers();
-                setUsers(fetchedUsers);
-                
-                if (fetchedUsers.length > 0) {
-                    const currentActiveId = fetchedUsers[0].id;
-                    setActiveUserId(currentActiveId);
-                    const fetchedTeams = await dbService.getTeamsForUser(currentActiveId);
-                    setTeams(fetchedTeams);
-                }
-            } catch (e) {
-                console.error("Failed to load data:", e);
-                setError("Failed to connect to the cosmos (database). Please check your Firebase setup and security rules. The app won't work until this is resolved.");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        loadData();
-    }, []);
-
-    const activeUser = useMemo(() => users.find(u => u.id === activeUserId), [users, activeUserId]);
-    const selectedTeam = useMemo(() => teams.find(t => t.id === selectedTeamId), [teams, selectedTeamId]);
-    
-    const allUserAccounts = useMemo(() => users.flatMap(u => u.accounts), [users]);
-    
-    const effectiveFinancialStatement = useMemo(() => {
-        if (!activeUser) return { transactions: [], assets: [], liabilities: [] };
-        
-        const personalStatement = JSON.parse(JSON.stringify(activeUser.financialStatement));
-        const userTeams = teams.filter(t => t.memberIds.includes(activeUser.id));
-
-        for(const team of userTeams) {
-            personalStatement.transactions.push(...team.financialStatement.transactions);
-            team.financialStatement.assets.forEach(a => personalStatement.assets.push({ ...a }));
-            team.financialStatement.liabilities.forEach(l => personalStatement.liabilities.push({ ...l }));
-        }
-        
-        const uniqueTransactions = Array.from(new Map(personalStatement.transactions.map((t: Transaction) => [t.id, t])).values());
-        personalStatement.transactions = uniqueTransactions;
-        
-        return personalStatement;
-    }, [activeUser, teams]);
-
-    const historicalData = useMemo((): HistoricalDataPoint[] => {
-        if (!activeUser) return [];
-        return generateHistoricalData(activeUser, teams);
-    }, [activeUser, teams]);
-
-    const updateUserState = (updatedUser: User) => setUsers(currentUsers => currentUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
-    const updateMultipleUsersState = (updatedUsers: User[]) => {
-        const updatedUsersMap = new Map(updatedUsers.map(u => [u.id, u]));
-        setUsers(currentUsers => currentUsers.map(u => updatedUsersMap.get(u.id) || u));
-    };
-    const updateTeamState = (updatedTeam: Team) => setTeams(currentTeams => currentTeams.map(t => t.id === updatedTeam.id ? updatedTeam : t));
-    const updateMultipleTeamsState = (updatedTeams: Team[]) => {
-        const updatedTeamsMap = new Map(updatedTeams.map(t => [t.id, t]));
-        setTeams(currentTeams => currentTeams.map(t => updatedTeamsMap.get(t.id) || t));
-    };
-    
-    const handleUnlockAchievement = async (achievementId: string) => {
-        if (!activeUser) return;
-        const updatedUser = await dbService.checkAndUnlockAchievement(activeUser.id, achievementId);
-        if (updatedUser) {
-            updateUserState(updatedUser);
-            // In a real app, you might show a toast notification here
-            console.log(`Achievement Unlocked: ${achievementId}`);
-        }
-    };
-
-    const handleSaveTransaction = async (transaction: Omit<Transaction, 'id'> | Transaction) => {
-        if (!activeUser) return;
-        
-        const isFirstTransaction = effectiveFinancialStatement.transactions.length === 0 && !('id' in transaction);
-
-        if ('id' in transaction) { // Editing existing transaction
-            const { updatedUsers, updatedTeams } = await dbService.updateTransaction(transaction, users, teams);
-            updateMultipleUsersState(updatedUsers);
-            updateMultipleTeamsState(updatedTeams);
-        } else { // Adding new transaction
-            if(transaction.teamId) {
-                const { updatedTeam, updatedUsers } = await dbService.addTeamTransaction(transaction, teams, users);
-                updateTeamState(updatedTeam);
-                updateMultipleUsersState(updatedUsers);
-            } else {
-                const updatedUsers = await dbService.addTransaction(activeUser.id, transaction, users);
-                updateMultipleUsersState(updatedUsers);
-            }
-        }
-        
-        if(isFirstTransaction) {
-            handleUnlockAchievement('FIRST_TRANSACTION');
-        }
-    };
-    
-    const handleDeleteTransaction = async (transactionId: string) => {
-        if (!window.confirm("Are you sure you want to delete this transaction? This action cannot be undone.")) return;
-        const { updatedUsers, updatedTeams } = await dbService.deleteTransaction(transactionId, users, teams);
-        updateMultipleUsersState(updatedUsers);
-        updateMultipleTeamsState(updatedTeams);
-    };
-
-    const handleTransfer = async (fromAccountId: string, toAccountId: string, amount: number) => {
-        if (!activeUserId) return;
-        try {
-             const updatedUser = await dbService.performTransfer(activeUserId, fromAccountId, toAccountId, amount);
-            updateUserState(updatedUser);
-        } catch (error) {
-            alert((error as Error).message);
-        }
-    };
-    
-    const handleDrawCosmicCard = async () => {
-        if (!activeUser) return;
-        setIsGeneratingCosmicEvent(true);
-        setCosmicEventModalOpen(true);
-        setCurrentCosmicEvent(null);
-        
-        const event = await getCosmicEvent(activeUser.financialStatement, activeUser.accounts);
-        setCurrentCosmicEvent(event);
-        setIsGeneratingCosmicEvent(false);
-    };
-
-    const handleCosmicEventResolution = async (outcome: EventOutcome) => {
-        if (!activeUser) return;
-        try {
-            const updatedUser = await dbService.applyEventOutcome(activeUser, outcome);
-            updateUserState(updatedUser);
-        } catch (error) {
-            alert((error as Error).message);
-        }
-    };
-
-    const handleAddAssetLiability = async (data: Partial<Asset | Liability>, teamId?: string) => {
-        if(!activeUser || !assetLiabilityToAdd) return;
-        try {
-            if(teamId) {
-                const updatedTeam = assetLiabilityToAdd === 'asset'
-                    ? await dbService.addTeamAsset(teamId, data as Partial<Asset>)
-                    : await dbService.addTeamLiability(teamId, data as Partial<Liability>);
-                updateTeamState(updatedTeam);
-            } else {
-                 const updatedUser = assetLiabilityToAdd === 'asset'
-                    ? await dbService.addAsset(activeUser.id, data as Partial<Asset>)
-                    : await dbService.addLiability(activeUser.id, data as Partial<Liability>);
-                updateUserState(updatedUser);
-            }
-        } catch(e) {
-            alert((e as Error).message);
-        }
-    };
-
-    const handleUpdateAssetLiability = async (data: Partial<Asset | Liability>) => {
-        if (!activeUser || !assetLiabilityToEdit) return;
-        try {
-            if (assetLiabilityToEdit.teamId) {
-                const isAsset = 'value' in assetLiabilityToEdit;
-                const updatedTeam = isAsset
-                    ? await dbService.updateTeamAsset(assetLiabilityToEdit.teamId, assetLiabilityToEdit.id, data)
-                    : await dbService.updateTeamLiability(assetLiabilityToEdit.teamId, assetLiabilityToEdit.id, data);
-                updateTeamState(updatedTeam);
-            } else {
-                const isAsset = 'value' in assetLiabilityToEdit;
-                const updatedUser = isAsset
-                    ? await dbService.updateAsset(activeUser.id, assetLiabilityToEdit.id, data)
-                    : await dbService.updateLiability(activeUser.id, assetLiabilityToEdit.id, data);
-                updateUserState(updatedUser);
-            }
-        } catch (e) {
-            alert((e as Error).message);
-        }
-    };
-
-    const handleSaveStock = async (stockData: Partial<Asset>, teamId?: string) => {
-        if (!activeUser) return;
-        try {
-            if(teamId) {
-                const updatedTeam = await dbService.addTeamAsset(teamId, {...stockData, type: AssetType.STOCK});
-                updateTeamState(updatedTeam);
-            } else {
-                let updatedUser;
-                if (stockToEdit) { 
-                    updatedUser = await dbService.updateAsset(activeUser.id, stockToEdit.id, stockData);
-                } else { 
-                    updatedUser = await dbService.addAsset(activeUser.id, {...stockData, type: AssetType.STOCK} as any);
-                }
-                updateUserState(updatedUser);
-            }
-             handleUnlockAchievement('FIRST_INVESTMENT');
-        } catch(e) {
-            alert((e as Error).message);
-        }
-    };
-    
-    const handleDeleteStock = async (stockId: string) => {
-        if (!activeUser || !window.confirm("Are you sure you want to sell this stock? This action cannot be undone.")) return;
-        try {
-            const updatedUser = await dbService.deleteAsset(activeUser.id, stockId);
-            updateUserState(updatedUser);
-        } catch (e) {
-            alert((e as Error).message);
-        }
-    };
-
-    const handleLogDividend = async (amount: number, accountId: string) => {
-        if (!activeUser || !stockForDividend) return;
-        try {
-            const updatedUser = await dbService.logDividend(activeUser, stockForDividend.id, amount, accountId);
-            updateUserState(updatedUser);
-        } catch (e) {
-            alert((e as Error).message);
-        }
-    };
-
-    const handleAddAccount = async (accountData: Omit<Account, 'id' | 'balance' | 'ownerIds'> & {balance: number}) => {
-        if (!activeUser) return;
-        try {
-            const updatedUser = await dbService.addAccount(activeUser.id, accountData);
-            updateUserState(updatedUser);
-        } catch (e) {
-            alert((e as Error).message);
-        }
-        setAddAccountModalOpen(false);
-        setAddTransactionModalOpen(true); 
-    };
-
-    const handleUpdateAccount = async (account: Account) => {
-        try {
-            const updatedUsers = await dbService.updateAccount(account, users);
-            updateMultipleUsersState(updatedUsers);
-        } catch (error) {
-            alert((error as Error).message);
-        }
-    };
-
-    const handleAddCategory = (newCategory: string) => {
-        console.log("New category added:", newCategory);
-        setAddCategoryModalOpen(false);
-        setAddTransactionModalOpen(true);
-    };
-    
-    const handleCreateTeam = async(name: string, memberIds: string[]) => {
-        if(!activeUser) return;
-        const newTeam = await dbService.createTeam(name, [...memberIds, activeUser.id]);
-        setTeams(current => [...current, newTeam]);
-        handleUnlockAchievement('FIRST_TEAM');
-    };
-
-    const handleSaveBudget = async (budget: Budget) => {
-        if (!activeUser) return;
-        const updatedUser = await dbService.saveBudget(activeUser.id, budget);
-        updateUserState(updatedUser);
-    };
-
-    const handleSaveGoal = async (goalData: Omit<Goal, 'id' | 'currentAmount'>) => {
-        if (!activeUser) return;
-        const updatedUser = await dbService.addGoal(activeUser.id, goalData);
-        updateUserState(updatedUser);
-    };
-
-    const handleDeleteGoal = async (goalId: string) => {
-        if (!activeUser || !window.confirm("Are you sure you want to delete this goal?")) return;
-        const updatedUser = await dbService.deleteGoal(activeUser.id, goalId);
-        updateUserState(updatedUser);
-    };
-
-    const handleContributeToGoal = async (goal: Goal, amount: number, fromAccountId: string) => {
-        if (!activeUser) return;
-
-        const contributionTransaction: Omit<Transaction, 'id'> = {
-            description: `Contribution to goal: ${goal.name}`,
-            amount: amount,
-            type: TransactionType.EXPENSE,
-            category: 'Goals',
-            date: new Date().toISOString().split('T')[0],
-            paymentShares: [{ userId: activeUser.id, accountId: fromAccountId, amount: amount }],
-            expenseShares: [{ userId: activeUser.id, amount: amount }],
-        };
-        await handleSaveTransaction(contributionTransaction);
-
-        const updatedGoal = { ...goal, currentAmount: goal.currentAmount + amount };
-        const updatedUser = await dbService.updateGoal(activeUser.id, updatedGoal);
-        updateUserState(updatedUser);
-    };
-    
-    const handleViewReceipt = (url: string) => {
-        setReceiptUrlToView(url);
-        setReceiptModalOpen(true);
-    };
-    
-    const handleViewSplitDetails = (transaction: Transaction) => {
-        setSelectedTransaction(transaction);
-        setSplitDetailModalOpen(true);
-    };
-
-    const handleTeamClick = (teamId: string) => { setSelectedTeamId(teamId); setActiveView('team-detail'); };
-    const handleBackToTeams = () => { setSelectedTeamId(null); setActiveView('teams'); };
-    const handleCategoryClick = (category: string) => { setSelectedCategory(category); setCategoryModalOpen(true); };
-    const handleTransactionClick = (transaction: Transaction) => { setSelectedTransaction(transaction); setTransactionDetailModalOpen(true); };
-    
-    const handleStatCardClick = (stat: 'netWorth' | 'cashflow' | 'passiveIncome') => {
-        if (stat === 'netWorth') setNetWorthBreakdownModalOpen(true);
-        if (stat === 'cashflow') setActiveView('statement');
-        if (stat === 'passiveIncome') { setActiveView('history'); }
-    };
-    
-    const handleOpenAccountTransactionsModal = (account: Account) => { setAccountForTransactionList(account); setAccountTransactionsModalOpen(true); };
-    const openLargeChartModal = (stock: Asset) => setStockForLargeChart(stock);
-    const closeLargeChartModal = () => setStockForLargeChart(null);
-    const handleOpenLogDividendModal = (stock: Asset) => { setStockForDividend(stock); setLogDividendModalOpen(true); };
-    
-    const handleOpenAddTransactionModal = (teamId?: string) => { setTransactionToEdit(null); setModalDefaultTeamId(teamId); setAddTransactionModalOpen(true); };
-    const handleOpenEditTransactionModal = (transaction: Transaction) => { setTransactionToEdit(transaction); setAddTransactionModalOpen(true); };
-    
-    const handleOpenAddAssetLiabilityModal = (type: 'asset' | 'liability', teamId?: string) => { setAssetLiabilityToEdit(null); setModalDefaultTeamId(teamId); setAssetLiabilityToAdd(type); setAddAssetLiabilityModalOpen(true); };
-    const handleOpenEditAssetLiabilityModal = (item: Asset | Liability) => { setAssetLiabilityToEdit(item); setAssetLiabilityToAdd('value' in item ? 'asset' : 'liability'); setAddAssetLiabilityModalOpen(true); };
-    const handleOpenAddStockModal = (teamId?: string) => { setStockToEdit(null); setModalDefaultTeamId(teamId); setAddStockModalOpen(true); };
-    const handleOpenEditStockModal = (stock: Asset) => { setStockToEdit(stock); setAddStockModalOpen(true); };
-    const handleOpenEditAccountModal = (account: Account) => { setAccountToEdit(account); setEditAccountModalOpen(true); };
-    const handleOpenContributeToGoalModal = (goal: Goal) => { setGoalToContribute(goal); setContributeToGoalModalOpen(true); };
-
-    const fabActions = {
-        onAddTransaction: () => { setIsFabOpen(false); handleOpenAddTransactionModal(selectedTeamId || undefined); },
-        onAddAccount: () => { setIsFabOpen(false); setAddAccountModalOpen(true); },
-        onCreateTeam: () => { setIsFabOpen(false); setCreateTeamModalOpen(true); },
-        onAddStock: () => { setIsFabOpen(false); handleOpenAddStockModal(selectedTeamId || undefined); },
-        onTransfer: () => { setIsFabOpen(false); setTransferModalOpen(true); }
-    };
-    
     const handleViewChange = (view: View) => {
+        actions.setSelectedTeamId(null);
         setActiveView(view);
-        setSelectedTeamId(null);
         setIsMobileNavOpen(false);
     }
+    
+    if (isLoading) return <div className="flex items-center justify-center h-screen bg-cosmic-bg text-lg animate-pulse-fast">Connecting to the Cosmos...</div>;
+    if (error) return <div className="p-8 bg-cosmic-surface border border-cosmic-danger rounded-lg text-center m-8"><p className="font-bold text-cosmic-danger">Connection Error</p><p>{error}</p></div>;
+    if (!activeUser) return <div className="flex items-center justify-center h-screen bg-cosmic-bg"><p>Loading player data...</p></div>;
 
     const renderView = () => {
-        if (isLoading) return <div className="flex items-center justify-center h-full"><p className="text-lg animate-pulse-fast">Connecting to the Cosmos...</p></div>;
-        if (error) return <div className="p-8 bg-cosmic-surface border border-cosmic-danger rounded-lg text-center"><p className="font-bold text-cosmic-danger">Connection Error</p><p>{error}</p></div>;
-        if (!activeUser) return <div className="flex items-center justify-center h-full"><p>No Players Found</p></div>;
-
         switch (activeView) {
-            case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
-            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt} onViewSplitDetails={handleViewSplitDetails}/>;
+            case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick}/>;
+            case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails}/>;
             case 'importer': return <StatementImporter />;
-            case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => setAddAccountModalOpen(true)} onOpenAccountTransactions={handleOpenAccountTransactionsModal} onEditAccount={handleOpenEditAccountModal} />;
+            case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => actions.setModalOpen('isAddAccountModalOpen', true)} onOpenAccountTransactions={actions.handleOpenAccountTransactionsModal} onEditAccount={actions.handleOpenEditAccountModal} />;
             case 'coach': return <AICoach user={activeUser} />;
-            case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => handleOpenAddStockModal()} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability')} onEditStock={handleOpenEditStockModal} onDeleteStock={handleDeleteStock} onLogDividend={handleOpenLogDividendModal} onOpenLargeChart={openLargeChartModal} teams={teams} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} />;
-            case 'teams': return <Teams teams={teams} onCreateTeam={() => setCreateTeamModalOpen(true)} onTeamClick={handleTeamClick}/>;
-            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={handleBackToTeams} onAddTransaction={() => handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => handleOpenAddStockModal(selectedTeam.id)} onEditAsset={handleOpenEditAssetLiabilityModal} onEditLiability={handleOpenEditAssetLiabilityModal} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} onViewReceipt={handleViewReceipt} onViewSplitDetails={handleViewSplitDetails}/> : null;
-            case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => setTransferModalOpen(true)} />;
-            case 'budget': return <BudgetView user={activeUser} onSaveBudget={handleSaveBudget} onOpenBudgetModal={() => setAddBudgetModalOpen(true)} />;
-            case 'goals': return <GoalsView user={activeUser} onAddGoal={() => setAddGoalModalOpen(true)} onDeleteGoal={handleDeleteGoal} onContribute={handleOpenContributeToGoalModal} />;
+            case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => actions.handleOpenAddStockModal()} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability')} onEditStock={actions.handleOpenEditStockModal} onDeleteStock={actions.handleDeleteStock} onLogDividend={actions.handleOpenLogDividendModal} onOpenLargeChart={actions.openLargeChartModal} teams={teams} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} />;
+            case 'teams': return <Teams teams={teams} onCreateTeam={() => actions.setModalOpen('isCreateTeamModalOpen', true)} onTeamClick={actions.handleTeamClick}/>;
+            case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={actions.handleBackToTeams} onAddTransaction={() => actions.handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => actions.handleOpenAddStockModal(selectedTeam.id)} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails}/> : null;
+            case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => actions.setModalOpen('isTransferModalOpen', true)} />;
+            case 'budget': return <BudgetView user={activeUser} onSaveBudget={actions.handleSaveBudget} onOpenBudgetModal={() => actions.setModalOpen('isAddBudgetModalOpen', true)} />;
+            case 'goals': return <GoalsView user={activeUser} onAddGoal={() => actions.setModalOpen('isAddGoalModalOpen', true)} onDeleteGoal={actions.handleDeleteGoal} onContribute={actions.handleOpenContributeToGoalModal} />;
             case 'history': return <HistoricalPerformance data={historicalData} />;
             case 'achievements': return <Achievements user={activeUser} />;
-            default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => handleOpenAddTransactionModal()} onTransferClick={() => setTransferModalOpen(true)} onDrawCosmicCard={handleDrawCosmicCard} onCategoryClick={handleCategoryClick} onTransactionClick={handleTransactionClick} onStatCardClick={handleStatCardClick}/>;
+            default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick}/>;
         }
     };
 
@@ -488,10 +120,21 @@ const App: React.FC = () => {
              )}
             <NavItem icon={<CoachIcon className="w-6 h-6" />} label="AI Coach" isActive={activeView === 'coach'} onClick={() => handleViewChange('coach')} />
         </div>
-        {activeUser && <div className="mt-auto bg-cosmic-bg p-4 rounded-lg border border-cosmic-border"><div className="flex items-center gap-3"><img src={activeUser.avatar} alt={activeUser.name} className="w-12 h-12 rounded-full border-2 border-cosmic-primary" /><div><p className="font-bold text-cosmic-text-primary">{activeUser.name}</p><p className="text-sm text-cosmic-text-secondary">Level 5</p></div></div></div>}
+        <div className="mt-auto bg-cosmic-bg p-4 rounded-lg border border-cosmic-border flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <img src={activeUser.avatar} alt={activeUser.name} className="w-10 h-10 rounded-full border-2 border-cosmic-primary" />
+                <div>
+                    <p className="font-bold text-cosmic-text-primary">{activeUser.name}</p>
+                    <p className="text-sm text-cosmic-text-secondary">Level 5</p>
+                </div>
+            </div>
+            <button onClick={handleLogout} title="Log Out" className="text-cosmic-text-secondary hover:text-cosmic-primary">
+                <LogOutIcon className="w-6 h-6" />
+            </button>
+        </div>
       </>
     );
-    
+
     return (
         <div className="md:flex h-screen bg-cosmic-bg text-cosmic-text-primary font-sans">
             {/* Mobile Nav */}
@@ -514,43 +157,56 @@ const App: React.FC = () => {
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
                     <div className="flex items-center gap-2">
-                        {users.map(user => <button key={user.id} onClick={() => setActiveUserId(user.id)} className={`w-8 h-8 rounded-full transition-all duration-200 ${activeUserId === user.id ? 'border-2 border-cosmic-primary scale-110' : ''}`}><img src={user.avatar} className="w-full h-full rounded-full" alt={user.name}/></button>)}
+                         <img src={activeUser.avatar} className="w-8 h-8 rounded-full border-2 border-cosmic-primary" alt={activeUser.name}/>
                     </div>
                 </header>
 
                 <div className="p-4 md:p-8">
-                    <div className="hidden md:flex mb-6 bg-cosmic-surface p-2 rounded-lg border border-cosmic-border self-start items-center gap-2">
-                         <label className="text-sm font-semibold text-cosmic-text-secondary mr-2">Active Player:</label>
-                        {users.map(user => <button key={user.id} onClick={() => setActiveUserId(user.id)} className={`px-3 py-1 rounded-md text-sm font-semibold transition-colors ${activeUserId === user.id ? 'bg-cosmic-primary text-white' : 'bg-cosmic-bg text-cosmic-text-primary hover:bg-cosmic-border'}`}>{user.name}</button>)}
-                    </div>
                     <div className="flex-grow">{renderView()}</div>
                 </div>
 
-                <FloatingActionButton {...fabActions} isOpen={isFabOpen} onToggle={() => setIsFabOpen(prev => !prev)} />
+{/* Fix: The FloatingActionButton was missing required props. Pass the handlers for each action. */}
+                <FloatingActionButton 
+                    isOpen={modalStates.isFabOpen} 
+                    onToggle={() => actions.setModalOpen('isFabOpen', !modalStates.isFabOpen)} 
+                    onAddTransaction={() => { actions.setModalOpen('isAddTransactionModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
+                    onAddAccount={() => { actions.setModalOpen('isAddAccountModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
+                    onCreateTeam={() => { actions.setModalOpen('isCreateTeamModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
+                    onAddStock={() => { actions.setModalOpen('isAddStockModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
+                    onTransfer={() => { actions.setModalOpen('isTransferModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
+                />
             </main>
             
-            {activeUser && <AddTransactionModal isOpen={isAddTransactionModalOpen} onClose={() => setAddTransactionModalOpen(false)} onSave={handleSaveTransaction} transactionToEdit={transactionToEdit} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={() => { setAddTransactionModalOpen(false); setAddAccountModalOpen(true); }} onAddCategoryClick={() => { setAddTransactionModalOpen(false); setAddCategoryModalOpen(true); }} defaultTeamId={modalDefaultTeamId} />}
-            {activeUser && <TransferModal isOpen={isTransferModalOpen} onClose={() => setTransferModalOpen(false)} onTransfer={handleTransfer} currentUser={activeUser}/>}
-            <CosmicEventModal isOpen={isCosmicEventModalOpen} isGenerating={isGeneratingCosmicEvent} event={currentCosmicEvent} onClose={() => setCosmicEventModalOpen(false)} onResolve={handleCosmicEventResolution}/>
-            <AddStockModal isOpen={isAddStockModalOpen} onClose={() => setAddStockModalOpen(false)} onSave={handleSaveStock} stockToEdit={stockToEdit} accounts={activeUser?.accounts || []} teams={teams} defaultTeamId={modalDefaultTeamId} />
-            {activeUser && stockForDividend && <LogDividendModal isOpen={isLogDividendModalOpen} onClose={() => { setLogDividendModalOpen(false); setStockForDividend(null); }} onLogDividend={handleLogDividend} stock={stockForDividend} accounts={activeUser.accounts}/>}
-            {stockForLargeChart && <LargeChartModal stock={stockForLargeChart} onClose={closeLargeChartModal}/>}
-            <AddAccountModal isOpen={isAddAccountModalOpen} onClose={() => setAddAccountModalOpen(false)} onAddAccount={handleAddAccount}/>
-            {activeUser && <EditAccountModal isOpen={isEditAccountModalOpen} onClose={() => setEditAccountModalOpen(false)} onSave={handleUpdateAccount} accountToEdit={accountToEdit} allUsers={users} />}
-            {activeUser && <AddAssetLiabilityModal isOpen={isAddAssetLiabilityModalOpen} type={assetLiabilityToAdd} itemToEdit={assetLiabilityToEdit} onClose={() => { setAddAssetLiabilityModalOpen(false); setAssetLiabilityToEdit(null); }} onSave={assetLiabilityToEdit ? handleUpdateAssetLiability : handleAddAssetLiability} teams={teams} defaultTeamId={modalDefaultTeamId} />}
-            {selectedTransaction && <TransactionDetailModal isOpen={isTransactionDetailModalOpen} onClose={() => { setTransactionDetailModalOpen(false); setSelectedTransaction(null); }} transaction={selectedTransaction} users={users}/>}
-            {selectedCategory && <CategoryTransactionListModal isOpen={isCategoryModalOpen} onClose={() => { setCategoryModalOpen(false); setSelectedCategory(null); }} category={selectedCategory} transactions={effectiveFinancialStatement.transactions}/>}
-            {activeUser && <CreateTeamModal isOpen={isCreateTeamModalOpen} onClose={() => setCreateTeamModalOpen(false)} onCreateTeam={handleCreateTeam} allUsers={users} currentUser={activeUser}/>}
-            {activeUser && <NetWorthBreakdownModal isOpen={isNetWorthBreakdownModalOpen} onClose={() => setNetWorthBreakdownModalOpen(false)} user={activeUser} teams={teams} />}
-            <AddCategoryModal isOpen={isAddCategoryModalOpen} onClose={() => { setAddCategoryModalOpen(false); setAddTransactionModalOpen(true); }} onAddCategory={handleAddCategory} />
-            {activeUser && accountForTransactionList && <AccountTransactionsModal isOpen={isAccountTransactionsModalOpen} onClose={() => setAccountTransactionsModalOpen(false)} account={accountForTransactionList} allTransactions={effectiveFinancialStatement.transactions} onEditTransaction={handleOpenEditTransactionModal} onDeleteTransaction={handleDeleteTransaction} />}
-            {activeUser && <AddBudgetModal isOpen={isAddBudgetModalOpen} onClose={() => setAddBudgetModalOpen(false)} onSave={handleSaveBudget} user={activeUser} />}
-            {activeUser && <AddGoalModal isOpen={isAddGoalModalOpen} onClose={() => setAddGoalModalOpen(false)} onSave={handleSaveGoal} />}
-            {activeUser && goalToContribute && <ContributeToGoalModal isOpen={isContributeToGoalModalOpen} onClose={() => setContributeToGoalModalOpen(false)} onContribute={handleContributeToGoal} goal={goalToContribute} user={activeUser} />}
-            <ReceiptModal isOpen={isReceiptModalOpen} onClose={() => setReceiptModalOpen(false)} imageUrl={receiptUrlToView} />
-            {selectedTransaction && <TransactionSplitDetailModal isOpen={isSplitDetailModalOpen} onClose={() => { setSplitDetailModalOpen(false); setSelectedTransaction(null); }} transaction={selectedTransaction} allUsers={users} allAccounts={allUserAccounts} />}
+            <AddTransactionModal isOpen={modalStates.isAddTransactionModalOpen} onClose={() => actions.setModalOpen('isAddTransactionModalOpen', false)} onSave={actions.handleSaveTransaction} transactionToEdit={modalData.transactionToEdit} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={() => { actions.setModalOpen('isAddTransactionModalOpen', false); actions.setModalOpen('isAddAccountModalOpen', true); }} onAddCategoryClick={() => { actions.setModalOpen('isAddTransactionModalOpen', false); actions.setModalOpen('isAddCategoryModalOpen', true); }} defaultTeamId={modalData.modalDefaultTeamId} />
+            <TransferModal isOpen={modalStates.isTransferModalOpen} onClose={() => actions.setModalOpen('isTransferModalOpen', false)} onTransfer={actions.handleTransfer} currentUser={activeUser}/>
+            <CosmicEventModal isOpen={modalStates.isCosmicEventModalOpen} isGenerating={modalData.isGeneratingCosmicEvent} event={modalData.currentCosmicEvent} onClose={() => actions.setModalOpen('isCosmicEventModalOpen', false)} onResolve={actions.handleCosmicEventResolution}/>
+            <AddStockModal isOpen={modalStates.isAddStockModalOpen} onClose={() => actions.setModalOpen('isAddStockModalOpen', false)} onSave={actions.handleSaveStock} stockToEdit={modalData.stockToEdit} accounts={activeUser?.accounts || []} teams={teams} defaultTeamId={modalData.modalDefaultTeamId} />
+            {modalData.stockForDividend && <LogDividendModal isOpen={modalStates.isLogDividendModalOpen} onClose={() => { actions.setModalOpen('isLogDividendModalOpen', false); actions.setStockForDividend(null); }} onLogDividend={actions.handleLogDividend} stock={modalData.stockForDividend} accounts={activeUser.accounts}/>}
+            {modalData.stockForLargeChart && <LargeChartModal stock={modalData.stockForLargeChart} onClose={actions.closeLargeChartModal}/>}
+            <AddAccountModal isOpen={modalStates.isAddAccountModalOpen} onClose={() => actions.setModalOpen('isAddAccountModalOpen', false)} onAddAccount={actions.handleAddAccount}/>
+            <EditAccountModal isOpen={modalStates.isEditAccountModalOpen} onClose={() => actions.setModalOpen('isEditAccountModalOpen', false)} onSave={actions.handleUpdateAccount} accountToEdit={modalData.accountToEdit} allUsers={users} />
+            <AddAssetLiabilityModal isOpen={modalStates.isAddAssetLiabilityModalOpen} type={modalData.assetLiabilityToAdd} itemToEdit={modalData.assetLiabilityToEdit} onClose={() => { actions.setModalOpen('isAddAssetLiabilityModalOpen', false); actions.setAssetLiabilityToEdit(null); }} onSave={modalData.assetLiabilityToEdit ? actions.handleUpdateAssetLiability : actions.handleAddAssetLiability} teams={teams} defaultTeamId={modalData.modalDefaultTeamId} />
+            {modalData.selectedTransaction && <TransactionDetailModal isOpen={modalStates.isTransactionDetailModalOpen} onClose={() => { actions.setModalOpen('isTransactionDetailModalOpen', false); actions.setSelectedTransaction(null); }} transaction={modalData.selectedTransaction} users={users}/>}
+            {modalData.selectedCategory && <CategoryTransactionListModal isOpen={modalStates.isCategoryModalOpen} onClose={() => { actions.setModalOpen('isCategoryModalOpen', false); actions.setSelectedCategory(null); }} category={modalData.selectedCategory} transactions={effectiveFinancialStatement.transactions}/>}
+            <CreateTeamModal isOpen={modalStates.isCreateTeamModalOpen} onClose={() => actions.setModalOpen('isCreateTeamModalOpen', false)} onCreateTeam={actions.handleCreateTeam} allUsers={users} currentUser={activeUser}/>
+            <NetWorthBreakdownModal isOpen={modalStates.isNetWorthBreakdownModalOpen} onClose={() => actions.setModalOpen('isNetWorthBreakdownModalOpen', false)} user={activeUser} teams={teams} />
+            <AddCategoryModal isOpen={modalStates.isAddCategoryModalOpen} onClose={() => { actions.setModalOpen('isAddCategoryModalOpen', false); actions.setModalOpen('isAddTransactionModalOpen', true); }} onAddCategory={actions.handleAddCategory} />
+            {modalData.accountForTransactionList && <AccountTransactionsModal isOpen={modalStates.isAccountTransactionsModalOpen} onClose={() => actions.setModalOpen('isAccountTransactionsModalOpen', false)} account={modalData.accountForTransactionList} allTransactions={effectiveFinancialStatement.transactions} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} />}
+            <AddBudgetModal isOpen={modalStates.isAddBudgetModalOpen} onClose={() => actions.setModalOpen('isAddBudgetModalOpen', false)} onSave={actions.handleSaveBudget} user={activeUser} />
+            <AddGoalModal isOpen={modalStates.isAddGoalModalOpen} onClose={() => actions.setModalOpen('isAddGoalModalOpen', false)} onSave={actions.handleSaveGoal} />
+            {modalData.goalToContribute && <ContributeToGoalModal isOpen={modalStates.isContributeToGoalModalOpen} onClose={() => actions.setModalOpen('isContributeToGoalModalOpen', false)} onContribute={actions.handleContributeToGoal} goal={modalData.goalToContribute} user={activeUser} />}
+            <ReceiptModal isOpen={modalStates.isReceiptModalOpen} onClose={() => actions.setModalOpen('isReceiptModalOpen', false)} imageUrl={modalData.receiptUrlToView} />
+            {modalData.selectedTransaction && <TransactionSplitDetailModal isOpen={modalStates.isSplitDetailModalOpen} onClose={() => { actions.setModalOpen('isSplitDetailModalOpen', false); actions.setSelectedTransaction(null); }} transaction={modalData.selectedTransaction} allUsers={users} allAccounts={allUserAccounts} />}
         </div>
     );
 };
+
+const App: React.FC = () => {
+    return (
+        <AppProvider>
+            <AppContent />
+        </AppProvider>
+    )
+}
 
 export default App;

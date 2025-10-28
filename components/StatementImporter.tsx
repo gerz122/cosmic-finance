@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SparklesIcon, UploadIcon } from './icons';
+import { parseStatementWithGemini } from '../services/geminiService';
 
-// Mock data structure and values
 interface ParsedTransaction {
     id: number;
     date: string;
@@ -9,16 +9,8 @@ interface ParsedTransaction {
     amount: number;
     type: 'income' | 'expense';
     category: string;
-    accountId: string; // This would be empty initially
+    accountId: string;
 }
-
-const mockParsedTransactions: ParsedTransaction[] = [
-    { id: 1, date: '2023-10-25', description: 'SUPERSTORE #1234', amount: 85.43, type: 'expense', category: 'Food', accountId: '' },
-    { id: 2, date: '2023-10-25', description: 'PAYROLL DEPOSIT - ACME CORP', amount: 2200.00, type: 'income', category: 'Job', accountId: '' },
-    { id: 3, date: '2023-10-24', description: 'SHELL GAS STATION', amount: 55.12, type: 'expense', category: 'Transportation', accountId: '' },
-    { id: 4, date: '2023-10-23', description: 'ETRANSFER FROM JOHN DOE', amount: 150.00, type: 'income', category: 'Transfer', accountId: '' },
-    { id: 5, date: '2023-10-22', description: 'AMAZON.CA', amount: 34.99, type: 'expense', category: 'Shopping', accountId: '' },
-];
 
 const defaultCategories = ['Food', 'Transportation', 'Shopping', 'Job', 'Utilities', 'Entertainment', 'Transfer', 'Other'];
 
@@ -27,31 +19,45 @@ export const StatementImporter: React.FC = () => {
     const [fileName, setFileName] = useState('');
     const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             setFileName(file.name);
+            setError(null);
             const reader = new FileReader();
             reader.onload = (event) => {
                 setText(event.target?.result as string);
-                setParsedTransactions([]); // Clear previous results
+                setParsedTransactions([]);
             };
             reader.readAsText(file);
         }
     };
 
-    const handleAnalyze = () => {
+    const handleAnalyze = async () => {
         if (!text.trim()) {
             alert("Please upload a file or paste statement text first.");
             return;
         }
         setIsAnalyzing(true);
-        // In a real implementation, this would call a service with the `text` content
-        setTimeout(() => {
-            setParsedTransactions(mockParsedTransactions);
+        setError(null);
+        setParsedTransactions([]);
+        
+        try {
+            const results = await parseStatementWithGemini(text);
+            // Add default empty category/accountId for review step
+            const reviewableResults = results.map((tx: any) => ({
+                ...tx,
+                category: '',
+                accountId: ''
+            }));
+            setParsedTransactions(reviewableResults);
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
             setIsAnalyzing(false);
-        }, 1500);
+        }
     };
     
     const handleTransactionUpdate = (id: number, field: keyof ParsedTransaction, value: string | number) => {
@@ -82,10 +88,10 @@ export const StatementImporter: React.FC = () => {
                         <label htmlFor="file-upload" className="w-full text-center cursor-pointer bg-cosmic-bg border-2 border-dashed border-cosmic-border rounded-lg p-8 hover:border-cosmic-primary transition-colors">
                             <UploadIcon className="w-10 h-10 mx-auto text-cosmic-text-secondary" />
                             <p className="mt-2 font-semibold text-cosmic-primary">Click to upload a file</p>
-                            <p className="text-xs text-cosmic-text-secondary">(.txt, .csv, .pdf)</p>
+                            <p className="text-xs text-cosmic-text-secondary">(.txt, .csv)</p>
                             {fileName && <p className="text-sm mt-2 text-cosmic-success font-semibold">{fileName}</p>}
                         </label>
-                        <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".txt,.csv,.pdf"/>
+                        <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".txt,.csv"/>
                     </div>
                     <div className="flex items-center gap-2">
                         <hr className="flex-grow border-cosmic-border" />
@@ -98,6 +104,7 @@ export const StatementImporter: React.FC = () => {
                             setText(e.target.value);
                             setFileName('');
                             setParsedTransactions([]);
+                            setError(null);
                         }}
                         rows={6}
                         placeholder="Paste statement text here..."
@@ -121,6 +128,7 @@ export const StatementImporter: React.FC = () => {
                             </>
                         )}
                     </button>
+                    {error && <p className="text-sm text-center text-cosmic-danger mt-2">{error}</p>}
                 </div>
             </div>
 
@@ -141,8 +149,8 @@ export const StatementImporter: React.FC = () => {
                             <tbody>
                                 {parsedTransactions.map(tx => (
                                     <tr key={tx.id} className="border-b border-cosmic-border last:border-0 hover:bg-cosmic-bg">
-                                        <td className="p-2">{tx.date}</td>
-                                        <td className="p-2">{tx.description}</td>
+                                        <td className="p-2"><input type="date" value={tx.date} onChange={(e) => handleTransactionUpdate(tx.id, 'date', e.target.value)} className="bg-transparent w-full"/></td>
+                                        <td className="p-2"><input type="text" value={tx.description} onChange={(e) => handleTransactionUpdate(tx.id, 'description', e.target.value)} className="bg-transparent w-full"/></td>
                                         <td className={`p-2 text-right font-semibold ${tx.type === 'income' ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>
                                             {tx.type === 'income' ? '+' : '-'}${tx.amount.toFixed(2)}
                                         </td>
@@ -152,6 +160,7 @@ export const StatementImporter: React.FC = () => {
                                                 onChange={(e) => handleTransactionUpdate(tx.id, 'category', e.target.value)}
                                                 className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1"
                                             >
+                                                <option value="">Select Category...</option>
                                                 {defaultCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                             </select>
                                         </td>

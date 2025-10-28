@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Transaction, User, Team, PaymentShare, ExpenseShare, Account, SplitMode } from '../types';
 import { TransactionType } from '../types';
-import { XIcon, PlusIcon } from './icons';
+import { XIcon } from './icons';
 import * as dbService from '../services/dbService';
 
 interface AddTransactionModalProps {
@@ -16,10 +16,6 @@ interface AddTransactionModalProps {
     onAddCategoryClick: () => void;
     defaultTeamId?: string;
 }
-
-const defaultCategories = [
-    'Housing', 'Food', 'Transportation', 'Entertainment', 'Utilities', 'Job', 'Investment', 'Loan', 'Shopping', 'Business Expense', 'Team Contribution', 'Transfer', 'Cosmic Event', 'Maintenance', 'Goals'
-];
 
 export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategoryClick, defaultTeamId }) => {
     const [description, setDescription] = useState('');

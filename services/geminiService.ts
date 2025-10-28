@@ -141,3 +141,63 @@ export const getCosmicEvent = async (statement: FinancialStatement, accounts: Ac
         };
     }
 };
+
+export const parseStatementWithGemini = async (statementText: string) => {
+    if (!ai) {
+        throw new Error("AI parser is disabled because API key is not configured.");
+    }
+
+    const prompt = `
+        Analyze the following bank statement text and extract all transactions.
+        For each transaction, determine the date, a clean description, the amount, and whether it's an income or an expense.
+        The date should be in YYYY-MM-DD format. Today's date is ${new Date().toLocaleDateString()}.
+        If a year is not specified, assume the current year.
+        Text to analyze:
+        ---
+        ${statementText}
+        ---
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        transactions: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    date: { type: Type.STRING, description: "Date in YYYY-MM-DD format." },
+                                    description: { type: Type.STRING, description: "Cleaned-up transaction description." },
+                                    amount: { type: Type.NUMBER, description: "The transaction amount as a positive number." },
+                                    type: { type: Type.STRING, description: "Either 'income' or 'expense'." }
+                                },
+                                required: ['date', 'description', 'amount', 'type']
+                            }
+                        }
+                    },
+                    required: ['transactions']
+                }
+            }
+        });
+
+        const jsonText = response.text.trim();
+        const parsedData = JSON.parse(jsonText);
+        
+        if (parsedData.transactions && Array.isArray(parsedData.transactions)) {
+            // Add a temporary ID for client-side rendering
+            return parsedData.transactions.map((tx: any, index: number) => ({ ...tx, id: Date.now() + index }));
+        }
+        
+        throw new Error("AI response did not contain a valid 'transactions' array.");
+
+    } catch (error) {
+        console.error("Error parsing statement with Gemini:", error);
+        throw new Error("The AI failed to parse the statement. The text might be in an unsupported format.");
+    }
+};
