@@ -15,17 +15,17 @@ const createInitialDataWithSubcollections = async (batch: firebase.firestore.Wri
 
     // Add accounts to subcollection
     for (const account of accounts) {
-        const accountRef = db.collection(`users/${uid}/accounts`).doc();
+        const accountRef = userRef.collection('accounts').doc();
         batch.set(accountRef, { ...account, id: accountRef.id }); // Ensure ID is set
     }
     // Add assets to subcollection
     for (const asset of financialStatement.assets) {
-        const assetRef = db.collection(`users/${uid}/assets`).doc();
+        const assetRef = userRef.collection('assets').doc();
         batch.set(assetRef, { ...asset, id: assetRef.id });
     }
     // Add liabilities to subcollection
     for (const liability of financialStatement.liabilities) {
-        const liabilityRef = db.collection(`users/${uid}/liabilities`).doc();
+        const liabilityRef = userRef.collection('liabilities').doc();
         batch.set(liabilityRef, { ...liability, id: liabilityRef.id });
     }
     // Transactions can be added here if there are any initial ones
@@ -50,7 +50,6 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
         const existingData = { id: userDoc.id, ...userDoc.data() } as User;
         const accountsSnap = await db.collection(`users/${firebaseUser.uid}/accounts`).get();
         
-        // This is the migration trigger: a special user has a document but no accounts subcollection.
         if ((isGerman || isValeria) && accountsSnap.empty) {
             console.log(`Data migration required for ${email}. Re-initializing data structure.`);
             const initialData = isGerman ? initialDataForGerman(firebaseUser.uid, name, avatar, email) : initialDataForValeria(firebaseUser.uid, name, avatar, email);
@@ -58,7 +57,6 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
             await createInitialDataWithSubcollections(batch, firebaseUser.uid, initialData);
             await batch.commit();
             
-            // Re-fetch the user data after migration
             const migratedDoc = await userRef.get();
             userData = { id: migratedDoc.id, ...migratedDoc.data() } as User;
         } else {
@@ -66,15 +64,13 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
         }
 
     } else {
-        // User does not exist, create new document and subcollections
         const batch = db.batch();
         let initialData: User;
         if (isGerman) {
-            initialData = initialDataForGerman(firebaseUser.uid, name, avatar, email);
+            initialData = initialDataForGerman(firebaseUser.uid, 'German', avatar, email);
         } else if (isValeria) {
-            initialData = initialDataForValeria(firebaseUser.uid, name, avatar, email);
+            initialData = initialDataForValeria(firebaseUser.uid, 'Valeria', avatar, email);
         } else {
-            // Standard new user
             initialData = {
                 id: firebaseUser.uid, name, email, avatar, teamIds: [], achievements: [], onboardingCompleted: false,
                 accounts: [], financialStatement: { transactions: [], assets: [], liabilities: [] }, budgets: [], goals: [],
@@ -87,7 +83,6 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
         userData = { id: newUserDoc.id, ...newUserDoc.data() } as User;
     }
 
-    // Now, load all data from subcollections for the final user object
     const accountsSnap = await db.collection(`users/${firebaseUser.uid}/accounts`).get();
     const assetsSnap = await db.collection(`users/${firebaseUser.uid}/assets`).get();
     const liabilitiesSnap = await db.collection(`users/${firebaseUser.uid}/liabilities`).get();
@@ -100,7 +95,6 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
         transactions: transactionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)),
     };
     
-    // Ensure other top-level fields are initialized
     userData.budgets = userData.budgets || [];
     userData.goals = userData.goals || [];
     userData.achievements = userData.achievements || [];
@@ -110,9 +104,34 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
 
 export const getUsers = async (uids: string[]): Promise<User[]> => {
     if (uids.length === 0) return [];
-    const usersQuery = db.collection('users').where(firebase.firestore.FieldPath.documentId(), 'in', uids);
-    const userSnapshot = await usersQuery.get();
-    return userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+    const userDocs = await Promise.all(uids.map(uid => db.collection('users').doc(uid).get()));
+
+    const usersPromises = userDocs.map(async (doc) => {
+        if (!doc.exists) return null;
+        const userData = { id: doc.id, ...doc.data() } as User;
+        
+        const [accountsSnap, assetsSnap, liabilitiesSnap, transactionsSnap] = await Promise.all([
+            db.collection(`users/${doc.id}/accounts`).get(),
+            db.collection(`users/${doc.id}/assets`).get(),
+            db.collection(`users/${doc.id}/liabilities`).get(),
+            db.collection(`users/${doc.id}/transactions`).get()
+        ]);
+        
+        userData.accounts = accountsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
+        userData.financialStatement = {
+            assets: assetsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)),
+            liabilities: liabilitiesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Liability)),
+            transactions: transactionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)),
+        };
+        userData.budgets = userData.budgets || [];
+        userData.goals = userData.goals || [];
+        userData.achievements = userData.achievements || [];
+
+        return userData;
+    });
+    
+    const users = await Promise.all(usersPromises);
+    return users.filter((u): u is User => u !== null);
 };
 
 export const findUserByEmail = async (email: string): Promise<{id: string, name: string} | null> => {
@@ -124,8 +143,36 @@ export const findUserByEmail = async (email: string): Promise<{id: string, name:
 };
 
 export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
-    // Implementation is now more complex as we need to fetch subcollections for each team
-    return []; // Simplified for now, AppContext will handle this
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return [];
+
+    const teamIds = (userDoc.data() as User).teamIds || [];
+    if (teamIds.length === 0) return [];
+
+    const teamDocs = await Promise.all(teamIds.map(id => db.collection('teams').doc(id).get()));
+
+    const teamsPromises = teamDocs.map(async (doc) => {
+        if (!doc.exists) return null;
+        const teamData = { id: doc.id, ...doc.data() } as Team;
+
+        const [assetsSnap, liabilitiesSnap, transactionsSnap, accountsSnap] = await Promise.all([
+            db.collection(`teams/${doc.id}/assets`).get(),
+            db.collection(`teams/${doc.id}/liabilities`).get(),
+            db.collection(`teams/${doc.id}/transactions`).get(),
+            db.collection(`teams/${doc.id}/accounts`).get()
+        ]);
+
+        teamData.accounts = accountsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
+        teamData.financialStatement = {
+            assets: assetsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)),
+            liabilities: liabilitiesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Liability)),
+            transactions: transactionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)),
+        };
+        return teamData;
+    });
+    
+    const teams = await Promise.all(teamsPromises);
+    return teams.filter((t): t is Team => t !== null);
 };
 
 // --- DATA MODIFICATION ---
@@ -144,13 +191,11 @@ export const uploadReceipt = async (base64Image: string, userId: string): Promis
 
 // --- FULLY IMPLEMENTED FIRESTORE FUNCTIONS ---
 
-// FIX: Changed to use v8 syntax (auth instance method)
 export const resetPassword = (email: string) => auth.sendPasswordResetEmail(email);
 
 export const addPersonalTransaction = async (userId: string, transaction: Omit<Transaction, 'id'>): Promise<Transaction> => {
     const newDocRef = await db.collection(`users/${userId}/transactions`).add(transaction);
     
-    // Update account balances within a Firestore transaction for atomicity
     await db.runTransaction(async (t) => {
         for (const share of transaction.paymentShares) {
             const accountRef = db.collection(`users/${share.userId}/accounts`).doc(share.accountId);
@@ -255,6 +300,4 @@ export const applyEventOutcome = async (userId: string, outcome: EventOutcome) =
      }
 };
 
-
-// --- MOCK/TODO FUNCTIONS ---
 export { checkAndUnlockAchievement, saveBudget, addGoal, deleteGoal, updateGoal } from './dbService.mock';

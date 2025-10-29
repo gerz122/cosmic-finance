@@ -95,7 +95,6 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Validation
         for (const share of paymentShares) {
             if (!share.accountId) {
                 alert('Please select an account for all payment shares.');
@@ -115,24 +114,26 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             }
         }
 
-        const transactionData: Omit<Transaction, 'id'> = {
+        const transactionBase = {
             description,
             amount: parseFloat(totalAmount),
             category: categoryInput,
             date,
             type,
             isPassive,
-            teamId: teamId || undefined,
             paymentShares,
             expenseShares,
             receiptUrl: finalReceiptUrl,
             isTaxDeductible,
         };
+        
+        const transactionData = teamId ? { ...transactionBase, teamId } : transactionBase;
+
 
         if (isEditing) {
-            onSave({ ...transactionData, id: transactionToEdit.id });
+            onSave({ ...transactionData as Omit<Transaction, 'id'>, id: transactionToEdit.id });
         } else {
-            onSave(transactionData);
+            onSave(transactionData as Omit<Transaction, 'id'>);
         }
         
         onClose();
@@ -168,9 +169,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                     <button onClick={onClose} className="text-cosmic-text-secondary hover:text-cosmic-text-primary"><XIcon className="w-6 h-6" /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* ... (other form fields like description, amount, etc.) */}
-
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="flex items-center gap-4 bg-cosmic-bg border border-cosmic-border rounded-md p-1">
                             <button type="button" onClick={() => setType(TransactionType.EXPENSE)} className={`w-1/2 rounded p-2 font-semibold text-sm ${type === TransactionType.EXPENSE ? 'bg-cosmic-danger text-white' : 'text-cosmic-text-secondary'}`}>Expense</button>
                             <button type="button" onClick={() => setType(TransactionType.INCOME)} className={`w-1/2 rounded p-2 font-semibold text-sm ${type === TransactionType.INCOME ? 'bg-cosmic-success text-white' : 'text-cosmic-text-secondary'}`}>Income</button>

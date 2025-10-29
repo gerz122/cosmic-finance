@@ -22,35 +22,25 @@ export const Balances: React.FC<BalancesProps> = ({ currentUser, allUsers, teams
         const balanceMap: { [userId: string]: number } = {};
         allUsers.forEach(u => balanceMap[u.id] = 0);
 
-        // Step 1: Gather all relevant transactions from every source.
-        // This includes personal shared expenses and all team expenses.
         const allSharedTransactions = [
-            ...teams.flatMap(team => team.financialStatement.transactions),
-            ...allUsers.flatMap(user => user.financialStatement.transactions)
+            ...teams.flatMap(team => team.financialStatement?.transactions || []),
+            ...allUsers.flatMap(user => user.financialStatement?.transactions || [])
         ].filter(tx => tx.type === TransactionType.EXPENSE && tx.expenseShares && tx.expenseShares.length > 0);
 
-        // Step 2: Ensure we only process each transaction once, even if it's in multiple places.
         const uniqueTransactions = Array.from(new Map(allSharedTransactions.map(t => [t.id, t])).values());
         
-        // Step 3: Calculate balances based on the "pool" method.
         uniqueTransactions.forEach(tx => {
-            // A transaction must be an expense with defined shares to affect balances.
             if (tx.type === TransactionType.EXPENSE && tx.expenseShares) {
-                // Credit the payers: They put money into the "pool".
-                // Their balance goes up, meaning the group owes them.
                 tx.paymentShares.forEach(payment => {
                     balanceMap[payment.userId] = (balanceMap[payment.userId] || 0) + payment.amount;
                 });
 
-                // Debit the beneficiaries: They took value from the "pool".
-                // Their balance goes down, meaning they owe the group.
                 tx.expenseShares.forEach(expense => {
                     balanceMap[expense.userId] = (balanceMap[expense.userId] || 0) - expense.amount;
                 });
             }
         });
 
-        // Step 4: Format the data for the UI.
         return allUsers
             .map(user => ({
                 userId: user.id,
@@ -58,13 +48,12 @@ export const Balances: React.FC<BalancesProps> = ({ currentUser, allUsers, teams
                 avatar: user.avatar,
                 amount: balanceMap[user.id] || 0,
             }))
-            .filter(balance => Math.abs(balance.amount) > 0.01); // Only show non-zero balances for clarity.
+            .filter(balance => Math.abs(balance.amount) > 0.01);
             
     }, [allUsers, teams]);
 
     const myNetBalance = balances.find(b => b.userId === currentUser.id)?.amount || 0;
     
-    // This is a simplified view for the summary cards.
     const netOwedToMe = Math.max(0, myNetBalance);
     const netOwedByMe = Math.max(0, -myNetBalance);
 
