@@ -10,8 +10,8 @@ export interface TickerSearchResult {
     name: string;
 }
 
-// FIX: Changed from import.meta.env to process.env to resolve TypeScript error.
-const API_KEY = process.env.VITE_ALPHA_VANTAGE_API_KEY;
+// FIX: Use process.env to access environment variables.
+const API_KEY = process.env.ALPHA_VANTAGE_API_KEY;
 const BASE_URL = 'https://www.alphavantage.co/query';
 
 // Helper to handle API rate limiting (5 calls per minute for free tier)

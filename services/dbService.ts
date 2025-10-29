@@ -11,10 +11,30 @@ import { initialDataForGerman, initialDataForValeria } from './initial.data';
 export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User> => {
     const userRef = doc(db, 'users', firebaseUser.uid);
     const userDoc = await getDoc(userRef);
+    const email = firebaseUser.email!;
+    const name = firebaseUser.displayName || 'New Player';
+    const avatar = firebaseUser.photoURL || `https://api.dicebear.com/8.x/pixel-art/svg?seed=${name}`;
+
+    // Special data migration for German and Valeria
+    const isGerman = email === 'gerzbogado@gmail.com';
+    const isValeria = email === 'valeriasisterna01@gmail.com';
 
     if (userDoc.exists()) {
-        // User exists, fetch their data and subcollections
-        const userData = { id: userDoc.id, ...userDoc.data() } as User;
+        const existingData = userDoc.data() as User;
+        
+        // If it's a special user but they have a blank profile (e.g., from a previous failed login), overwrite it.
+        const needsMigration = (isGerman || isValeria) && (!existingData.accounts || existingData.accounts.length === 0);
+        
+        if (needsMigration) {
+            console.log(`Migrating data for ${email}...`);
+            const initialData = isGerman ? initialDataForGerman(firebaseUser.uid, name, avatar, email) : initialDataForValeria(firebaseUser.uid, name, avatar, email);
+            await setDoc(userRef, initialData);
+            const freshDoc = await getDoc(userRef);
+            return { id: freshDoc.id, ...freshDoc.data() } as User;
+        }
+        
+        // User exists and doesn't need migration, fetch their data
+        const userData = { id: userDoc.id, ...existingData };
         const accountsSnap = await getDocs(collection(db, `users/${firebaseUser.uid}/accounts`));
         userData.accounts = accountsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         
@@ -28,27 +48,23 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
 
     } else {
         // User does not exist, create a new document
-        const name = firebaseUser.displayName || 'New Player';
-        const email = firebaseUser.email!;
-        const avatar = firebaseUser.photoURL || `https://api.dicebear.com/8.x/pixel-art/svg?seed=${name}`;
-
-        // Special migration for German and Valeria
-        if (email === 'gerzbogado@gmail.com') {
+        if (isGerman) {
             const initialData = initialDataForGerman(firebaseUser.uid, name, avatar, email);
             await setDoc(userRef, initialData);
-            console.log("Migrated data for German.");
-            return (await getDoc(userRef)).data() as User;
+            console.log("Created initial data for German.");
+            const freshDoc = await getDoc(userRef);
+            return { id: freshDoc.id, ...freshDoc.data() } as User;
         }
-        if (email === 'valeriasisterna01@gmail.com') {
+        if (isValeria) {
             const initialData = initialDataForValeria(firebaseUser.uid, name, avatar, email);
             await setDoc(userRef, initialData);
-            console.log("Migrated data for Valeria.");
-            return (await getDoc(userRef)).data() as User;
+            console.log("Created initial data for Valeria.");
+            const freshDoc = await getDoc(userRef);
+            return { id: freshDoc.id, ...freshDoc.data() } as User;
         }
 
         // Standard new user setup
-        const newUser: User = {
-            id: firebaseUser.uid,
+        const newUser: Omit<User, 'id'> = {
             name,
             email,
             avatar,
@@ -61,7 +77,7 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
             goals: [],
         };
         await setDoc(userRef, newUser);
-        return newUser;
+        return { id: firebaseUser.uid, ...newUser };
     }
 };
 

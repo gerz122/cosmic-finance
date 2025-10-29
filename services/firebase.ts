@@ -1,8 +1,6 @@
-// FIX: Use named imports for Firebase v9+ modular SDK
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-// FIX: Use named imports for Firebase v9+ modular SDK
 import {
     getAuth,
     sendPasswordResetEmail,
@@ -13,8 +11,8 @@ import {
     onAuthStateChanged,
     signOut,
     updateProfile,
-    type User as FirebaseUserType
 } from "firebase/auth";
+import type { User as FirebaseUserType } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -26,17 +24,14 @@ const firebaseConfig = {
   appId: "1:196366472563:web:a46437b52c118102032106"
 };
 
-// FIX: Call initializeApp directly
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
-// FIX: Call getAuth directly
 const auth = getAuth(app);
 
 export { db, storage, auth };
 
 export const firebaseAuth = {
-    // FIX: Use the directly imported functions
     sendPasswordResetEmail,
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
@@ -47,5 +42,4 @@ export const firebaseAuth = {
     updateProfile,
 };
 
-// FIX: Export the User type from Firebase auth, aliased to avoid conflicts.
 export type User = FirebaseUserType;
