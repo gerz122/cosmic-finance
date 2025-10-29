@@ -1,9 +1,9 @@
-// FIX: Changed imports to use Firebase v8 namespaced/compat syntax
-import firebase from 'firebase/app';
-import 'firebase/firestore';
-import 'firebase/storage';
-import 'firebase/auth';
-import type { User as FirebaseUserType } from "firebase/auth";
+// FIX: Changed imports to use Firebase v9+ compat syntax
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
+import 'firebase/compat/storage';
+import 'firebase/compat/auth';
+import type { User as FirebaseUserType } from "firebase/compat/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -25,7 +25,7 @@ const db = firebase.firestore();
 const storage = firebase.storage();
 const auth = firebase.auth();
 
-export { db, storage, auth };
+export { db, storage, auth, firebase };
 
 // FIX: Provide GoogleAuthProvider through a simplified firebaseAuth object for compatibility.
 // Other auth methods will be called directly on the `auth` instance.
