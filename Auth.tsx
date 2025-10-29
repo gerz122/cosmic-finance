@@ -20,14 +20,17 @@ const Auth: React.FC = () => {
 
         try {
             if (isLogin) {
-                // FIX: Use functions from the firebaseAuth namespace.
                 await firebaseAuth.signInWithEmailAndPassword(auth, email, password);
             } else {
                 if (!name) throw new Error("Please enter your player name.");
-                // FIX: Use functions from the firebaseAuth namespace.
                 const userCredential = await firebaseAuth.createUserWithEmailAndPassword(auth, email, password);
-                await dbService.createNewUser(userCredential.user.uid, name, email);
+                // The onAuthStateChanged listener in AppContext will handle creating the user doc.
+                // We just need to set their display name here.
+                if (userCredential.user) {
+                   await firebaseAuth.updateProfile(userCredential.user, { displayName: name });
+                }
             }
+            // AppContext will handle the redirect and data loading via onAuthStateChanged
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -38,16 +41,10 @@ const Auth: React.FC = () => {
     const handleGoogleSignIn = async () => {
         setIsLoading(true);
         setError(null);
-        // FIX: Use functions from the firebaseAuth namespace.
         const provider = new firebaseAuth.GoogleAuthProvider();
         try {
-            // FIX: Use functions from the firebaseAuth namespace.
-            const result = await firebaseAuth.signInWithPopup(auth, provider);
-            // Check if user is new
-            const userExists = await dbService.getUserData(result.user.uid);
-            if (!userExists) {
-                await dbService.createNewUser(result.user.uid, result.user.displayName || 'New Player', result.user.email!);
-            }
+            await firebaseAuth.signInWithPopup(auth, provider);
+            // AppContext's onAuthStateChanged listener will handle creating the user doc if they are new.
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -83,7 +80,6 @@ const Auth: React.FC = () => {
                         <p className="text-sm text-cosmic-text-secondary">Enter your email and we'll send you a link to get back into your account.</p>
                          <div>
                             <label htmlFor="email-reset" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Email</label>
-                            {/* FIX: Corrected onChange handler to use e.target.value and completed the component JSX. */}
                             <input id="email-reset" type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary" required />
                         </div>
                         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
@@ -166,5 +162,4 @@ const Auth: React.FC = () => {
     );
 };
 
-// FIX: Added default export.
 export default Auth;

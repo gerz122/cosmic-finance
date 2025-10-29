@@ -1,5 +1,9 @@
 {
   "name": "Cosmic Cashflow: The Freedom Tournament",
   "description": "A multi-user financial game where players and teams compete in a 'cosmic tournament' to achieve financial freedom. Track expenses, grow passive income, and collaborate with others to win your financial match, inspired by 'Cashflow' with a gamified, cosmic twist.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "env": [
+    "VITE_GEMINI_API_KEY",
+    "VITE_ALPHA_VANTAGE_API_KEY"
+  ]
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 
-interface ChartData {
+// FIX: Export interface and add color property.
+export interface ChartData {
     label: string;
     value: number;
     color: string;
@@ -13,88 +14,77 @@ interface DoughnutChartProps {
     onSliceClick?: (label: string) => void;
 }
 
-const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
-    const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
-    return {
-        x: centerX + (radius * Math.cos(angleInRadians)),
-        y: centerY + (radius * Math.sin(angleInRadians))
-    };
-};
-
-const describeArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
-    const start = polarToCartesian(x, y, radius, endAngle);
-    const end = polarToCartesian(x, y, radius, startAngle);
-
-    const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-
-    const d = [
-        "M", start.x, start.y,
-        "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
-    ].join(" ");
-
-    return d;
-};
+// FIX: Implemented the DoughnutChart component which was missing.
+const getCoords = (percent: number, radius: number, size: number) => {
+    const x = size / 2 + radius * Math.cos(2 * Math.PI * percent);
+    const y = size / 2 + radius * Math.sin(2 * Math.PI * percent);
+    return [x, y];
+}
 
 export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, centerLabel, onSliceClick }) => {
-    if (!data || data.length === 0) {
-        return (
-            <div style={{ width: size, height: size }} className="flex items-center justify-center">
-                <p className="text-sm text-cosmic-text-secondary">No data</p>
-            </div>
-        );
-    }
-
     const total = data.reduce((sum, item) => sum + item.value, 0);
+
     if (total === 0) {
-         return (
-            <div style={{ width: size, height: size }} className="flex items-center justify-center">
-                <p className="text-sm text-cosmic-text-secondary">No data</p>
+        return (
+            <div style={{ width: size, height: size }} className="relative flex items-center justify-center">
+                 <svg viewBox={`0 0 ${size} ${size}`}>
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={size * 0.4}
+                        fill="transparent"
+                        stroke="#30363D"
+                        strokeWidth={size * 0.15}
+                    />
+                </svg>
+                <span className="absolute text-cosmic-text-secondary text-sm">No data</span>
             </div>
         );
     }
-    
-    const radius = size / 2;
-    const strokeWidth = radius * 0.4;
-    const innerRadius = radius - strokeWidth;
-    let startAngle = 0;
 
-    const slices = data.map(item => {
-        const angle = (item.value / total) * 360;
-        const endAngle = startAngle + angle;
-        const pathData = describeArc(radius, radius, innerRadius + strokeWidth / 2, startAngle, endAngle > 359.99 ? 359.99 : endAngle);
-        const slice = {
-            path: pathData,
-            color: item.color,
-            label: item.label
-        };
-        startAngle = endAngle;
-        return slice;
-    });
+    let cumulativePercent = 0;
+    
+    const outerRadius = size * 0.45;
+    const innerRadius = size * 0.3;
 
     return (
         <div className="relative" style={{ width: size, height: size }}>
-            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-                <g>
-                    {slices.map((slice, index) => (
+            <svg viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+                {data.map((item) => {
+                    const percent = item.value / total;
+                    
+                    const [startX, startY] = getCoords(cumulativePercent, outerRadius, size);
+                    const [startInnerX, startInnerY] = getCoords(cumulativePercent, innerRadius, size);
+                    
+                    cumulativePercent += percent;
+                    
+                    const [endX, endY] = getCoords(cumulativePercent, outerRadius, size);
+                    const [endInnerX, endInnerY] = getCoords(cumulativePercent, innerRadius, size);
+                    
+                    const largeArcFlag = percent > 0.5 ? 1 : 0;
+
+                    const pathData = [
+                        `M ${startX} ${startY}`,
+                        `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+                        `L ${endInnerX} ${endInnerY}`,
+                        `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${startInnerX} ${startInnerY}`,
+                        'Z'
+                    ].join(' ');
+
+                    return (
                         <path
-                            key={index}
-                            d={slice.path}
-                            fill="none"
-                            stroke={slice.color}
-                            strokeWidth={strokeWidth}
-                            onClick={() => onSliceClick && onSliceClick(slice.label)}
-                            className={onSliceClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}
-                        >
-                            <title>{`${slice.label}: ${((data[index].value / total) * 100).toFixed(1)}%`}</title>
-                        </path>
-                    ))}
-                </g>
+                            key={item.label}
+                            d={pathData}
+                            fill={item.color}
+                            onClick={() => onSliceClick && onSliceClick(item.label)}
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                        />
+                    );
+                })}
             </svg>
-            {centerLabel && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="text-center">
-                        <span className="text-xs text-cosmic-text-secondary">{centerLabel}</span>
-                    </div>
+             {centerLabel && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-center">
+                    <span className="text-cosmic-text-secondary font-semibold text-sm">{centerLabel}</span>
                 </div>
             )}
         </div>

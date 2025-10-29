@@ -5,9 +5,6 @@ import * as dbService from './services/dbService';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
 import { generateHistoricalData } from './utils/financialCalculations';
 import { getCosmicEvent } from './services/geminiService';
-// FIX: The Auth component now has a default export, so this import is correct.
-import Auth from './Auth';
-import Onboarding from './Onboarding';
 
 interface AppContextType {
     activeView: View;
@@ -30,9 +27,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-    const [authReady, setAuthReady] = useState(false);
-    
     const [activeView, setActiveView] = useState<View>('dashboard');
     const [users, setUsers] = useState<User[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
@@ -47,7 +41,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const refreshData = useCallback(async (uid: string) => {
         setIsLoading(true);
         try {
-            const userData = await dbService.getUserData(uid);
+            const userData = await dbService.getOrCreateUser({ uid } as FirebaseUser); // A bit of a hack for refresh
             setActiveUser(userData);
             const fetchedTeams = await dbService.getTeamsForUser(uid);
             setTeams(fetchedTeams);
@@ -64,32 +58,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, []);
 
     useEffect(() => {
-        // FIX: Use onAuthStateChanged from the firebaseAuth namespace.
-        const unsubscribe = firebaseAuth.onAuthStateChanged(auth, (user) => {
-            setFirebaseUser(user);
-            setAuthReady(true);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    useEffect(() => {
-        if (!authReady) return;
-        const loadData = async () => {
+        const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (firebaseUser) => {
+            setIsLoading(true);
             if (firebaseUser) {
-                setError(null);
-                await refreshData(firebaseUser.uid);
+                try {
+                    setError(null);
+                    // This is the core logic: get the user data, or create it if it's a new login.
+                    const appUser = await dbService.getOrCreateUser(firebaseUser);
+                    setActiveUser(appUser);
+
+                    // Once we have the user, fetch their related data.
+                    const fetchedTeams = await dbService.getTeamsForUser(appUser.id);
+                    setTeams(fetchedTeams);
+
+                    const memberIds = new Set(fetchedTeams.flatMap(t => t.memberIds));
+                    memberIds.add(appUser.id);
+                    const allTeamUsers = await dbService.getUsers(Array.from(memberIds));
+                    setUsers(allTeamUsers);
+
+                } catch (err) {
+                    console.error("Error during user data fetch/creation:", err);
+                    setError("Could not load user profile.");
+                    setActiveUser(null);
+                }
             } else {
-                setIsLoading(false);
+                // User is signed out
                 setActiveUser(null);
                 setUsers([]);
                 setTeams([]);
             }
-        };
-        loadData();
-    }, [authReady, firebaseUser, refreshData]);
+            setIsLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
 
     const handleLogout = async () => {
-        // FIX: Use signOut from the firebaseAuth namespace.
         await firebaseAuth.signOut(auth);
         setActiveUser(null);
         setActiveView('dashboard');
@@ -293,7 +297,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 else await dbService.addTeamAsset(teamId, stockData);
             } else {
                 if (isEditing) await dbService.updateAsset(activeUser.id, modalData.stockToEdit.id, stockData);
-                // FIX: Changed to call the correctly exported `addAsset` function.
                 else await dbService.addAsset(activeUser.id, stockData);
             }
             await refreshData(activeUser.id);
@@ -330,7 +333,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if ('value' in data) await dbService.addTeamAsset(teamId, data);
                 else await dbService.addTeamLiability(teamId, data);
             } else {
-                // FIX: Changed to call the correctly exported `addAsset` function.
                 if ('value' in data) await dbService.addAsset(activeUser.id, data);
                 else await dbService.addLiability(activeUser.id, data);
             }
@@ -366,11 +368,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.log("Transactions to import:", transactions);
     };
 
-
-    if (!authReady) {
-         return <div className="flex items-center justify-center h-screen bg-cosmic-bg text-lg animate-pulse-fast">Initializing Authentication...</div>;
-    }
-
     const actions = {
         setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding,
         handleTeamClick: (teamId: string) => { setActiveView('team-detail'); setSelectedTeamId(teamId); },
@@ -403,17 +400,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleOpenAddStockModal: (teamId?: string) => { setModalData({ stockToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddStockModalOpen', true); },
         handleOpenEditStockModal: (stock: Asset) => { setModalData({ stockToEdit: stock, modalDefaultTeamId: stock.teamId }); setModalOpen('isAddStockModalOpen', true); },
         handleOpenLogDividendModal: (stock: Asset) => { setModalData({ stockForDividend: stock }); setModalOpen('isLogDividendModalOpen', true); },
-        openLargeChartModal: (stock: Asset) => setModalData(p=> ({...p, stockForLargeChart: stock })),
-        closeLargeChartModal: () => setModalData(p=> ({...p, stockForLargeChart: null })),
+        openLargeChartModal: (stock: Asset) => setModalDataField('stockForLargeChart', stock),
+        closeLargeChartModal: () => setModalDataField('stockForLargeChart', null),
         handleOpenAccountTransactionsModal: (account: Account) => { setModalData({ accountForTransactionList: account }); setModalOpen('isAccountTransactionsModalOpen', true); },
         handleOpenEditAccountModal: (account: Account) => { setModalData({ accountToEdit: account }); setModalOpen('isEditAccountModalOpen', true); },
         handleOpenAddAssetLiabilityModal: (type: 'asset' | 'liability', teamId?: string) => { setModalData({ assetLiabilityToAdd: type, assetLiabilityToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenEditAssetLiabilityModal: (item: Asset | Liability) => { setModalData({ assetLiabilityToAdd: 'value' in item ? 'asset' : 'liability', assetLiabilityToEdit: item, modalDefaultTeamId: item.teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenContributeToGoalModal: (goal: Goal) => { setModalData({ goalToContribute: goal }); setModalOpen('isContributeToGoalModalOpen', true); },
-        setStockForDividend: (stock: Asset | null) => setModalDataField('stockForDividend', stock),
-        setSelectedTransaction: (tx: Transaction | null) => setModalDataField('selectedTransaction', tx),
-        setSelectedCategory: (cat: string | null) => setModalDataField('selectedCategory', cat),
-        setAssetLiabilityToEdit: (item: Asset | Liability | null) => setModalDataField('assetLiabilityToEdit', item),
+        setModalDataField,
     };
 
     return (
@@ -422,7 +416,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             modalStates, modalData, effectiveFinancialStatement, historicalData, allUserAccounts,
             setActiveView, handleLogout, actions
         }}>
-            {firebaseUser ? children : <Auth />}
+            {children}
         </AppContext.Provider>
     );
 };

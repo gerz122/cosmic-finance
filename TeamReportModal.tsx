@@ -87,7 +87,7 @@ const TeamReportModal: React.FC<TeamReportModalProps> = ({ isOpen, onClose, team
                 <div className="grid grid-cols-3 gap-4 mb-4">
                     <div className="bg-cosmic-bg p-4 rounded-lg text-center"><p className="text-sm text-cosmic-text-secondary">Total Income</p><p className="text-2xl font-bold text-cosmic-success">${income.toFixed(2)}</p></div>
                     <div className="bg-cosmic-bg p-4 rounded-lg text-center"><p className="text-sm text-cosmic-text-secondary">Total Expenses</p><p className="text-2xl font-bold text-cosmic-danger">${expenses.toFixed(2)}</p></div>
-                    <div className="bg-cosmic-bg p-4 rounded-lg text-center"><p className="text-sm text-cosmic-text-secondary">Net Profit / Loss</p><p className={`text-2xl font-bold ${profit >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>${profit.toFixed(2)}</p></div>
+                    <div className="bg-cosmic-bg p-4 rounded-lg text-center"><p className="text-sm text-cosmic-text-secondary">Net Profit / Loss</p><p className={`text-2xl font-bold ${profit >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>{profit.toFixed(2)}</p></div>
                 </div>
 
                 <div className="overflow-y-auto flex-grow">

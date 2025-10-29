@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import type { User, Budget, BudgetCategory } from '../types';
 import { XIcon } from './icons';

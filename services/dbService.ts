@@ -1,6 +1,6 @@
 import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, Budget, Goal } from '../types';
 import { TransactionType } from '../types';
-import { auth, db, storage, firebaseAuth } from './firebase';
+import { auth, db, storage, firebaseAuth, User as FirebaseUser } from './firebase';
 import { collection, getDocs, getDoc, doc, where, query, writeBatch, setDoc, deleteDoc, runTransaction, documentId, addDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from "firebase/storage";
 import { initialDataForGerman, initialDataForValeria } from './initial.data';
@@ -8,66 +8,66 @@ import { initialDataForGerman, initialDataForValeria } from './initial.data';
 
 // --- AUTHENTICATION & USER DATA ---
 
-export const createNewUser = async (uid: string, name: string, email: string): Promise<User> => {
-    const newUserRef = doc(db, 'users', uid);
-    const avatar = `https://api.dicebear.com/8.x/pixel-art/svg?seed=${name}`;
-    
-    // Special migration for German and Valeria
-    if (email === 'gerzbogado@gmail.com') {
-        await setDoc(newUserRef, initialDataForGerman(uid, name, avatar, email));
-        console.log("Migrated data for German.");
-        return (await getUserData(uid))!;
+export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User> => {
+    const userRef = doc(db, 'users', firebaseUser.uid);
+    const userDoc = await getDoc(userRef);
+
+    if (userDoc.exists()) {
+        // User exists, fetch their data and subcollections
+        const userData = { id: userDoc.id, ...userDoc.data() } as User;
+        const accountsSnap = await getDocs(collection(db, `users/${firebaseUser.uid}/accounts`));
+        userData.accounts = accountsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        
+        // Ensure other fields are initialized if they don't exist
+        userData.financialStatement = userData.financialStatement || { transactions: [], assets: [], liabilities: [] };
+        userData.budgets = userData.budgets || [];
+        userData.goals = userData.goals || [];
+        userData.achievements = userData.achievements || [];
+        
+        return userData;
+
+    } else {
+        // User does not exist, create a new document
+        const name = firebaseUser.displayName || 'New Player';
+        const email = firebaseUser.email!;
+        const avatar = firebaseUser.photoURL || `https://api.dicebear.com/8.x/pixel-art/svg?seed=${name}`;
+
+        // Special migration for German and Valeria
+        if (email === 'gerzbogado@gmail.com') {
+            const initialData = initialDataForGerman(firebaseUser.uid, name, avatar, email);
+            await setDoc(userRef, initialData);
+            console.log("Migrated data for German.");
+            return (await getDoc(userRef)).data() as User;
+        }
+        if (email === 'valeriasisterna01@gmail.com') {
+            const initialData = initialDataForValeria(firebaseUser.uid, name, avatar, email);
+            await setDoc(userRef, initialData);
+            console.log("Migrated data for Valeria.");
+            return (await getDoc(userRef)).data() as User;
+        }
+
+        // Standard new user setup
+        const newUser: User = {
+            id: firebaseUser.uid,
+            name,
+            email,
+            avatar,
+            teamIds: [],
+            achievements: [],
+            onboardingCompleted: false,
+            accounts: [],
+            financialStatement: { transactions: [], assets: [], liabilities: [] },
+            budgets: [],
+            goals: [],
+        };
+        await setDoc(userRef, newUser);
+        return newUser;
     }
-    if (email === 'valeriasisterna01@gmail.com') {
-        await setDoc(newUserRef, initialDataForValeria(uid, name, avatar, email));
-        console.log("Migrated data for Valeria.");
-        return (await getUserData(uid))!;
-    }
-    
-    // Standard new user setup
-    const newUser: Omit<User, 'financialStatement' | 'accounts' | 'budgets' | 'goals'> = {
-        id: uid,
-        name,
-        email,
-        avatar,
-        teamIds: [],
-        achievements: [],
-        onboardingCompleted: false,
-    };
-    await setDoc(newUserRef, newUser);
-    // You can add default accounts or other initial data here if needed
-    return (await getUserData(uid))!;
 };
 
 export const resetPassword = async (email: string) => {
-    // FIX: Use sendPasswordResetEmail from the exported firebaseAuth namespace.
     await firebaseAuth.sendPasswordResetEmail(auth, email);
 };
-
-
-export const getUserData = async (uid: string): Promise<User | null> => {
-    const userRef = doc(db, 'users', uid);
-    const userDoc = await getDoc(userRef);
-
-    if (!userDoc.exists()) {
-        console.warn(`User data not found in Firestore for UID: ${uid}. This might be a new user.`);
-        return null;
-    }
-
-    const userData = { id: userDoc.id, ...userDoc.data() } as User;
-
-    // Fetch subcollections if they exist, otherwise initialize
-    const accountsSnap = await getDocs(collection(db, `users/${uid}/accounts`));
-    userData.accounts = accountsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
-    
-    // In a full implementation, you'd also fetch financialStatement items, budgets, and goals
-    userData.financialStatement = { transactions: [], assets: [], liabilities: [] }; // Keep this lightweight for now
-    userData.budgets = userData.budgets || [];
-    userData.goals = userData.goals || [];
-
-    return userData;
-};
-
 
 export const getUsers = async (uids: string[]): Promise<User[]> => {
     if (uids.length === 0) return [];
@@ -205,5 +205,4 @@ export const uploadReceipt = async (base64Image: string, userId: string): Promis
 
 // --- MOCK/TODO FUNCTIONS ---
 // These are placeholders that need full Firestore implementation
-// FIX: Added addAsset to the export list.
 export { checkAndUnlockAchievement, saveBudget, addGoal, deleteGoal, updateGoal, addTeamAsset, addTeamLiability, updateTeamAsset, updateTeamLiability, createTeam, logDividend, updateAccount, addAccount, deleteAsset, updateLiability, updateAsset, addAsset, addLiability, applyEventOutcome, performTransfer } from './dbService.mock';

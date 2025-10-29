@@ -3,15 +3,18 @@ import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType, TransactionType } from '../types';
 
 let ai: GoogleGenAI | null = null;
+// FIX: Use process.env.API_KEY as per Gemini API guidelines. The original `import.meta.env` caused a TypeScript error.
+const apiKey = process.env.API_KEY;
 
-if (process.env.API_KEY) {
+if (apiKey) {
   try {
-    ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    ai = new GoogleGenAI({ apiKey });
   } catch (error) {
     console.error("Failed to initialize GoogleGenAI:", error);
   }
 } else {
-  console.warn("Gemini API key not found. AI features will be disabled.");
+  // FIX: Updated warning message to reflect the change to API_KEY.
+  console.warn("API_KEY not found in environment variables. AI features will be disabled.");
 }
 
 function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {
