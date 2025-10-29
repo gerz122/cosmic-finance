@@ -43,36 +43,37 @@ export const PortfolioLivePL: React.FC<PortfolioLivePLProps> = ({ stocks }) => {
         fetchAllStockData();
         const intervalId = setInterval(fetchAllStockData, 60000); // Refresh every minute
 
+        // FIX: Added clearInterval to the cleanup function and completed the file.
         return () => {
             isMounted = false;
             clearInterval(intervalId);
         };
     }, [stocks]);
 
-    const totalPL = useMemo(() => {
-        return stocks.reduce((acc, stock) => {
+    const totalDayPL = useMemo(() => {
+        return stocks.reduce((total, stock) => {
             const data = liveData[stock.id];
             if (data && stock.numberOfShares) {
-                const pl = data.dayChange * stock.numberOfShares;
-                return acc + pl;
+                return total + data.dayChange * stock.numberOfShares;
             }
-            return acc;
+            return total;
         }, 0);
-    }, [liveData, stocks]);
+    }, [stocks, liveData]);
 
-    if (stocks.length === 0) {
-        return <span>$0.00</span>;
-    }
-
+    // FIX: Added JSX return to render the calculated P/L.
     if (isLoading) {
-        return <span className="text-sm animate-pulse-fast">Calculating...</span>;
+        return <span className="text-sm text-cosmic-text-secondary animate-pulse">Loading...</span>;
     }
-
-    const plColor = totalPL >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
+    
+    if (stocks.length === 0) {
+        return <>$0.00</>;
+    }
+    
+    const plColor = totalDayPL >= 0 ? 'text-cosmic-success' : 'text-cosmic-danger';
 
     return (
         <span className={plColor}>
-            {totalPL >= 0 ? '+' : ''}${totalPL.toFixed(2)}
+            {totalDayPL >= 0 ? '+' : ''}${totalDayPL.toFixed(2)}
         </span>
     );
 };

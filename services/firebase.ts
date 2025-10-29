@@ -1,17 +1,8 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-import {
-    getAuth,
-    sendPasswordResetEmail,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    GoogleAuthProvider,
-    signInWithPopup,
-    onAuthStateChanged,
-    signOut,
-    updateProfile,
-} from "firebase/auth";
+// FIX: Changed imports to use Firebase v8 namespaced/compat syntax
+import firebase from 'firebase/app';
+import 'firebase/firestore';
+import 'firebase/storage';
+import 'firebase/auth';
 import type { User as FirebaseUserType } from "firebase/auth";
 
 // Your web app's Firebase configuration
@@ -24,22 +15,22 @@ const firebaseConfig = {
   appId: "1:196366472563:web:a46437b52c118102032106"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const storage = getStorage(app);
-const auth = getAuth(app);
+// FIX: Initialize Firebase using v8 syntax and ensure it's only done once.
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+
+// FIX: Get services using v8 syntax
+const db = firebase.firestore();
+const storage = firebase.storage();
+const auth = firebase.auth();
 
 export { db, storage, auth };
 
+// FIX: Provide GoogleAuthProvider through a simplified firebaseAuth object for compatibility.
+// Other auth methods will be called directly on the `auth` instance.
 export const firebaseAuth = {
-    sendPasswordResetEmail,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    GoogleAuthProvider,
-    signInWithPopup,
-    onAuthStateChanged,
-    signOut,
-    updateProfile,
+    GoogleAuthProvider: firebase.auth.GoogleAuthProvider,
 };
 
 export type User = FirebaseUserType;

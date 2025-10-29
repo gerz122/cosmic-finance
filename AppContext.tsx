@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
-import { auth, firebaseAuth } from './services/firebase';
+// FIX: Update firebase imports to align with v8 syntax changes
+import { auth } from './services/firebase';
 import type { User as FirebaseUser } from './services/firebase';
 import * as dbService from './services/dbService';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
+import { TransactionType } from './types';
 import { generateHistoricalData } from './utils/financialCalculations';
 import { getCosmicEvent } from './services/geminiService';
 
@@ -58,7 +60,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, []);
 
     useEffect(() => {
-        const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (firebaseUser) => {
+        // FIX: Use v8 auth method syntax
+        const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
             setIsLoading(true);
             if (firebaseUser) {
                 try {
@@ -94,7 +97,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
 
     const handleLogout = async () => {
-        await firebaseAuth.signOut(auth);
+        // FIX: Use v8 auth method syntax
+        await auth.signOut();
         setActiveUser(null);
         setActiveView('dashboard');
     };
@@ -167,17 +171,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await refreshData(activeUser.id);
     };
 
-    const handleSaveTransaction = async (transaction: Omit<Transaction, 'id'> | Transaction) => {
+    const handleSaveTransaction = async (transactionData: Omit<Transaction, 'id'> | Transaction) => {
         if (!activeUser) return;
-        const isEditing = 'id' in transaction;
+        const isEditing = 'id' in transactionData;
         try {
             if (isEditing) {
-                await dbService.updateTransaction(transaction as Transaction);
+                await dbService.updateTransaction(transactionData as Transaction);
             } else {
-                if (transaction.teamId) {
-                    await dbService.addTeamTransaction(transaction);
+                if (transactionData.teamId) {
+                    await dbService.addTeamTransaction(transactionData);
                 } else {
-                    await dbService.addTransaction(activeUser.id, transaction);
+                    // This is a personal transaction
+                    await dbService.addPersonalTransaction(activeUser.id, transactionData);
                 }
             }
             await refreshData(activeUser.id);
@@ -185,7 +190,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const unlocked = await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_TRANSACTION');
                 if (unlocked) setActiveUser(unlocked); // Optimistic update
             }
-        } catch(e) { console.error(e); alert('Failed to save transaction.'); }
+        } catch(e) { console.error(e); alert(`Failed to save transaction: ${(e as Error).message}`); }
     };
     
     const handleDeleteTransaction = async (transactionId: string) => {
@@ -202,8 +207,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleTransfer = async (fromAccountId: string, toAccountId: string, amount: number) => {
         if (!activeUser) return;
         try {
-            const updatedUser = await dbService.performTransfer(activeUser.id, fromAccountId, toAccountId, amount);
-            setActiveUser(updatedUser); // Optimistic update
+            await dbService.performTransfer(activeUser.id, fromAccountId, toAccountId, amount);
             await refreshData(activeUser.id);
         } catch(e) { console.error(e); alert((e as Error).message); }
     };
@@ -227,8 +231,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleCosmicEventResolution = async (outcome: EventOutcome) => {
         if (!activeUser) return;
         try {
-            const updatedUser = await dbService.applyEventOutcome(activeUser, outcome);
-            setActiveUser(updatedUser); // Optimistic update
+            await dbService.applyEventOutcome(activeUser.id, outcome);
             await refreshData(activeUser.id);
         } catch(e) { console.error(e); alert('Failed to apply event outcome.'); }
     };
@@ -236,17 +239,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleAddAccount = async (account: Omit<Account, 'id' | 'ownerIds'>) => {
         if (!activeUser) return;
         try {
-            const updatedUser = await dbService.addAccount(activeUser.id, account);
-            setActiveUser(updatedUser); // Optimistic update
+            await dbService.addAccount(activeUser.id, account);
             await refreshData(activeUser.id);
         } catch(e) { console.error(e); alert('Failed to add account.'); }
     };
 
     const handleUpdateAccount = async (account: Account) => {
         try {
-            const updatedUsers = await dbService.updateAccount(account, users);
-            setUsers(updatedUsers); // Optimistic update
-            if (activeUser) await refreshData(activeUser.id);
+            await dbService.updateAccount(activeUser!.id, account);
+             if (activeUser) await refreshData(activeUser.id);
         } catch (e) { console.error(e); alert("Failed to update account."); }
     };
 
@@ -279,11 +280,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             const fromAccount = activeUser.accounts.find(a => a.id === fromAccountId);
             if (!fromAccount || fromAccount.balance < amount) throw new Error("Insufficient funds");
+            
+            // This logic should be a single transaction in a real backend
             fromAccount.balance -= amount;
             const updatedGoal = { ...goal, currentAmount: goal.currentAmount + amount };
             const updatedUser = await dbService.updateGoal(activeUser.id, updatedGoal);
+            await dbService.updateAccount(activeUser.id, fromAccount);
+            
             setActiveUser(updatedUser);
-            await dbService.updateAccount(fromAccount, [activeUser]);
             await refreshData(activeUser.id);
         } catch(e) { console.error(e); alert((e as Error).message); }
     };
@@ -310,8 +314,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleLogDividend = async (amount: number, accountId: string) => {
         if (!activeUser || !modalData.stockForDividend) return;
         try {
-            const updatedUser = await dbService.logDividend(activeUser, modalData.stockForDividend.id, amount, accountId);
-            setActiveUser(updatedUser); // Optimistic update
+            await dbService.logDividend(activeUser.id, modalData.stockForDividend, amount, accountId);
             await refreshData(activeUser.id);
         } catch (e) { console.error(e); alert((e as Error).message); }
     };

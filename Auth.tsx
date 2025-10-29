@@ -20,14 +20,17 @@ const Auth: React.FC = () => {
 
         try {
             if (isLogin) {
-                await firebaseAuth.signInWithEmailAndPassword(auth, email, password);
+                // FIX: Use v8 auth method syntax
+                await auth.signInWithEmailAndPassword(email, password);
             } else {
                 if (!name) throw new Error("Please enter your player name.");
-                const userCredential = await firebaseAuth.createUserWithEmailAndPassword(auth, email, password);
+                // FIX: Use v8 auth method syntax
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
                 // The onAuthStateChanged listener in AppContext will handle creating the user doc.
                 // We just need to set their display name here.
                 if (userCredential.user) {
-                   await firebaseAuth.updateProfile(userCredential.user, { displayName: name });
+                    // FIX: Use v8 user method syntax
+                   await userCredential.user.updateProfile({ displayName: name });
                 }
             }
             // AppContext will handle the redirect and data loading via onAuthStateChanged
@@ -41,9 +44,11 @@ const Auth: React.FC = () => {
     const handleGoogleSignIn = async () => {
         setIsLoading(true);
         setError(null);
+        // FIX: Use v8 provider constructor syntax
         const provider = new firebaseAuth.GoogleAuthProvider();
         try {
-            await firebaseAuth.signInWithPopup(auth, provider);
+            // FIX: Use v8 auth method syntax
+            await auth.signInWithPopup(provider);
             // AppContext's onAuthStateChanged listener will handle creating the user doc if they are new.
         } catch (err) {
             setError((err as Error).message);

@@ -95,6 +95,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
+        // Validation
+        for (const share of paymentShares) {
+            if (!share.accountId) {
+                alert('Please select an account for all payment shares.');
+                return;
+            }
+        }
+
         let finalReceiptUrl = isEditing ? transactionToEdit.receiptUrl : undefined;
 
         if (receiptImage) {

@@ -10,8 +10,8 @@ export interface TickerSearchResult {
     name: string;
 }
 
-// FIX: Use process.env to access environment variables.
-const API_KEY = process.env.ALPHA_VANTAGE_API_KEY;
+// FIX: Add type assertion to handle missing Vite env types.
+const API_KEY = (import.meta as any).env.VITE_ALPHA_VANTAGE_API_KEY;
 const BASE_URL = 'https://www.alphavantage.co/query';
 
 // Helper to handle API rate limiting (5 calls per minute for free tier)
