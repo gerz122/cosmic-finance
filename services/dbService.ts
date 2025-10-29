@@ -2,7 +2,7 @@ import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, 
 import { TransactionType } from '../types';
 // FIX: Update firebase imports to align with v8 syntax changes. Using compat API now.
 import { auth, db, storage, firebase, User as FirebaseUser } from './firebase';
-import { initialDataForGerman, initialDataForValeria } from './initial.data';
+import { initialDataForGerman, initialDataForValeria, getInitialTeamData } from './initial.data';
 
 // --- STRUCTURED DATA CREATION ---
 
@@ -66,11 +66,49 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
     } else {
         const batch = db.batch();
         let initialData: User;
-        if (isGerman) {
-            initialData = initialDataForGerman(firebaseUser.uid, 'German', avatar, email);
-        } else if (isValeria) {
-            initialData = initialDataForValeria(firebaseUser.uid, 'Valeria', avatar, email);
+
+        if (isGerman || isValeria) {
+            // Special user: ensure the shared team exists or is updated.
+            const teamRef = db.collection('teams').doc('team-condo-1');
+            const teamDoc = await teamRef.get();
+
+            if (!teamDoc.exists) {
+                console.log("Shared team 'team-condo-1' not found. Creating it...");
+                const { accounts, financialStatement, ...mainTeamData } = getInitialTeamData([firebaseUser.uid]);
+                batch.set(teamRef, mainTeamData);
+                
+                // Batch-create subcollections for the new team
+                for (const account of accounts) {
+                    const accountRef = teamRef.collection('accounts').doc(); // Auto-generate ID
+                    batch.set(accountRef, { ...account, id: accountRef.id });
+                }
+                for (const asset of financialStatement.assets) {
+                    const assetRef = teamRef.collection('assets').doc();
+                    batch.set(assetRef, { ...asset, id: assetRef.id });
+                }
+                for (const liability of financialStatement.liabilities) {
+                    const liabilityRef = teamRef.collection('liabilities').doc();
+                    batch.set(liabilityRef, { ...liability, id: liabilityRef.id });
+                }
+            } else {
+                console.log("Shared team 'team-condo-1' found. Adding user to it.");
+                // Team exists, just add this user to it
+                batch.update(teamRef, {
+                    memberIds: firebase.firestore.FieldValue.arrayUnion(firebaseUser.uid)
+                });
+                 // Also add user to the joint account ownerIds
+                const teamAccountsSnap = await teamRef.collection('accounts').get();
+                teamAccountsSnap.forEach(doc => {
+                    batch.update(doc.ref, {
+                        ownerIds: firebase.firestore.FieldValue.arrayUnion(firebaseUser.uid)
+                    });
+                });
+            }
+            initialData = isGerman 
+                ? initialDataForGerman(firebaseUser.uid, 'German', avatar, email) 
+                : initialDataForValeria(firebaseUser.uid, 'Valeria', avatar, email);
         } else {
+            // Standard new user
             initialData = {
                 id: firebaseUser.uid, name, email, avatar, teamIds: [], achievements: [], onboardingCompleted: false,
                 accounts: [], financialStatement: { transactions: [], assets: [], liabilities: [] }, budgets: [], goals: [],

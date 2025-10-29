@@ -1,4 +1,4 @@
-import type { User } from '../types';
+import type { User, Team } from '../types';
 import { AccountType, TransactionType, AssetType } from '../types';
 
 export const initialDataForGerman = (uid: string, name: string, avatar: string, email: string): User => ({
@@ -48,4 +48,24 @@ export const initialDataForValeria = (uid: string, name: string, avatar: string,
     budgets: [],
     goals: [],
     achievements: ['FIRST_INVESTMENT'],
+});
+
+export const getInitialTeamData = (memberUids: string[]): Omit<Team, 'id'> => ({
+    name: 'Condo Project',
+    memberIds: memberUids,
+    accounts: [
+        { id: 't-condo-chequing', name: 'Condo Joint Chequing', type: AccountType.CHECKING, balance: 500, ownerIds: memberUids, teamId: 'team-condo-1' }
+    ],
+    financialStatement: {
+        transactions: [],
+        assets: [
+            { id: 't-asset-condo', name: 'Investment Condo', type: AssetType.REAL_ESTATE, value: 250000, monthlyCashflow: 1500, teamId: 'team-condo-1' }
+        ],
+        liabilities: [
+            { id: 't-lia-mortgage', name: 'Condo Mortgage', balance: 200000, interestRate: 3.5, monthlyPayment: 990, teamId: 'team-condo-1' }
+        ]
+    },
+    goals: [
+        { description: 'Pay off 10% of mortgage', target: 20000, current: 0 }
+    ]
 });
