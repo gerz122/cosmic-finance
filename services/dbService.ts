@@ -28,7 +28,11 @@ const createInitialDataWithSubcollections = async (batch: firebase.firestore.Wri
         const liabilityRef = userRef.collection('liabilities').doc();
         batch.set(liabilityRef, { ...liability, id: liabilityRef.id });
     }
-    // Transactions can be added here if there are any initial ones
+    // FIX: Add initial transactions to the transactions subcollection
+    for (const transaction of financialStatement.transactions) {
+        const transactionRef = userRef.collection('transactions').doc();
+        batch.set(transactionRef, { ...transaction, id: transactionRef.id });
+    }
 };
 
 // --- AUTH & USER DATA ---

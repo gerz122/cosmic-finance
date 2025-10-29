@@ -40,6 +40,17 @@
         }
       }
     </script>
+    <style>
+      /* Fix for dark text in input fields on dark background */
+      input, select, textarea {
+        color-scheme: dark;
+        color: #C9D1D9;
+      }
+      .date-input::-webkit-calendar-picker-indicator { 
+        filter: invert(0.8); 
+        cursor: pointer; 
+      }
+    </style>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
   <script type="importmap">
 {

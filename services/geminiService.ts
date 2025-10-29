@@ -3,8 +3,8 @@ import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType, TransactionType } from '../types';
 
 let ai: GoogleGenAI | null = null;
-// FIX: Switched to process.env.API_KEY per Gemini API guidelines.
-const apiKey = process.env.API_KEY;
+// FIX: Add type assertion to handle missing Vite env types.
+const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
 
 if (apiKey) {
   try {
@@ -13,8 +13,7 @@ if (apiKey) {
     console.error("Failed to initialize GoogleGenAI:", error);
   }
 } else {
-  // FIX: Updated warning message to match the new environment variable.
-  console.warn("API_KEY not found in environment variables. AI features will be disabled.");
+  console.warn("VITE_GEMINI_API_KEY not found in environment variables. AI features will be disabled.");
 }
 
 function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {
