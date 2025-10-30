@@ -82,29 +82,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
 
         const currentMonth = new Date().toISOString().slice(0, 7);
 
-        statement.transactions.forEach(t => {
-            if (!t.date.startsWith(currentMonth)) return;
+        statement.transactions.forEach(transaction => {
+            if (!transaction.date.startsWith(currentMonth)) return;
         
-            const userExpenseShare = t.expenseShares?.find(s => s.userId === user.id)?.amount;
-            const userIncomeShare = t.paymentShares?.find(s => s.userId === user.id)?.amount;
+            const userExpenseShare = transaction.expenseShares?.find(share => share.userId === user.id)?.amount;
+            const userIncomeShare = transaction.paymentShares?.find(share => share.userId === user.id)?.amount;
         
-            if (t.type === TransactionType.INCOME) {
+            if (transaction.type === TransactionType.INCOME) {
                 if (userIncomeShare !== undefined) {
                     calculatedTotalIncome += userIncomeShare;
-                    if (t.isPassive) {
+                    if (transaction.isPassive) {
                         calculatedPassiveIncome += userIncomeShare;
                     }
                 }
             } else { // EXPENSE
                 if (userExpenseShare !== undefined) {
                     calculatedTotalExpenses += userExpenseShare;
-                    calculatedExpenseBreakdown[t.category] = (calculatedExpenseBreakdown[t.category] || 0) + userExpenseShare;
-                } else if (t.teamId && (!t.expenseShares || t.expenseShares.length === 0)) {
-                    const team = teams.find(tm => tm.id === t.teamId);
+                    calculatedExpenseBreakdown[transaction.category] = (calculatedExpenseBreakdown[transaction.category] || 0) + userExpenseShare;
+                } else if (transaction.teamId && (!transaction.expenseShares || transaction.expenseShares.length === 0)) {
+                    const team = teams.find(teamMember => teamMember.id === transaction.teamId);
                     if (team && team.memberIds.includes(user.id)) {
-                        const equalShare = t.amount / team.memberIds.length;
+                        const equalShare = transaction.amount / team.memberIds.length;
                         calculatedTotalExpenses += equalShare;
-                        calculatedExpenseBreakdown[t.category] = (calculatedExpenseBreakdown[t.category] || 0) + equalShare;
+                        calculatedExpenseBreakdown[transaction.category] = (calculatedExpenseBreakdown[transaction.category] || 0) + equalShare;
                     }
                 }
             }
@@ -113,31 +113,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         const calculatedMonthlyCashflow = calculatedTotalIncome - calculatedTotalExpenses;
 
         let totalAssets = 0;
-        statement.assets.forEach(a => {
+        statement.assets.forEach(asset => {
             let share = 1.0;
-            if(a.shares) share = (a.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
-            else if (a.teamId) {
-                const team = teams.find(t => t.id === a.teamId);
+            if(asset.shares) share = (asset.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
+            else if (asset.teamId) {
+                const team = teams.find(t => t.id === asset.teamId);
                 if(team && team.memberIds.includes(user.id)) share = 1 / team.memberIds.length; else share = 0;
             }
-            totalAssets += a.value * share;
+            totalAssets += asset.value * share;
         });
         
         let totalLiabilities = 0;
-        statement.liabilities.forEach(l => {
+        statement.liabilities.forEach(liability => {
             let share = 1.0;
-            if(l.shares) share = (l.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
-            else if (l.teamId) {
-                const team = teams.find(t => t.id === l.teamId);
+            if(liability.shares) share = (liability.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
+            else if (liability.teamId) {
+                const team = teams.find(t => t.id === liability.teamId);
                 if(team && team.memberIds.includes(user.id)) share = 1 / team.memberIds.length; else share = 0;
             }
-            totalLiabilities += l.balance * share;
+            totalLiabilities += liability.balance * share;
         });
         
         const calculatedNetWorth = totalAssets - totalLiabilities;
         
-        const recentTransactions = [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
-        const stocks = (userFinancials.assets || []).filter(a => a.type === AssetType.STOCK);
+        const recentTransactions = [...statement.transactions].sort((txA, txB) => new Date(txB.date).getTime() - new Date(txA.date).getTime()).slice(0, 5);
+        const stocks = (userFinancials.assets || []).filter(asset => asset.type === AssetType.STOCK);
         
         return { 
             passiveIncome: calculatedPassiveIncome, 

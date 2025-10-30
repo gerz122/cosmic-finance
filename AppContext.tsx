@@ -126,22 +126,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             liabilities: activeUser.financialStatement.liabilities
         };
 
-        const userTeams = teams.filter(t => t.memberIds.includes(activeUser.id));
+        const userTeams = teams.filter(teamInstance => teamInstance.memberIds.includes(activeUser.id));
         
         const allTransactions = [...personalStatement.transactions];
         const allAssets = [...personalStatement.assets];
         const allLiabilities = [...personalStatement.liabilities];
 
-        for(const team of userTeams) {
-            allTransactions.push(...team.financialStatement.transactions);
-            allAssets.push(...team.financialStatement.assets);
-            allLiabilities.push(...team.financialStatement.liabilities);
+        for(const teamItem of userTeams) {
+            allTransactions.push(...teamItem.financialStatement.transactions);
+            allAssets.push(...teamItem.financialStatement.assets);
+            allLiabilities.push(...teamItem.financialStatement.liabilities);
         }
         
         return {
-            transactions: Array.from(new Map(allTransactions.map((t: Transaction) => [t.id, t])).values()),
-            assets: Array.from(new Map(allAssets.map((a: Asset) => [a.id, a])).values()),
-            liabilities: Array.from(new Map(allLiabilities.map((l: Liability) => [l.id, l])).values())
+            transactions: Array.from(new Map(allTransactions.map((transactionItem: Transaction) => [transactionItem.id, transactionItem])).values()),
+            assets: Array.from(new Map(allAssets.map((assetItem: Asset) => [assetItem.id, assetItem])).values()),
+            liabilities: Array.from(new Map(allLiabilities.map((liabilityItem: Liability) => [liabilityItem.id, liabilityItem])).values())
         };
     }, [activeUser, teams]);
 
