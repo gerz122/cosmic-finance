@@ -322,29 +322,6 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                     </div>
                     
 
-                    <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-                        {type === TransactionType.INCOME &&
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={isPassive} onChange={e => setIsPassive(e.target.checked)} className="w-5 h-5 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary" />
-                                <span className="text-sm font-medium text-cosmic-text-primary">Is this passive income?</span>
-                            </label>
-                        }
-                         {type === TransactionType.EXPENSE &&
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={isTaxDeductible} onChange={e => setIsTaxDeductible(e.target.checked)} className="w-5 h-5 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary" />
-                                <span className="text-sm font-medium text-cosmic-text-primary">Is this tax deductible?</span>
-                            </label>
-                        }
-                         <div>
-                            <label htmlFor="receipt" className="cursor-pointer text-sm text-cosmic-primary hover:underline">
-                                {receiptImage ? 'Change Receipt' : 'Attach Receipt'}
-                            </label>
-                            <input type="file" id="receipt" onChange={handleFileChange} accept="image/*" className="hidden"/>
-                            {receiptImage && <img src={receiptImage} alt="Receipt preview" className="mt-2 h-16 w-auto rounded" />}
-                        </div>
-                    </div>
-                    
-
                     {type === TransactionType.EXPENSE && (
                          <div className="space-y-3 pt-3 border-t border-cosmic-border">
                             <div className="flex justify-between items-center">
@@ -381,6 +358,29 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                             </div>
                         </div>
                     )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-cosmic-border">
+                        {type === TransactionType.INCOME &&
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={isPassive} onChange={e => setIsPassive(e.target.checked)} className="w-5 h-5 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary" />
+                                <span className="text-sm font-medium text-cosmic-text-primary">Is this passive income?</span>
+                            </label>
+                        }
+                         {type === TransactionType.EXPENSE &&
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={isTaxDeductible} onChange={e => setIsTaxDeductible(e.target.checked)} className="w-5 h-5 rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary" />
+                                <span className="text-sm font-medium text-cosmic-text-primary">Is this tax deductible?</span>
+                            </label>
+                        }
+                         <div>
+                            <label htmlFor="receipt" className="cursor-pointer text-sm text-cosmic-primary hover:underline">
+                                {receiptImage ? 'Change Receipt' : 'Attach Receipt'}
+                            </label>
+                            <input type="file" id="receipt" onChange={handleFileChange} accept="image/*" className="hidden"/>
+                            {receiptImage && <img src={receiptImage} alt="Receipt preview" className="mt-2 h-16 w-auto rounded" />}
+                        </div>
+                    </div>
+                    
                     
                     <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border">Cancel</button><button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400">{isEditing ? 'Save Changes' : 'Save Transaction'}</button></div>
                 </form>
