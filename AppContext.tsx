@@ -39,7 +39,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [error, setError] = useState<string | null>(null);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     
-    const [modalStates, setModalStates] = useState<Record<string, boolean>>({ isFreedomModalOpen: false, isTeamReportModalOpen: false, isFabOpen: false });
+    const [modalStates, setModalStates] = useState<Record<string, boolean>>({ isFreedomModalOpen: false, isTeamReportModalOpen: false, isFabOpen: false, isSuccessModalOpen: false });
     const [modalData, setModalData] = useState<Record<string, any>>({});
 
     const showNotification = (message: string, type: 'success' | 'error') => {
@@ -47,6 +47,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setTimeout(() => {
             setNotification(null);
         }, 5000);
+    };
+
+    const showSuccessModal = (message: string) => {
+        setModalData(prev => ({ ...prev, successModalMessage: message }));
+        setModalStates(prev => ({ ...prev, isSuccessModalOpen: true }));
     };
 
     const refreshData = useCallback(async (uid: string) => {
@@ -179,7 +184,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
             }
             await refreshData(activeUser.id);
-            showNotification('Team created successfully!', 'success');
+            showSuccessModal('Team Created!');
         } catch (e) {
             console.error(e);
             showNotification("Failed to create team.", 'error');
@@ -210,7 +215,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_TRANSACTION');
             }
             await refreshData(activeUser.id);
-            showNotification('Transaction saved!', 'success');
+            showSuccessModal(isEditing ? 'Transaction Updated!' : 'Transaction Added!');
         } catch(e) { console.error(e); showNotification(`Failed to save transaction: ${(e as Error).message}`, 'error'); }
     };
     
@@ -231,7 +236,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.performTransfer(activeUser.id, fromAccountId, toAccountId, amount);
             await refreshData(activeUser.id);
-            showNotification('Transfer successful!', 'success');
+            showSuccessModal('Transfer Successful!');
         } catch(e) { console.error(e); showNotification((e as Error).message, 'error'); }
     };
     
@@ -264,7 +269,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.addAccount(activeUser.id, account);
             await refreshData(activeUser.id);
-            showNotification('Account added!', 'success');
+            showSuccessModal('Account Added!');
         } catch(e) { console.error(e); showNotification('Failed to add account.', 'error'); }
     };
 
@@ -290,7 +295,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.addGoal(activeUser.id, goalData);
             await refreshData(activeUser.id);
-            showNotification('Goal created!', 'success');
+            showSuccessModal('Goal Created!');
         } catch (e) { console.error(e); showNotification("Failed to save goal.", 'error'); }
     };
     
@@ -335,7 +340,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_INVESTMENT');
             }
             await refreshData(activeUser.id);
-            showNotification('Stock saved to portfolio!', 'success');
+            showSuccessModal('Stock saved!');
         } catch (e) { console.error(e); showNotification("Failed to save stock.", 'error'); }
     };
 
@@ -344,7 +349,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.logDividend(activeUser.id, modalData.stockForDividend, amount, accountId);
             await refreshData(activeUser.id);
-            showNotification('Dividend logged as income!', 'success');
+            showSuccessModal('Dividend Logged!');
         } catch (e) { console.error(e); showNotification((e as Error).message, 'error'); }
     };
 
@@ -370,7 +375,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 else await dbService.addLiability(activeUser.id, data);
             }
             await refreshData(activeUser.id);
-            showNotification('Item added to portfolio!', 'success');
+            showSuccessModal('Item added to portfolio!');
         } catch (e) { console.error(e); showNotification("Failed to add item.", 'error'); }
     };
     

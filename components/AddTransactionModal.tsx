@@ -156,8 +156,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                 finalReceiptUrl = await dbService.uploadReceipt(receiptImage, currentUser.id);
             } catch (error) {
                 console.error("Failed to upload receipt:", error);
-                alert("There was an error uploading the receipt. Please check your network connection and Firebase Storage rules/billing.");
-                return;
+                alert("There was an error uploading the receipt. This is likely a Firebase configuration issue (CORS or billing). The transaction will be saved without the receipt.");
+                // We proceed to save without the receipt url
             }
         }
 
@@ -372,6 +372,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                                 <span className="text-sm font-medium text-cosmic-text-primary">Is this tax deductible?</span>
                             </label>
                         }
+                         {/* 
+                            Receipt functionality temporarily disabled due to Firebase configuration issues (CORS/Billing).
+                            To re-enable, uncomment the following div.
+                         */}
+                         {/*
                          <div>
                             <label htmlFor="receipt" className="cursor-pointer text-sm text-cosmic-primary hover:underline">
                                 {receiptImage ? 'Change Receipt' : 'Attach Receipt'}
@@ -379,6 +384,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                             <input type="file" id="receipt" onChange={handleFileChange} accept="image/*" className="hidden"/>
                             {receiptImage && <img src={receiptImage} alt="Receipt preview" className="mt-2 h-16 w-auto rounded" />}
                         </div>
+                        */}
                     </div>
                     
                     

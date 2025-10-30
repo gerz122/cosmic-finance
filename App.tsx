@@ -40,6 +40,7 @@ import { Achievements } from './components/Achievements';
 import { StatementImporter } from './components/StatementImporter';
 import FreedomModal from './FreedomModal';
 import TeamReportModal from './TeamReportModal';
+import SuccessModal from './components/SuccessModal';
 
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
@@ -203,7 +204,7 @@ const AppContent: React.FC = () => {
                 <FloatingActionButton 
                     isOpen={modalStates.isFabOpen} 
                     onToggle={() => actions.setModalOpen('isFabOpen', !modalStates.isFabOpen)} 
-                    onAddTransaction={() => { actions.setModalOpen('isAddTransactionModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
+                    onAddTransaction={() => { actions.handleOpenAddTransactionModal(); actions.setModalOpen('isFabOpen', false); }}
                     onAddAccount={() => { actions.setModalOpen('isAddAccountModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
                     onCreateTeam={() => { actions.setModalOpen('isCreateTeamModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
                     onAddStock={() => { actions.setModalOpen('isAddStockModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
@@ -233,6 +234,7 @@ const AppContent: React.FC = () => {
             {modalData.selectedTransaction && <TransactionSplitDetailModal isOpen={modalStates.isSplitDetailModalOpen} onClose={() => { actions.setModalOpen('isSplitDetailModalOpen', false); actions.setModalDataField('selectedTransaction', null); }} transaction={modalData.selectedTransaction} allUsers={users} allAccounts={allUserAccounts} />}
             <FreedomModal isOpen={modalStates.isFreedomModalOpen} onClose={() => actions.setModalOpen('isFreedomModalOpen', false)} />
             <TeamReportModal isOpen={modalStates.isTeamReportModalOpen} onClose={() => actions.setModalOpen('isTeamReportModalOpen', false)} team={selectedTeam} />
+            <SuccessModal isOpen={modalStates.isSuccessModalOpen} message={modalData.successModalMessage} onClose={() => actions.setModalOpen('isSuccessModalOpen', false)} />
         </div>
     );
 };
