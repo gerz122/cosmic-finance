@@ -107,7 +107,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const allUserAccounts = useMemo(() => users.flatMap(u => u.accounts || []), [users]);
 
     const effectiveFinancialStatement = useMemo(() => {
-        if (!activeUser) return { transactions: [], assets: [], liabilities: [] };
+        // DEFINITIVE FIX: This guard prevents calculations on partially loaded data.
+        // It ensures the user object, its financial statement, and all transaction/asset arrays
+        // exist before proceeding, preventing the race condition that caused the crash.
+        if (
+            !activeUser || 
+            !activeUser.financialStatement || 
+            !Array.isArray(activeUser.financialStatement.transactions) ||
+            !Array.isArray(activeUser.financialStatement.assets) ||
+            !Array.isArray(activeUser.financialStatement.liabilities)
+        ) {
+            return { transactions: [], assets: [], liabilities: [] };
+        }
         
         const personalStatement = {
             transactions: activeUser.financialStatement.transactions,
