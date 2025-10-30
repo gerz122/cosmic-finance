@@ -43,7 +43,6 @@ export const PortfolioLivePL: React.FC<PortfolioLivePLProps> = ({ stocks }) => {
         fetchAllStockData();
         const intervalId = setInterval(fetchAllStockData, 60000); // Refresh every minute
 
-        // FIX: Added clearInterval to the cleanup function and completed the file.
         return () => {
             isMounted = false;
             clearInterval(intervalId);
@@ -60,7 +59,6 @@ export const PortfolioLivePL: React.FC<PortfolioLivePLProps> = ({ stocks }) => {
         }, 0);
     }, [stocks, liveData]);
 
-    // FIX: Added JSX return to render the calculated P/L.
     if (isLoading) {
         return <span className="text-sm text-cosmic-text-secondary animate-pulse">Loading...</span>;
     }

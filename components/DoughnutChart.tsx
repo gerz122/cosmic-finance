@@ -1,6 +1,5 @@
 import React from 'react';
 
-// FIX: Export interface and add color property.
 export interface ChartData {
     label: string;
     value: number;
@@ -14,7 +13,6 @@ interface DoughnutChartProps {
     onSliceClick?: (label: string) => void;
 }
 
-// FIX: Implemented the DoughnutChart component which was missing.
 const getCoords = (percent: number, radius: number, size: number) => {
     const x = size / 2 + radius * Math.cos(2 * Math.PI * percent);
     const y = size / 2 + radius * Math.sin(2 * Math.PI * percent);

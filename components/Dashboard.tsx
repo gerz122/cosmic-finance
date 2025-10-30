@@ -48,7 +48,13 @@ const ProgressBar: React.FC<{ value: number; max: number; }> = ({ value, max }) 
 export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStatement, historicalData, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick, onShowFreedomModal }) => {
 
     const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks, expenseBreakdown } = useMemo(() => {
+        // FIX: Add guards and fallbacks to prevent crash on initial render with incomplete data.
         const statement = effectiveStatement;
+        const userFinancials = user?.financialStatement;
+
+        if (!statement || !userFinancials) {
+            return { passiveIncome: 0, totalExpenses: 0, netWorth: 0, monthlyCashflow: 0, recentTransactions: [], stocks: [], expenseBreakdown: {} };
+        }
         
         let calculatedPassiveIncome = 0;
         let calculatedTotalExpenses = 0;
@@ -57,7 +63,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
 
         const currentMonth = new Date().toISOString().slice(0, 7);
 
-        statement.transactions.forEach(t => {
+        (statement.transactions || []).forEach(t => {
             if (!t.date.startsWith(currentMonth)) return;
         
             // Determine the user's share of an expense
@@ -93,7 +99,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         const calculatedMonthlyCashflow = calculatedTotalIncome - calculatedTotalExpenses;
 
         let totalAssets = 0;
-        statement.assets.forEach(a => {
+        (statement.assets || []).forEach(a => {
             let share = 1.0;
             if(a.shares) share = (a.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
             else if (a.teamId) {
@@ -104,7 +110,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         });
         
         let totalLiabilities = 0;
-        statement.liabilities.forEach(l => {
+        (statement.liabilities || []).forEach(l => {
             let share = 1.0;
             if(l.shares) share = (l.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
             else if (l.teamId) {
@@ -116,8 +122,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         
         const calculatedNetWorth = totalAssets - totalLiabilities;
         
-        const recentTransactions = [...statement.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
-        const stocks = user.financialStatement.assets.filter(a => a.type === AssetType.STOCK);
+        const recentTransactions = [...(statement.transactions || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+        const stocks = (userFinancials.assets || []).filter(a => a.type === AssetType.STOCK);
         
         return { 
             passiveIncome: calculatedPassiveIncome, 
