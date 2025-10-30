@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Transaction, User, Team, PaymentShare, ExpenseShare, Account, SplitMode } from '../types';
 import { TransactionType } from '../types';
-import { XIcon } from './icons';
+import { XIcon, PlusIcon } from './icons';
 import * as dbService from '../services/dbService';
+import { AddCategoryModal } from './AddCategoryModal';
 
 interface AddTransactionModalProps {
     isOpen: boolean;
@@ -13,11 +14,11 @@ interface AddTransactionModalProps {
     allUsers: User[];
     teams: Team[];
     onAddAccountClick: () => void;
-    onAddCategoryClick: () => void;
+    onAddCategory: (category: string) => void;
     defaultTeamId?: string;
 }
 
-export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategoryClick, defaultTeamId }) => {
+export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategory, defaultTeamId }) => {
     const [description, setDescription] = useState('');
     const [totalAmount, setTotalAmount] = useState('');
     const [categoryInput, setCategoryInput] = useState('');
@@ -28,12 +29,13 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     const [receiptImage, setReceiptImage] = useState<string | null>(null);
     const [isTaxDeductible, setIsTaxDeductible] = useState(false);
 
-
     const [paymentShares, setPaymentShares] = useState<PaymentShare[]>([{ userId: currentUser.id, accountId: '', amount: 0 }]);
     const [expenseShares, setExpenseShares] = useState<ExpenseShare[]>([{ userId: currentUser.id, amount: 0 }]);
     
     const [splitMode, setSplitMode] = useState<SplitMode>('equal');
     const isEditing = !!transactionToEdit;
+    
+    const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
 
     const contextMembers = useMemo(() => {
         if (!teamId) return allUsers;
@@ -70,7 +72,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             
             setSplitMode('equal');
         }
-    }, [isOpen, transactionToEdit]);
+    }, [isOpen, transactionToEdit, defaultTeamId, teamId, allUsers, teams, currentUser.id]);
 
     useEffect(() => {
         const amount = parseFloat(totalAmount) || 0;
@@ -82,6 +84,13 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             setPaymentShares(prev => [{...prev[0], amount}]);
         }
     }, [totalAmount, splitMode, contextMembers, paymentShares.length]);
+    
+    const handleAddNewCategory = (newCategory: string) => {
+        onAddCategory(newCategory); // This shows the notification from AppContext
+        setCategoryInput(newCategory); // This sets the input value in this modal
+        setIsAddCategoryModalOpen(false); // This closes the category modal
+    };
+
 
     const handlePaymentShareChange = (index: number, field: keyof Omit<PaymentShare, 'userId'>, value: string) => {
         const newShares = [...paymentShares];
@@ -214,6 +223,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
 
     return (
         <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+            <AddCategoryModal isOpen={isAddCategoryModalOpen} onClose={() => setIsAddCategoryModalOpen(false)} onAddCategory={handleAddNewCategory} />
             <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-3xl shadow-2xl p-6 m-4 animate-slide-in-up max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold text-cosmic-text-primary">{isEditing ? 'Edit Transaction' : 'Add New Play'}</h2>
@@ -248,7 +258,12 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                              <label htmlFor="category" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Category</label>
-                            <input type="text" id="category" value={categoryInput} onChange={e => setCategoryInput(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required/>
+                            <div className="flex gap-2">
+                                <input type="text" id="category" value={categoryInput} onChange={e => setCategoryInput(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required/>
+                                <button type="button" onClick={() => setIsAddCategoryModalOpen(true)} className="p-2 bg-cosmic-primary rounded-md text-white hover:bg-blue-400" title="Add New Category">
+                                    <PlusIcon className="w-5 h-5" />
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label htmlFor="date" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Date</label>

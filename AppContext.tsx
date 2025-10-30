@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
-// FIX: Update firebase imports to align with v8 syntax changes
-import { auth } from './services/firebase';
+// FIX: Import `db` and `firebase` to resolve undefined errors in the transaction import handler.
+import { auth, db, firebase } from './services/firebase';
 import type { User as FirebaseUser } from './services/firebase';
 import * as dbService from './services/dbService';
 import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal } from './types';
@@ -22,6 +22,7 @@ interface AppContextType {
     effectiveFinancialStatement: any;
     historicalData: HistoricalDataPoint[];
     allUserAccounts: Account[];
+    allCategories: string[];
     setActiveView: (view: View) => void;
     handleLogout: () => void;
     actions: Record<string, (...args: any[]) => any>;
@@ -158,6 +159,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             liabilities: Array.from(new Map(allLiabilities.map((liabilityItem: Liability) => [liabilityItem.id, liabilityItem])).values())
         };
     }, [activeUser, teams]);
+
+    const allCategories = useMemo(() => {
+        const categories = new Set(effectiveFinancialStatement.transactions.map((tx: Transaction) => tx.category));
+        return [...Array.from(categories)].sort();
+    }, [effectiveFinancialStatement.transactions]);
 
     const historicalData = useMemo(() => activeUser ? generateHistoricalData(activeUser, teams) : [], [activeUser, teams]);
     
@@ -396,16 +402,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     
     const handleAddCategory = (category: string) => {
-        // This is a client-side only operation for now.
-        // In a real app, you might save this to user preferences in the DB.
-        showNotification(`Category "${category}" added to selection lists! (demo)`, 'success');
+        // This is a client-side only operation for now to provide immediate feedback.
+        // The category will be saved with the transaction.
+        showNotification(`Category "${category}" created!`, 'success');
     };
 
-    const handleImportTransactions = (transactions: any[]) => {
-        // This is a client-side only operation for now.
-        // It would batch-add these to the database.
-        showNotification(`Simulating import of ${transactions.length} transactions.`, 'success');
-        console.log("Transactions to import:", transactions);
+    const handleImportTransactions = async (parsedTransactions: any[]) => {
+        if (!activeUser) return;
+        try {
+            // Use a batch to ensure all transactions are added or none are.
+            const batch = db.batch();
+            for (const ptx of parsedTransactions) {
+                const transactionData: Omit<Transaction, 'id'> = {
+                    description: ptx.description,
+                    amount: ptx.amount,
+                    type: ptx.type === 'income' ? TransactionType.INCOME : TransactionType.EXPENSE,
+                    category: ptx.category,
+                    date: ptx.date,
+                    // For simplicity, imported transactions are marked as personal and not split.
+                    paymentShares: [{ userId: activeUser.id, accountId: ptx.accountId, amount: ptx.amount }],
+                    expenseShares: [{ userId: activeUser.id, amount: ptx.amount }]
+                };
+                
+                // Add the transaction itself to the batch
+                const txRef = db.collection(`users/${activeUser.id}/transactions`).doc();
+                batch.set(txRef, transactionData);
+                
+                // Add the balance update to the batch
+                const accountRef = db.collection(`users/${activeUser.id}/accounts`).doc(ptx.accountId);
+                const increment = transactionData.type === TransactionType.INCOME ? ptx.amount : -ptx.amount;
+                batch.update(accountRef, { balance: firebase.firestore.FieldValue.increment(increment) });
+            }
+            await batch.commit();
+            await refreshData(activeUser.id);
+            showSuccessModal(`${parsedTransactions.length} transactions imported!`);
+        } catch (e) {
+            console.error("Failed to import transactions:", e);
+            showNotification(`An error occurred during import: ${(e as Error).message}`, 'error');
+        }
     };
 
     const actions = {
@@ -454,7 +488,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return (
         <AppContext.Provider value={{
             activeView, users, teams, activeUser, selectedTeam, isLoading, error, notification,
-            modalStates, modalData, effectiveFinancialStatement, historicalData, allUserAccounts,
+            modalStates, modalData, effectiveFinancialStatement, historicalData, allUserAccounts, allCategories,
             setActiveView, handleLogout, actions
         }}>
             {children}
