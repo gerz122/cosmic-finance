@@ -40,23 +40,34 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         const team = teams.find(t => t.id === teamId);
         return team ? allUsers.filter(u => team.memberIds.includes(u.id)) : [currentUser];
     }, [teamId, teams, allUsers, currentUser]);
-
+    
+    // Comprehensive state reset
     useEffect(() => {
         if (isOpen) {
-            if (isEditing && transactionToEdit) {
-                // ... (logic for editing)
+            const isEditMode = isEditing && transactionToEdit;
+
+            setDescription(isEditMode ? transactionToEdit.description : '');
+            setTotalAmount(isEditMode ? String(transactionToEdit.amount) : '');
+            setCategoryInput(isEditMode ? transactionToEdit.category : '');
+            setDate(isEditMode ? transactionToEdit.date : new Date().toISOString().split('T')[0]);
+            setType(isEditMode ? transactionToEdit.type : TransactionType.EXPENSE);
+            setIsPassive(isEditMode ? transactionToEdit.isPassive || false : false);
+            setTeamId(isEditMode ? transactionToEdit.teamId || defaultTeamId || '' : defaultTeamId || '');
+            setReceiptImage(null); // Always reset image preview
+            setIsTaxDeductible(isEditMode ? transactionToEdit.isTaxDeductible || false : false);
+
+            setPaymentShares(isEditMode ? transactionToEdit.paymentShares : [{ userId: currentUser.id, accountId: '', amount: 0 }]);
+            
+            if (isEditMode) {
+                setExpenseShares(transactionToEdit.expenseShares || contextMembers.map(m => ({ userId: m.id, amount: 0 })));
             } else {
-                // Reset logic for new transaction
-                const initialAccountId = teamId 
-                    ? teams.find(t => t.id === teamId)?.accounts[0]?.id || ''
-                    : currentUser.accounts?.[0]?.id || '';
-                setPaymentShares([{ userId: currentUser.id, accountId: initialAccountId, amount: parseFloat(totalAmount) || 0 }]);
                 setExpenseShares(contextMembers.map(m => ({ userId: m.id, amount: 0 })));
-                setSplitMode('equal');
             }
+            
+            setSplitMode('equal');
         }
-    }, [isOpen, transactionToEdit, currentUser, contextMembers, defaultTeamId, teamId, teams]);
-    
+    }, [isOpen, transactionToEdit, isEditing, currentUser, contextMembers, defaultTeamId]);
+
     useEffect(() => {
         const amount = parseFloat(totalAmount) || 0;
         if (splitMode === 'equal') {
