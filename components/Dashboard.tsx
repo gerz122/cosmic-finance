@@ -48,10 +48,28 @@ const ProgressBar: React.FC<{ value: number; max: number; }> = ({ value, max }) 
 export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStatement, historicalData, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick, onShowFreedomModal }) => {
 
     const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks, expenseBreakdown } = useMemo(() => {
-        // DEFINITIVE FIX: Add robust guards and fallbacks. Check for the existence of user, the statement, AND the nested arrays within the statement.
-        // This prevents any race conditions where the component tries to render before sub-collections are loaded.
-        if (!user || !effectiveStatement || !effectiveStatement.transactions || !effectiveStatement.assets || !effectiveStatement.liabilities || !user.financialStatement) {
-            return { passiveIncome: 0, totalExpenses: 0, netWorth: 0, monthlyCashflow: 0, recentTransactions: [], stocks: [], expenseBreakdown: {} };
+        // DEFINITIVE FIX: This guard is now extremely robust. It checks not only for the existence
+        // of the necessary data structures but also ensures that any property that will be looped over
+        // (like '.transactions' or '.assets') is actually an array. This completely prevents the
+        // race condition where the component tries to render before sub-collections are loaded.
+        if (
+            !user?.financialStatement ||
+            !effectiveStatement ||
+            !Array.isArray(effectiveStatement.transactions) ||
+            !Array.isArray(effectiveStatement.assets) ||
+            !Array.isArray(effectiveStatement.liabilities) ||
+            !Array.isArray(user.financialStatement.assets)
+        ) {
+            // Return a default, safe state if data is not fully hydrated.
+            return { 
+                passiveIncome: 0, 
+                totalExpenses: 0, 
+                netWorth: 0, 
+                monthlyCashflow: 0, 
+                recentTransactions: [], 
+                stocks: [], 
+                expenseBreakdown: {} 
+            };
         }
         
         const statement = effectiveStatement;
