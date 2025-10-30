@@ -157,7 +157,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             }
         }
 
-        const transactionBase = {
+        const transactionBase: Omit<Transaction, 'id' | 'receiptUrl' | 'teamId'> & { receiptUrl?: string; teamId?: string } = {
             description,
             amount: parseFloat(totalAmount),
             category: categoryInput,
@@ -166,9 +166,12 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             isPassive,
             paymentShares,
             expenseShares,
-            receiptUrl: finalReceiptUrl,
             isTaxDeductible,
         };
+        
+        if (finalReceiptUrl) {
+            transactionBase.receiptUrl = finalReceiptUrl;
+        }
         
         const transactionData = teamId ? { ...transactionBase, teamId } : transactionBase;
 
