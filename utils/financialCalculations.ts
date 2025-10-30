@@ -119,5 +119,5 @@ export const generateHistoricalData = (user: User, teams: Team[]): HistoricalDat
 
     return Object.keys(finalData)
         .sort((dateA, dateB) => new Date(dateA).getTime() - new Date(dateB).getTime())
-        .map(date => ({ date, ...finalData[date] }));
+        .map(dateString => ({ date: dateString, ...finalData[dateString] }));
 };

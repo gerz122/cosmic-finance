@@ -74,7 +74,7 @@ export const AddAssetLiabilityModal: React.FC<AddAssetLiabilityModalProps> = ({ 
             <div>
                 <label htmlFor="assetType" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Asset Type</label>
                 <select id="assetType" value={assetType} onChange={e => setAssetType(e.target.value as AssetType)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary">
-                    {Object.values(AssetType).filter(t => t !== AssetType.STOCK).map(t => <option key={t} value={t}>{t}</option>)}
+                    {Object.values(AssetType).filter(currentAssetType => currentAssetType !== AssetType.STOCK).map(currentAssetType => <option key={currentAssetType} value={currentAssetType}>{currentAssetType}</option>)}
                 </select>
             </div>
             <div>
@@ -120,7 +120,7 @@ export const AddAssetLiabilityModal: React.FC<AddAssetLiabilityModalProps> = ({ 
                         <label htmlFor="teamId" className="block text-sm font-medium text-cosmic-text-secondary mb-1">For</label>
                         <select id="teamId" value={teamId} onChange={e => setTeamId(e.target.value)} disabled={!!defaultTeamId} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 disabled:bg-cosmic-border">
                             <option value="">Personal</option>
-                            {teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                            {teams.map(teamRecord => <option key={teamRecord.id} value={teamRecord.id}>{teamRecord.name}</option>)}
                         </select>
                     </div>
                      <div>

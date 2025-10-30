@@ -37,8 +37,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
 
     const contextMembers = useMemo(() => {
         if (!teamId) return allUsers;
-        const team = teams.find(t => t.id === teamId);
-        return team ? allUsers.filter(u => team.memberIds.includes(u.id)) : [currentUser];
+        const team = teams.find(teamRecord => teamRecord.id === teamId);
+        return team ? allUsers.filter(userRecord => team.memberIds.includes(userRecord.id)) : [currentUser];
     }, [teamId, teams, allUsers, currentUser]);
     
     // Comprehensive state reset
@@ -59,9 +59,9 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             setPaymentShares(isEditMode ? transactionToEdit.paymentShares : [{ userId: currentUser.id, accountId: '', amount: 0 }]);
             
             if (isEditMode) {
-                setExpenseShares(transactionToEdit.expenseShares || contextMembers.map(m => ({ userId: m.id, amount: 0 })));
+                setExpenseShares(transactionToEdit.expenseShares || contextMembers.map(member => ({ userId: member.id, amount: 0 })));
             } else {
-                setExpenseShares(contextMembers.map(m => ({ userId: m.id, amount: 0 })));
+                setExpenseShares(contextMembers.map(member => ({ userId: member.id, amount: 0 })));
             }
             
             setSplitMode('equal');
@@ -72,7 +72,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         const amount = parseFloat(totalAmount) || 0;
         if (splitMode === 'equal') {
             const shareAmount = contextMembers.length > 0 ? amount / contextMembers.length : 0;
-            setExpenseShares(contextMembers.map(m => ({ userId: m.id, amount: shareAmount })));
+            setExpenseShares(contextMembers.map(member => ({ userId: member.id, amount: shareAmount })));
         }
         if (paymentShares.length === 1) {
             setPaymentShares(prev => [{...prev[0], amount}]);
@@ -100,7 +100,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         return share.amount.toString();
     };
 
-    const totalExpenseSplit = expenseShares.reduce((sum, s) => sum + s.amount, 0);
+    const totalExpenseSplit = expenseShares.reduce((sum, shareItem) => sum + shareItem.amount, 0);
     const totalPercentage = (parseFloat(totalAmount) > 0 ? (totalExpenseSplit / parseFloat(totalAmount)) * 100 : 0);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -163,10 +163,10 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
 
     const getAccountsForUser = (userId: string): Account[] => {
         if(teamId) {
-            const team = teams.find(t => t.id === teamId);
+            const team = teams.find(teamRecord => teamRecord.id === teamId);
             return team?.accounts || [];
         }
-        const user = allUsers.find(u => u.id === userId);
+        const user = allUsers.find(userRecord => userRecord.id === userId);
         return user?.accounts || [];
     }
 
@@ -189,7 +189,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                             <label htmlFor="teamId" className="block text-sm font-medium text-cosmic-text-secondary mb-1">For</label>
                             <select id="teamId" value={teamId} onChange={e => setTeamId(e.target.value)} disabled={!!defaultTeamId} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 disabled:bg-cosmic-border">
                                 <option value="">Personal</option>
-                                {teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                                {teams.map(teamRecord => <option key={teamRecord.id} value={teamRecord.id}>{teamRecord.name}</option>)}
                             </select>
                         </div>
                     </div>
@@ -255,7 +255,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                                 <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                                     {expenseShares.map((share, index) => (
                                         <div key={share.userId} className="flex items-center gap-3">
-                                            <label className="w-1/3 truncate">{contextMembers.find(m => m.id === share.userId)?.name}</label>
+                                            <label className="w-1/3 truncate">{contextMembers.find(member => member.id === share.userId)?.name}</label>
                                             <div className="relative flex-grow">
                                                 <input 
                                                     type="number" 

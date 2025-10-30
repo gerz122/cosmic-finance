@@ -47,7 +47,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setActiveUser(userData);
             const fetchedTeams = await dbService.getTeamsForUser(uid);
             setTeams(fetchedTeams);
-            const memberIds = new Set(fetchedTeams.flatMap(t => t.memberIds));
+            const memberIds = new Set(fetchedTeams.flatMap(teamRecord => teamRecord.memberIds));
             memberIds.add(uid);
             const allTeamUsers = await dbService.getUsers(Array.from(memberIds));
             setUsers(allTeamUsers);
@@ -74,7 +74,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const fetchedTeams = await dbService.getTeamsForUser(appUser.id);
                     setTeams(fetchedTeams);
 
-                    const memberIds = new Set(fetchedTeams.flatMap(t => t.memberIds));
+                    const memberIds = new Set(fetchedTeams.flatMap(teamRecord => teamRecord.memberIds));
                     memberIds.add(appUser.id);
                     const allTeamUsers = await dbService.getUsers(Array.from(memberIds));
                     setUsers(allTeamUsers);
@@ -103,8 +103,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setActiveView('dashboard');
     };
 
-    const selectedTeam = useMemo(() => teams.find(t => t.id === selectedTeamId), [teams, selectedTeamId]);
-    const allUserAccounts = useMemo(() => users.flatMap(u => u.accounts || []), [users]);
+    const selectedTeam = useMemo(() => teams.find(teamRecord => teamRecord.id === selectedTeamId), [teams, selectedTeamId]);
+    const allUserAccounts = useMemo(() => users.flatMap(userRecord => userRecord.accounts || []), [users]);
 
     const effectiveFinancialStatement = useMemo(() => {
         // DEFINITIVE FIX: This guard prevents calculations on partially loaded data.
@@ -196,11 +196,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     await dbService.addPersonalTransaction(activeUser.id, transactionData);
                 }
             }
-            await refreshData(activeUser.id);
             if (!isEditing) {
-                const unlocked = await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_TRANSACTION');
-                if (unlocked) setActiveUser(unlocked); // Optimistic update
+                await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_TRANSACTION');
             }
+            await refreshData(activeUser.id);
         } catch(e) { console.error(e); alert(`Failed to save transaction: ${(e as Error).message}`); }
     };
     
@@ -265,24 +264,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleSaveBudget = async (budget: Budget) => {
         if (!activeUser) return;
         try {
-            const updatedUser = await dbService.saveBudget(activeUser.id, budget);
-            setActiveUser(updatedUser);
+            await dbService.saveBudget(activeUser.id, budget);
+            await refreshData(activeUser.id);
         } catch (e) { console.error(e); alert("Failed to save budget."); }
     };
     
     const handleSaveGoal = async (goalData: Omit<Goal, 'id' | 'currentAmount'>) => {
         if (!activeUser) return;
         try {
-            const updatedUser = await dbService.addGoal(activeUser.id, goalData);
-            setActiveUser(updatedUser);
+            await dbService.addGoal(activeUser.id, goalData);
+            await refreshData(activeUser.id);
         } catch (e) { console.error(e); alert("Failed to save goal."); }
     };
     
     const handleDeleteGoal = async (goalId: string) => {
         if (!activeUser) return;
         try {
-            const updatedUser = await dbService.deleteGoal(activeUser.id, goalId);
-            setActiveUser(updatedUser);
+            await dbService.deleteGoal(activeUser.id, goalId);
+            await refreshData(activeUser.id);
         } catch (e) { console.error(e); alert("Failed to delete goal."); }
     };
     
@@ -295,10 +294,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // This logic should be a single transaction in a real backend
             fromAccount.balance -= amount;
             const updatedGoal = { ...goal, currentAmount: goal.currentAmount + amount };
-            const updatedUser = await dbService.updateGoal(activeUser.id, updatedGoal);
+            await dbService.updateGoal(activeUser.id, updatedGoal);
             await dbService.updateAccount(activeUser.id, fromAccount);
             
-            setActiveUser(updatedUser);
             await refreshData(activeUser.id);
         } catch(e) { console.error(e); alert((e as Error).message); }
     };
@@ -314,11 +312,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (isEditing) await dbService.updateAsset(activeUser.id, modalData.stockToEdit.id, stockData);
                 else await dbService.addAsset(activeUser.id, stockData);
             }
-            await refreshData(activeUser.id);
             if (!isEditing) {
-                const unlocked = await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_INVESTMENT');
-                if (unlocked) setActiveUser(unlocked); // Optimistic update
+                await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_INVESTMENT');
             }
+            await refreshData(activeUser.id);
         } catch (e) { console.error(e); alert("Failed to save stock."); }
     };
 

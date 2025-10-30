@@ -52,7 +52,7 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClos
                     <div>
                         <label htmlFor="accountType" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Account Type</label>
                         <select id="accountType" value={type} onChange={e => setType(e.target.value as AccountType)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary">
-                            {Object.values(AccountType).map(t => <option key={t} value={t}>{t}</option>)}
+                            {Object.values(AccountType).map(accountType => <option key={accountType} value={accountType}>{accountType}</option>)}
                         </select>
                     </div>
                     <div>

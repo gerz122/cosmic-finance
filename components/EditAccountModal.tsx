@@ -25,7 +25,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({ isOpen, onCl
                  setShares(accountToEdit.shares);
             } else if (accountToEdit.ownerIds.length > 0) {
                  const equalShare = 100 / accountToEdit.ownerIds.length;
-                 setShares(accountToEdit.ownerIds.map(id => ({ userId: id, percentage: equalShare })));
+                 setShares(accountToEdit.ownerIds.map(ownerId => ({ userId: ownerId, percentage: equalShare })));
             } else {
                 setShares([]);
             }
@@ -89,7 +89,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({ isOpen, onCl
                     <div>
                         <label htmlFor="accountType" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Account Type</label>
                         <select id="accountType" value={type} onChange={e => setType(e.target.value as AccountType)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2">
-                            {Object.values(AccountType).map(t => <option key={t} value={t}>{t}</option>)}
+                            {Object.values(AccountType).map(accountType => <option key={accountType} value={accountType}>{accountType}</option>)}
                         </select>
                     </div>
 

@@ -342,4 +342,62 @@ export const applyEventOutcome = async (userId: string, outcome: EventOutcome) =
      }
 };
 
-export { checkAndUnlockAchievement, saveBudget, addGoal, deleteGoal, updateGoal } from './dbService.mock';
+export const checkAndUnlockAchievement = async (userId: string, achievementId: string): Promise<void> => {
+    const userRef = db.collection('users').doc(userId);
+    await userRef.update({
+        achievements: firebase.firestore.FieldValue.arrayUnion(achievementId)
+    });
+};
+
+export const saveBudget = async (userId: string, budget: Budget): Promise<void> => {
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) throw new Error("User not found");
+
+    const userData = userDoc.data() as User;
+    const budgets = userData.budgets || [];
+    const budgetIndex = budgets.findIndex(b => b.month === budget.month);
+
+    if (budgetIndex > -1) {
+        budgets[budgetIndex] = budget;
+    } else {
+        budgets.push(budget);
+    }
+    await userRef.update({ budgets });
+};
+
+export const addGoal = async (userId: string, goalData: Omit<Goal, 'id' | 'currentAmount'>): Promise<void> => {
+    const newGoal: Goal = { ...goalData, id: db.collection('users').doc().id, currentAmount: 0 };
+    const userRef = db.collection('users').doc(userId);
+    await userRef.update({
+        goals: firebase.firestore.FieldValue.arrayUnion(newGoal)
+    });
+};
+
+export const deleteGoal = async (userId: string, goalId: string): Promise<void> => {
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) throw new Error("User not found");
+
+    const userData = userDoc.data() as User;
+    const goals = userData.goals || [];
+    const updatedGoals = goals.filter(g => g.id !== goalId);
+    await userRef.update({ goals: updatedGoals });
+};
+
+export const updateGoal = async (userId: string, goalToUpdate: Goal): Promise<void> => {
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) throw new Error("User not found");
+    
+    const userData = userDoc.data() as User;
+    const goals = userData.goals || [];
+    const goalIndex = goals.findIndex(g => g.id === goalToUpdate.id);
+    
+    if (goalIndex > -1) {
+        goals[goalIndex] = goalToUpdate;
+        await userRef.update({ goals });
+    } else {
+        throw new Error("Goal not found to update");
+    }
+};

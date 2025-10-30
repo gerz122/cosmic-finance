@@ -149,7 +149,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
                         <label htmlFor="teamId" className="block text-sm font-medium text-cosmic-text-secondary mb-1">For</label>
                         <select id="teamId" value={teamId} onChange={e => setTeamId(e.target.value)} disabled={!!defaultTeamId} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 disabled:bg-cosmic-border">
                             <option value="">Personal</option>
-                            {teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                            {teams.map(teamRecord => <option key={teamRecord.id} value={teamRecord.id}>{teamRecord.name}</option>)}
                         </select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">

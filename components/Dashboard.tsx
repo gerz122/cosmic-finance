@@ -117,7 +117,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
             let share = 1.0;
             if(asset.shares) share = (asset.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
             else if (asset.teamId) {
-                const team = teams.find(t => t.id === asset.teamId);
+                const team = teams.find(teamRecord => teamRecord.id === asset.teamId);
                 if(team && team.memberIds.includes(user.id)) share = 1 / team.memberIds.length; else share = 0;
             }
             totalAssets += asset.value * share;
@@ -128,7 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
             let share = 1.0;
             if(liability.shares) share = (liability.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
             else if (liability.teamId) {
-                const team = teams.find(t => t.id === liability.teamId);
+                const team = teams.find(teamRecord => teamRecord.id === liability.teamId);
                 if(team && team.memberIds.includes(user.id)) share = 1 / team.memberIds.length; else share = 0;
             }
             totalLiabilities += liability.balance * share;
@@ -137,7 +137,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         const calculatedNetWorth = totalAssets - totalLiabilities;
         
         const recentTransactions = [...statement.transactions].sort((txA, txB) => new Date(txB.date).getTime() - new Date(txA.date).getTime()).slice(0, 5);
-        const stocks = (userFinancials.assets || []).filter(asset => asset.type === AssetType.STOCK);
+        const stocks = (userFinancials.assets || []).filter(assetItem => assetItem.type === AssetType.STOCK);
         
         return { 
             passiveIncome: calculatedPassiveIncome, 
@@ -162,7 +162,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
 
     const expenseChartData = useMemo(() => {
         return Object.entries(expenseBreakdown)
-            .sort(([, a], [, b]) => b - a)
+            .sort(([, valA], [, valB]) => valB - valA)
             .map(([label, value], index) => ({
                 label,
                 value,
@@ -223,14 +223,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
                     <h2 className="text-xl font-bold text-cosmic-text-primary mb-4">Recent Plays (Transactions)</h2>
                     <div className="space-y-3">
                         {recentTransactions.length === 0 && <p className="text-cosmic-text-secondary">No recent transactions.</p>}
-                        {recentTransactions.map(tx => (
-                            <div key={tx.id} onClick={() => onTransactionClick(tx)} className="flex justify-between items-center p-3 bg-cosmic-bg rounded-lg hover:bg-cosmic-border cursor-pointer transition-colors">
+                        {recentTransactions.map(transactionRecord => (
+                            <div key={transactionRecord.id} onClick={() => onTransactionClick(transactionRecord)} className="flex justify-between items-center p-3 bg-cosmic-bg rounded-lg hover:bg-cosmic-border cursor-pointer transition-colors">
                                 <div>
-                                    <p className="font-semibold text-cosmic-text-primary">{tx.description}</p>
-                                    <p className="text-sm text-cosmic-text-secondary">{tx.category} &bull; {new Date(tx.date).toLocaleDateString()}</p>
+                                    <p className="font-semibold text-cosmic-text-primary">{transactionRecord.description}</p>
+                                    <p className="text-sm text-cosmic-text-secondary">{transactionRecord.category} &bull; {new Date(transactionRecord.date).toLocaleDateString()}</p>
                                 </div>
-                                <p className={`font-bold text-lg ${tx.type === TransactionType.INCOME ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>
-                                    {tx.type === TransactionType.INCOME ? '+' : '-'}${tx.amount.toFixed(2)}
+                                <p className={`font-bold text-lg ${transactionRecord.type === TransactionType.INCOME ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>
+                                    {transactionRecord.type === TransactionType.INCOME ? '+' : '-'}${transactionRecord.amount.toFixed(2)}
                                 </p>
                             </div>
                         ))}

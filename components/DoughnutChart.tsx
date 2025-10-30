@@ -20,7 +20,7 @@ const getCoords = (percent: number, radius: number, size: number) => {
 }
 
 export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, centerLabel, onSliceClick }) => {
-    const total = data.reduce((sum, item) => sum + item.value, 0);
+    const total = data.reduce((sum, chartItem) => sum + chartItem.value, 0);
 
     if (total === 0) {
         return (
@@ -48,8 +48,8 @@ export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, 
     return (
         <div className="relative" style={{ width: size, height: size }}>
             <svg viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-                {data.map((item) => {
-                    const percent = item.value / total;
+                {data.map((chartItem) => {
+                    const percent = chartItem.value / total;
                     
                     const [startX, startY] = getCoords(cumulativePercent, outerRadius, size);
                     const [startInnerX, startInnerY] = getCoords(cumulativePercent, innerRadius, size);
@@ -71,10 +71,10 @@ export const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, size = 200, 
 
                     return (
                         <path
-                            key={item.label}
+                            key={chartItem.label}
                             d={pathData}
-                            fill={item.color}
-                            onClick={() => onSliceClick && onSliceClick(item.label)}
+                            fill={chartItem.color}
+                            onClick={() => onSliceClick && onSliceClick(chartItem.label)}
                             className="cursor-pointer hover:opacity-80 transition-opacity"
                         />
                     );

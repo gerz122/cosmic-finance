@@ -21,7 +21,7 @@ interface TeamDashboardProps {
 }
 
 export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, onBack, onAddTransaction, onAddAsset, onAddLiability, onAddStock, onEditAsset, onEditLiability, onEditTransaction, onDeleteTransaction, onViewReceipt, onViewSplitDetails, onOpenReportModal }) => {
-    const members = allUsers.filter(u => team.memberIds.includes(u.id));
+    const members = allUsers.filter(userRecord => team.memberIds.includes(userRecord.id));
 
     return (
         <div className="animate-fade-in space-y-8">
@@ -30,7 +30,7 @@ export const TeamDashboard: React.FC<TeamDashboardProps> = ({ team, allUsers, on
                     <button onClick={onBack} className="text-sm text-cosmic-primary hover:underline mb-2">&larr; Back to Teams Hub</button>
                     <h1 className="text-3xl font-bold text-cosmic-text-primary">{team.name}</h1>
                     <div className="flex items-center mt-2 -space-x-2">
-                        {members.map(m => <img key={m.id} src={m.avatar} alt={m.name} title={m.name} className="w-8 h-8 rounded-full border-2 border-cosmic-surface" />)}
+                        {members.map(member => <img key={member.id} src={member.avatar} alt={member.name} title={member.name} className="w-8 h-8 rounded-full border-2 border-cosmic-surface" />)}
                     </div>
                 </div>
                 <div className="flex gap-2 flex-wrap">

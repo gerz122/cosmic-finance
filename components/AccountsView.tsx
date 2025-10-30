@@ -49,7 +49,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({ accounts = [], onAdd
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {accounts.length > 0 ? (
-                    accounts.map(acc => <AccountCard key={acc.id} account={acc} onClick={() => onOpenAccountTransactions(acc)} onEdit={(e) => { e.stopPropagation(); onEditAccount(acc); }} />)
+                    accounts.map(accountItem => <AccountCard key={accountItem.id} account={accountItem} onClick={() => onOpenAccountTransactions(accountItem)} onEdit={(e) => { e.stopPropagation(); onEditAccount(accountItem); }} />)
                 ) : (
                     <div className="col-span-full bg-cosmic-surface p-8 rounded-lg border border-dashed border-cosmic-border text-center">
                         <CreditCardIcon className="w-12 h-12 mx-auto text-cosmic-text-secondary mb-4" />

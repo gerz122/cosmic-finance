@@ -21,7 +21,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
         }
     }, [isOpen, currentUser.accounts]);
     
-    const fromAccountBalance = (currentUser.accounts || []).find(a => a.id === fromAccountId)?.balance || 0;
+    const fromAccountBalance = (currentUser.accounts || []).find(accountItem => accountItem.id === fromAccountId)?.balance || 0;
 
     if (!isOpen) return null;
 
@@ -64,8 +64,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
                             onChange={e => setFromAccountId(e.target.value)} 
                             className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary"
                         >
-                            {(currentUser.accounts || []).map(acc => (
-                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.type})</option>
+                            {(currentUser.accounts || []).map(accountItem => (
+                                <option key={accountItem.id} value={accountItem.id}>{accountItem.name} ({accountItem.type})</option>
                             ))}
                         </select>
                          <p className="text-xs text-cosmic-text-secondary mt-1">Balance: <span className="font-bold text-cosmic-primary">${fromAccountBalance.toFixed(2)}</span></p>
@@ -78,8 +78,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
                             onChange={e => setToAccountId(e.target.value)} 
                             className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary"
                         >
-                             {(currentUser.accounts || []).filter(a => a.id !== fromAccountId).map(acc => (
-                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.type})</option>
+                             {(currentUser.accounts || []).filter(accountItem => accountItem.id !== fromAccountId).map(accountItem => (
+                                <option key={accountItem.id} value={accountItem.id}>{accountItem.name} ({accountItem.type})</option>
                             ))}
                         </select>
                     </div>

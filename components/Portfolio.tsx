@@ -30,13 +30,13 @@ export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, o
     const assets = user.financialStatement?.assets || [];
     const liabilities = user.financialStatement?.liabilities || [];
     
-    const personalStocks = assets.filter(a => a.type === AssetType.STOCK && !a.teamId);
-    const personalOtherAssets = assets.filter(a => a.type !== AssetType.STOCK && !a.teamId);
-    const personalLiabilities = liabilities.filter(l => !l.teamId);
+    const personalStocks = assets.filter(assetItem => assetItem.type === AssetType.STOCK && !assetItem.teamId);
+    const personalOtherAssets = assets.filter(assetItem => assetItem.type !== AssetType.STOCK && !assetItem.teamId);
+    const personalLiabilities = liabilities.filter(liabilityItem => !liabilityItem.teamId);
     
-    const totalStockValue = personalStocks.reduce((sum, s) => sum + s.value, 0);
-    const totalOtherAssetsValue = personalOtherAssets.reduce((sum, a) => sum + a.value, 0);
-    const totalLiabilitiesValue = personalLiabilities.reduce((sum, l) => sum + l.balance, 0);
+    const totalStockValue = personalStocks.reduce((sum, stockItem) => sum + stockItem.value, 0);
+    const totalOtherAssetsValue = personalOtherAssets.reduce((sum, assetItem) => sum + assetItem.value, 0);
+    const totalLiabilitiesValue = personalLiabilities.reduce((sum, liabilityItem) => sum + liabilityItem.balance, 0);
 
     return (
         <div className="animate-fade-in space-y-8">
@@ -108,12 +108,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, o
                  <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
                      <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Personal Assets</h3>
                      <div className="p-4 space-y-2">
-                        {personalOtherAssets.map(asset => (
-                            <div key={asset.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1 group">
-                                <span>{asset.name} ({asset.type})</span>
+                        {personalOtherAssets.map(assetItem => (
+                            <div key={assetItem.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1 group">
+                                <span>{assetItem.name} ({assetItem.type})</span>
                                 <div className="flex items-center gap-4">
-                                    <span className="font-semibold">${asset.value.toLocaleString()}</span>
-                                    <button onClick={() => onEditAsset(asset)} className="text-xs text-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
+                                    <span className="font-semibold">${assetItem.value.toLocaleString()}</span>
+                                    <button onClick={() => onEditAsset(assetItem)} className="text-xs text-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
                                 </div>
                             </div>
                         ))}
@@ -123,12 +123,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, o
                  <div className="bg-cosmic-surface rounded-lg border border-cosmic-border">
                      <h3 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Personal Liabilities</h3>
                      <div className="p-4 space-y-2">
-                        {personalLiabilities.map(lia => (
-                             <div key={lia.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1 group">
-                                <span>{lia.name}</span>
+                        {personalLiabilities.map(liabilityItem => (
+                             <div key={liabilityItem.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1 group">
+                                <span>{liabilityItem.name}</span>
                                 <div className="flex items-center gap-4">
-                                    <span className="font-semibold text-cosmic-danger">-${lia.balance.toLocaleString()}</span>
-                                    <button onClick={() => onEditLiability(lia)} className="text-xs text-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
+                                    <span className="font-semibold text-cosmic-danger">-${liabilityItem.balance.toLocaleString()}</span>
+                                    <button onClick={() => onEditLiability(liabilityItem)} className="text-xs text-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
                                 </div>
                             </div>
                         ))}
@@ -137,37 +137,37 @@ export const Portfolio: React.FC<PortfolioProps> = ({ user, teams, onAddStock, o
                 </div>
             </div>
 
-            {teams.map(team => {
-                const userShare = 1 / team.memberIds.length;
+            {teams.map(teamData => {
+                const userShare = 1 / teamData.memberIds.length;
                 return (
-                <div key={team.id} className="bg-cosmic-surface rounded-lg border border-cosmic-border">
-                    <h2 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Team Portfolio: {team.name}</h2>
+                <div key={teamData.id} className="bg-cosmic-surface rounded-lg border border-cosmic-border">
+                    <h2 className="p-4 text-lg font-bold text-cosmic-text-primary border-b border-cosmic-border">Team Portfolio: {teamData.name}</h2>
                      <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
                           <div>
                             <h3 className="font-bold text-cosmic-primary mb-2">Team Assets</h3>
-                            {team.financialStatement.assets.map(asset => (
-                            <div key={asset.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
-                                <span>{asset.name} ({asset.type})</span>
+                            {teamData.financialStatement.assets.map(assetItem => (
+                            <div key={assetItem.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
+                                <span>{assetItem.name} ({assetItem.type})</span>
                                 <div className="text-right">
-                                    <span className="font-semibold">${asset.value.toLocaleString()}</span>
-                                    <span className="text-xs text-cosmic-text-secondary ml-2">(Your share: ${(asset.value * userShare).toLocaleString()})</span>
+                                    <span className="font-semibold">${assetItem.value.toLocaleString()}</span>
+                                    <span className="text-xs text-cosmic-text-secondary ml-2">(Your share: ${(assetItem.value * userShare).toLocaleString()})</span>
                                 </div>
                             </div>
                             ))}
-                            {team.financialStatement.assets.length === 0 && <p className="text-xs text-cosmic-text-secondary">No assets for this team.</p>}
+                            {teamData.financialStatement.assets.length === 0 && <p className="text-xs text-cosmic-text-secondary">No assets for this team.</p>}
                           </div>
                            <div>
                             <h3 className="font-bold text-cosmic-secondary mb-2">Team Liabilities</h3>
-                            {team.financialStatement.liabilities.map(lia => (
-                            <div key={lia.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
-                                <span>{lia.name}</span>
+                            {teamData.financialStatement.liabilities.map(liabilityItem => (
+                            <div key={liabilityItem.id} className="flex justify-between items-center text-cosmic-text-primary text-sm py-1">
+                                <span>{liabilityItem.name}</span>
                                 <div className="text-right">
-                                    <span className="font-semibold text-cosmic-danger">-${lia.balance.toLocaleString()}</span>
-                                     <span className="text-xs text-cosmic-text-secondary ml-2">(Your share: -${(lia.balance * userShare).toLocaleString()})</span>
+                                    <span className="font-semibold text-cosmic-danger">-${liabilityItem.balance.toLocaleString()}</span>
+                                     <span className="text-xs text-cosmic-text-secondary ml-2">(Your share: -${(liabilityItem.balance * userShare).toLocaleString()})</span>
                                 </div>
                             </div>
                             ))}
-                            {team.financialStatement.liabilities.length === 0 && <p className="text-xs text-cosmic-text-secondary">No liabilities for this team.</p>}
+                            {teamData.financialStatement.liabilities.length === 0 && <p className="text-xs text-cosmic-text-secondary">No liabilities for this team.</p>}
                           </div>
                      </div>
                 </div>

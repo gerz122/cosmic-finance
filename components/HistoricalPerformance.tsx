@@ -30,14 +30,14 @@ export const HistoricalPerformance: React.FC<HistoricalPerformanceProps> = ({ da
     const [activeView, setActiveView] = useState<ChartView>('netWorth');
 
     const chartData = useMemo(() => {
-        const currentKeys = viewConfig[activeView].series.map(s => s.key);
+        const currentKeys = viewConfig[activeView].series.map(seriesItem => seriesItem.key);
         // Fill forward logic: If a data point doesn't have a value for a key, use the last known value.
         let lastKnownValues: Record<string, number> = {};
-        return data.map(point => {
-            const newPoint = { date: point.date };
+        return data.map(dataPoint => {
+            const newPoint = { date: dataPoint.date };
             currentKeys.forEach(key => {
-                if (point[key] !== undefined) {
-                    lastKnownValues[key] = point[key] as number;
+                if (dataPoint[key] !== undefined) {
+                    lastKnownValues[key] = dataPoint[key] as number;
                 }
                 (newPoint as any)[key] = lastKnownValues[key];
             });

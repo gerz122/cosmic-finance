@@ -54,8 +54,8 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, onIm
         try {
             const results = await parseStatementWithGemini(text);
             // Add default empty category/accountId for review step
-            const reviewableResults = results.map((tx: any) => ({
-                ...tx,
+            const reviewableResults = results.map((transactionRecord: any) => ({
+                ...transactionRecord,
                 category: '',
                 accountId: ''
             }));

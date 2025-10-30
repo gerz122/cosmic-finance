@@ -20,39 +20,39 @@ export const Balances: React.FC<BalancesProps> = ({ currentUser, allUsers, teams
     
     const balances = useMemo((): Balance[] => {
         const balanceMap: { [userId: string]: number } = {};
-        allUsers.forEach(u => balanceMap[u.id] = 0);
+        allUsers.forEach(userToMap => balanceMap[userToMap.id] = 0);
 
         const allSharedTransactions = [
-            ...teams.flatMap(team => team.financialStatement?.transactions || []),
-            ...allUsers.flatMap(user => user.financialStatement?.transactions || [])
-        ].filter(tx => tx.type === TransactionType.EXPENSE && tx.expenseShares && tx.expenseShares.length > 0);
+            ...teams.flatMap(teamData => teamData.financialStatement?.transactions || []),
+            ...allUsers.flatMap(userData => userData.financialStatement?.transactions || [])
+        ].filter(transactionRecord => transactionRecord.type === TransactionType.EXPENSE && transactionRecord.expenseShares && transactionRecord.expenseShares.length > 0);
 
-        const uniqueTransactions = Array.from(new Map(allSharedTransactions.map(t => [t.id, t])).values());
+        const uniqueTransactions = Array.from(new Map(allSharedTransactions.map(transactionToMap => [transactionToMap.id, transactionToMap])).values());
         
-        uniqueTransactions.forEach(tx => {
-            if (tx.type === TransactionType.EXPENSE && tx.expenseShares) {
-                tx.paymentShares.forEach(payment => {
+        uniqueTransactions.forEach(transactionRecord => {
+            if (transactionRecord.type === TransactionType.EXPENSE && transactionRecord.expenseShares) {
+                transactionRecord.paymentShares.forEach(payment => {
                     balanceMap[payment.userId] = (balanceMap[payment.userId] || 0) + payment.amount;
                 });
 
-                tx.expenseShares.forEach(expense => {
+                transactionRecord.expenseShares.forEach(expense => {
                     balanceMap[expense.userId] = (balanceMap[expense.userId] || 0) - expense.amount;
                 });
             }
         });
 
         return allUsers
-            .map(user => ({
-                userId: user.id,
-                userName: user.name,
-                avatar: user.avatar,
-                amount: balanceMap[user.id] || 0,
+            .map(userRecord => ({
+                userId: userRecord.id,
+                userName: userRecord.name,
+                avatar: userRecord.avatar,
+                amount: balanceMap[userRecord.id] || 0,
             }))
             .filter(balance => Math.abs(balance.amount) > 0.01);
             
     }, [allUsers, teams]);
 
-    const myNetBalance = balances.find(b => b.userId === currentUser.id)?.amount || 0;
+    const myNetBalance = balances.find(balance => balance.userId === currentUser.id)?.amount || 0;
     
     const netOwedToMe = Math.max(0, myNetBalance);
     const netOwedByMe = Math.max(0, -myNetBalance);
@@ -80,7 +80,7 @@ export const Balances: React.FC<BalancesProps> = ({ currentUser, allUsers, teams
                 <h2 className="text-xl font-bold text-cosmic-text-primary mb-4 px-2">Player Net Balances</h2>
                 <div className="space-y-2">
                     {balances.length === 0 && <p className="text-center py-8 text-cosmic-text-secondary">All balances are settled up!</p>}
-                    {balances.sort((a, b) => b.amount - a.amount).map(balance => (
+                    {balances.sort((balanceA, balanceB) => balanceB.amount - balanceA.amount).map(balance => (
                         <div key={balance.userId} className="flex justify-between items-center p-3 bg-cosmic-bg rounded-lg">
                             <div className="flex items-center gap-3">
                                 <img src={balance.avatar} alt={balance.userName} className="w-10 h-10 rounded-full" />

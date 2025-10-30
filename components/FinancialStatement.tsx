@@ -17,7 +17,7 @@ interface FinancialStatementProps {
 const TransactionRowWithDetails: React.FC<{ tx: Transaction, allUsers: User[], onEdit: () => void, onDelete: () => void, onViewReceipt: (url: string) => void, onViewSplitDetails: (transaction: Transaction) => void }> = ({ tx, allUsers, onEdit, onDelete, onViewReceipt, onViewSplitDetails }) => {
     const isIncome = tx.type === TransactionType.INCOME;
     
-    const findUserAvatar = (userId: string) => allUsers.find(u => u.id === userId)?.avatar;
+    const findUserAvatar = (userId: string) => allUsers.find(userRecord => userRecord.id === userId)?.avatar;
 
     return (
         <tr className="border-b border-cosmic-border last:border-b-0 hover:bg-cosmic-bg group text-sm">
@@ -26,17 +26,17 @@ const TransactionRowWithDetails: React.FC<{ tx: Transaction, allUsers: User[], o
             <td className="px-2 py-2 text-cosmic-text-secondary">{tx.category}</td>
              <td className="px-2 py-2">
                 <button onClick={() => onViewSplitDetails(tx)} className="flex -space-x-2 hover:opacity-80 transition-opacity">
-                    {tx.paymentShares.map(ps => {
-                        const avatar = findUserAvatar(ps.userId);
-                        return avatar ? <img key={ps.userId} src={avatar} alt={ps.userId} className="w-6 h-6 rounded-full border-2 border-cosmic-surface" title={`${allUsers.find(u => u.id === ps.userId)?.name} paid $${ps.amount.toFixed(2)}`} /> : null;
+                    {tx.paymentShares.map(paymentShare => {
+                        const avatar = findUserAvatar(paymentShare.userId);
+                        return avatar ? <img key={paymentShare.userId} src={avatar} alt={paymentShare.userId} className="w-6 h-6 rounded-full border-2 border-cosmic-surface" title={`${allUsers.find(u => u.id === paymentShare.userId)?.name} paid $${paymentShare.amount.toFixed(2)}`} /> : null;
                     })}
                 </button>
             </td>
              <td className="px-2 py-2">
                 <button onClick={() => onViewSplitDetails(tx)} className="flex -space-x-2 hover:opacity-80 transition-opacity">
-                    {tx.expenseShares?.map(es => {
-                         const avatar = findUserAvatar(es.userId);
-                         return avatar ? <img key={es.userId} src={avatar} alt={es.userId} className="w-6 h-6 rounded-full border-2 border-cosmic-surface" title={`${allUsers.find(u => u.id === es.userId)?.name}'s share was $${es.amount.toFixed(2)}`} /> : null;
+                    {tx.expenseShares?.map(expenseShare => {
+                         const avatar = findUserAvatar(expenseShare.userId);
+                         return avatar ? <img key={expenseShare.userId} src={avatar} alt={expenseShare.userId} className="w-6 h-6 rounded-full border-2 border-cosmic-surface" title={`${allUsers.find(u => u.id === expenseShare.userId)?.name}'s share was $${expenseShare.amount.toFixed(2)}`} /> : null;
                     })}
                 </button>
             </td>
@@ -74,15 +74,15 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
     }, [statement.transactions]);
 
     const filteredTransactions = useMemo(() => {
-        return statement.transactions.filter(tx => {
-            const txDate = new Date(tx.date + 'T00:00:00');
+        return statement.transactions.filter(transactionRecord => {
+            const txDate = new Date(transactionRecord.date + 'T00:00:00');
             const start = dateRange.start ? new Date(dateRange.start + 'T00:00:00') : null;
             const end = dateRange.end ? new Date(dateRange.end + 'T00:00:00') : null;
             if (start && txDate < start) return false;
             if (end && txDate > end) return false;
-            if (categoryFilter !== 'all' && tx.category !== categoryFilter) return false;
+            if (categoryFilter !== 'all' && transactionRecord.category !== categoryFilter) return false;
             return true;
-        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        }).sort((txA, txB) => new Date(txB.date).getTime() - new Date(txA.date).getTime());
     }, [statement.transactions, dateRange, categoryFilter]);
 
     const { income, passiveIncome, expenses, monthlyCashflow, netWorth, assets, liabilities } = useMemo(() => {
@@ -133,7 +133,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                  let share = 1.0;
                 if(assetRecord.shares) share = (assetRecord.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
                 else if (assetRecord.teamId) {
-                    const teamData = teams.find(t => t.id === assetRecord.teamId);
+                    const teamData = teams.find(teamRecord => teamRecord.id === assetRecord.teamId);
                     if(teamData) share = 1 / teamData.memberIds.length; else share = 0;
                 }
                 totalAssets += assetRecord.value * share;
@@ -148,7 +148,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                 let share = 1.0;
                 if(liabilityRecord.shares) share = (liabilityRecord.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
                 else if (liabilityRecord.teamId) {
-                    const teamData = teams.find(t => t.id === liabilityRecord.teamId);
+                    const teamData = teams.find(teamRecord => teamRecord.id === liabilityRecord.teamId);
                     if(teamData) share = 1 / teamData.memberIds.length; else share = 0;
                 }
                 totalLiabilities += liabilityRecord.balance * share;
@@ -168,8 +168,8 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
         };
     }, [filteredTransactions, statement, user.id, team, teams, dateRange, categoryFilter]);
 
-    const incomeTransactions = filteredTransactions.filter(t => t.type === TransactionType.INCOME);
-    const expenseTransactions = filteredTransactions.filter(t => t.type === TransactionType.EXPENSE);
+    const incomeTransactions = filteredTransactions.filter(transactionRecord => transactionRecord.type === TransactionType.INCOME);
+    const expenseTransactions = filteredTransactions.filter(transactionRecord => transactionRecord.type === TransactionType.EXPENSE);
 
     return (
         <div className="animate-fade-in space-y-6">
@@ -230,17 +230,17 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                     <div className="bg-cosmic-bg p-3 rounded-lg">
                         <h3 className="font-semibold text-cosmic-primary mb-2">Assets</h3>
                         <div className="max-h-60 overflow-y-auto pr-2">
-                           {assets.map(a => <p key={a.id} className="flex justify-between text-sm py-1 border-b border-cosmic-border last:border-0"><span>{a.name}</span><span>${a.value.toLocaleString()}</span></p>)}
+                           {assets.map(assetItem => <p key={assetItem.id} className="flex justify-between text-sm py-1 border-b border-cosmic-border last:border-0"><span>{assetItem.name}</span><span>${assetItem.value.toLocaleString()}</span></p>)}
                         </div>
-                        <div className="font-bold text-right mt-2 text-cosmic-primary">Total: ${assets.reduce((s,a)=>s+a.value,0).toLocaleString()}</div>
+                        <div className="font-bold text-right mt-2 text-cosmic-primary">Total: ${assets.reduce((sum, assetItem)=>sum+assetItem.value,0).toLocaleString()}</div>
                     </div>
                     {/* Liabilities */}
                     <div className="bg-cosmic-bg p-3 rounded-lg">
                         <h3 className="font-semibold text-cosmic-secondary mb-2">Liabilities</h3>
                         <div className="max-h-60 overflow-y-auto pr-2">
-                            {liabilities.map(l => <p key={l.id} className="flex justify-between text-sm py-1 border-b border-cosmic-border last:border-0"><span>{l.name}</span><span>${l.balance.toLocaleString()}</span></p>)}
+                            {liabilities.map(liabilityItem => <p key={liabilityItem.id} className="flex justify-between text-sm py-1 border-b border-cosmic-border last:border-0"><span>{liabilityItem.name}</span><span>${liabilityItem.balance.toLocaleString()}</span></p>)}
                         </div>
-                         <div className="font-bold text-right mt-2 text-cosmic-secondary">Total: ${liabilities.reduce((s,l)=>s+l.balance,0).toLocaleString()}</div>
+                         <div className="font-bold text-right mt-2 text-cosmic-secondary">Total: ${liabilities.reduce((sum, liabilityItem)=>sum+liabilityItem.balance,0).toLocaleString()}</div>
                     </div>
                      {/* Net Worth */}
                      <div className="text-center bg-cosmic-bg p-4 rounded-lg">

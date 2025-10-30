@@ -74,8 +74,8 @@ export const LogDividendModal: React.FC<LogDividendModalProps> = ({ isOpen, onCl
                             required
                         >
                             <option value="" disabled>Select an account</option>
-                            {accounts.map(acc => (
-                                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                            {accounts.map(accountItem => (
+                                <option key={accountItem.id} value={accountItem.id}>{accountItem.name}</option>
                             ))}
                         </select>
                     </div>
