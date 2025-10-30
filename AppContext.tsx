@@ -205,7 +205,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const handleDeleteTransaction = async (transactionId: string) => {
         if (!activeUser) return;
-        const tx = effectiveFinancialStatement.transactions.find((t: Transaction) => t.id === transactionId);
+        const tx = effectiveFinancialStatement.transactions.find((transactionItem: Transaction) => transactionItem.id === transactionId);
         if (tx && window.confirm(`Are you sure you want to delete "${tx.description}"?`)) {
             try {
                 await dbService.deleteTransaction(tx);
@@ -288,7 +288,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleContributeToGoal = async (goal: Goal, amount: number, fromAccountId: string) => {
         if (!activeUser) return;
         try {
-            const fromAccount = activeUser.accounts.find(a => a.id === fromAccountId);
+            const fromAccount = activeUser.accounts.find(accountItem => accountItem.id === fromAccountId);
             if (!fromAccount || fromAccount.balance < amount) throw new Error("Insufficient funds");
             
             // This logic should be a single transaction in a real backend

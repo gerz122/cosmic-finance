@@ -100,7 +100,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                     if(userShare) {
                         incomeShare = userShare;
                     } else if (transactionRecord.teamId) {
-                        const teamData = teams.find(tm => tm.id === transactionRecord.teamId);
+                        const teamData = teams.find(teamMember => teamMember.id === transactionRecord.teamId);
                         if(teamData) incomeShare = transactionRecord.amount / teamData.memberIds.length;
                     }
                 }
@@ -115,7 +115,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                      if (userShare) {
                         expenseShare = userShare;
                     } else if (transactionRecord.teamId) {
-                        const teamData = teams.find(tm => tm.id === transactionRecord.teamId);
+                        const teamData = teams.find(teamMember => teamMember.id === transactionRecord.teamId);
                         if(teamData) expenseShare = transactionRecord.amount / teamData.memberIds.length;
                     }
                 }
@@ -133,7 +133,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                  let share = 1.0;
                 if(assetRecord.shares) share = (assetRecord.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
                 else if (assetRecord.teamId) {
-                    const teamData = teams.find(teamRecord => teamRecord.id === assetRecord.teamId);
+                    const teamData = teams.find(teamMember => teamMember.id === assetRecord.teamId);
                     if(teamData) share = 1 / teamData.memberIds.length; else share = 0;
                 }
                 totalAssets += assetRecord.value * share;
@@ -148,7 +148,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                 let share = 1.0;
                 if(liabilityRecord.shares) share = (liabilityRecord.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
                 else if (liabilityRecord.teamId) {
-                    const teamData = teams.find(teamRecord => teamRecord.id === liabilityRecord.teamId);
+                    const teamData = teams.find(teamMember => teamMember.id === liabilityRecord.teamId);
                     if(teamData) share = 1 / teamData.memberIds.length; else share = 0;
                 }
                 totalLiabilities += liabilityRecord.balance * share;

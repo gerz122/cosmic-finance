@@ -37,8 +37,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
 
     const contextMembers = useMemo(() => {
         if (!teamId) return allUsers;
-        const team = teams.find(teamRecord => teamRecord.id === teamId);
-        return team ? allUsers.filter(userRecord => team.memberIds.includes(userRecord.id)) : [currentUser];
+        const teamRecord = teams.find(teamItem => teamItem.id === teamId);
+        return teamRecord ? allUsers.filter(userRecord => teamRecord.memberIds.includes(userRecord.id)) : [currentUser];
     }, [teamId, teams, allUsers, currentUser]);
     
     // Comprehensive state reset
@@ -163,11 +163,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
 
     const getAccountsForUser = (userId: string): Account[] => {
         if(teamId) {
-            const team = teams.find(teamRecord => teamRecord.id === teamId);
-            return team?.accounts || [];
+            const teamRecord = teams.find(teamItem => teamItem.id === teamId);
+            return teamRecord?.accounts || [];
         }
-        const user = allUsers.find(userRecord => userRecord.id === userId);
-        return user?.accounts || [];
+        const userRecord = allUsers.find(userItem => userItem.id === userId);
+        return userRecord?.accounts || [];
     }
 
     if (!isOpen) return null;
@@ -253,13 +253,13 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                             </div>
                             {splitMode !== 'equal' &&
                                 <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                    {expenseShares.map((share, index) => (
-                                        <div key={share.userId} className="flex items-center gap-3">
-                                            <label className="w-1/3 truncate">{contextMembers.find(member => member.id === share.userId)?.name}</label>
+                                    {expenseShares.map((paymentShareItem, index) => (
+                                        <div key={paymentShareItem.userId} className="flex items-center gap-3">
+                                            <label className="w-1/3 truncate">{contextMembers.find(member => member.id === paymentShareItem.userId)?.name}</label>
                                             <div className="relative flex-grow">
                                                 <input 
                                                     type="number" 
-                                                    value={getExpenseShareValue(share)}
+                                                    value={getExpenseShareValue(paymentShareItem)}
                                                     onChange={e => handleExpenseShareChange(index, splitMode === 'amount' ? 'amount' : 'percentage', e.target.value)}
                                                     className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1.5 pr-8 text-right"
                                                 />
