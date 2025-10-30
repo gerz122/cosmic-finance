@@ -130,11 +130,11 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
     const liabilitiesSnap = await db.collection(`users/${firebaseUser.uid}/liabilities`).get();
     const transactionsSnap = await db.collection(`users/${firebaseUser.uid}/transactions`).get();
 
-    userData.accounts = accountsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+    userData.accounts = accountsSnap.docs.map(documentSnapshot => ({ id: documentSnapshot.id, ...documentSnapshot.data() } as Account));
     userData.financialStatement = {
-        assets: assetsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
-        liabilities: liabilitiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Liability)),
-        transactions: transactionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)),
+        assets: assetsSnap.docs.map(documentSnapshot => ({ id: documentSnapshot.id, ...documentSnapshot.data() } as Asset)),
+        liabilities: liabilitiesSnap.docs.map(documentSnapshot => ({ id: documentSnapshot.id, ...documentSnapshot.data() } as Liability)),
+        transactions: transactionsSnap.docs.map(documentSnapshot => ({ id: documentSnapshot.id, ...documentSnapshot.data() } as Transaction)),
     };
     
     userData.budgets = userData.budgets || [];
@@ -148,22 +148,22 @@ export const getUsers = async (uids: string[]): Promise<User[]> => {
     if (uids.length === 0) return [];
     const userDocs = await Promise.all(uids.map(uid => db.collection('users').doc(uid).get()));
 
-    const usersPromises = userDocs.map(async (doc) => {
-        if (!doc.exists) return null;
-        const userData = { id: doc.id, ...doc.data() } as User;
+    const usersPromises = userDocs.map(async (userDoc) => {
+        if (!userDoc.exists) return null;
+        const userData = { id: userDoc.id, ...userDoc.data() } as User;
         
         const [accountsSnap, assetsSnap, liabilitiesSnap, transactionsSnap] = await Promise.all([
-            db.collection(`users/${doc.id}/accounts`).get(),
-            db.collection(`users/${doc.id}/assets`).get(),
-            db.collection(`users/${doc.id}/liabilities`).get(),
-            db.collection(`users/${doc.id}/transactions`).get()
+            db.collection(`users/${userDoc.id}/accounts`).get(),
+            db.collection(`users/${userDoc.id}/assets`).get(),
+            db.collection(`users/${userDoc.id}/liabilities`).get(),
+            db.collection(`users/${userDoc.id}/transactions`).get()
         ]);
         
-        userData.accounts = accountsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
+        userData.accounts = accountsSnap.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() } as Account));
         userData.financialStatement = {
-            assets: assetsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)),
-            liabilities: liabilitiesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Liability)),
-            transactions: transactionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)),
+            assets: assetsSnap.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() } as Asset)),
+            liabilities: liabilitiesSnap.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() } as Liability)),
+            transactions: transactionsSnap.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() } as Transaction)),
         };
         userData.budgets = userData.budgets || [];
         userData.goals = userData.goals || [];
@@ -193,22 +193,22 @@ export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
 
     const teamDocs = await Promise.all(teamIds.map(id => db.collection('teams').doc(id).get()));
 
-    const teamsPromises = teamDocs.map(async (doc) => {
-        if (!doc.exists) return null;
-        const teamData = { id: doc.id, ...doc.data() } as Team;
+    const teamsPromises = teamDocs.map(async (teamDoc) => {
+        if (!teamDoc.exists) return null;
+        const teamData = { id: teamDoc.id, ...teamDoc.data() } as Team;
 
         const [assetsSnap, liabilitiesSnap, transactionsSnap, accountsSnap] = await Promise.all([
-            db.collection(`teams/${doc.id}/assets`).get(),
-            db.collection(`teams/${doc.id}/liabilities`).get(),
-            db.collection(`teams/${doc.id}/transactions`).get(),
-            db.collection(`teams/${doc.id}/accounts`).get()
+            db.collection(`teams/${teamDoc.id}/assets`).get(),
+            db.collection(`teams/${teamDoc.id}/liabilities`).get(),
+            db.collection(`teams/${teamDoc.id}/transactions`).get(),
+            db.collection(`teams/${teamDoc.id}/accounts`).get()
         ]);
 
-        teamData.accounts = accountsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
+        teamData.accounts = accountsSnap.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() } as Account));
         teamData.financialStatement = {
-            assets: assetsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)),
-            liabilities: liabilitiesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Liability)),
-            transactions: transactionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)),
+            assets: assetsSnap.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() } as Asset)),
+            liabilities: liabilitiesSnap.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() } as Liability)),
+            transactions: transactionsSnap.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() } as Transaction)),
         };
         return teamData;
     });
