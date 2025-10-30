@@ -14,24 +14,24 @@ const createInitialDataWithSubcollections = async (batch: firebase.firestore.Wri
     batch.set(userRef, mainUserData);
 
     // Add accounts to subcollection
-    for (const account of accounts) {
+    for (const accountToBatch of accounts) {
         const accountRef = userRef.collection('accounts').doc();
-        batch.set(accountRef, { ...account, id: accountRef.id }); // Ensure ID is set
+        batch.set(accountRef, { ...accountToBatch, id: accountRef.id }); // Ensure ID is set
     }
     // Add assets to subcollection
-    for (const asset of financialStatement.assets) {
+    for (const assetToBatch of financialStatement.assets) {
         const assetRef = userRef.collection('assets').doc();
-        batch.set(assetRef, { ...asset, id: assetRef.id });
+        batch.set(assetRef, { ...assetToBatch, id: assetRef.id });
     }
     // Add liabilities to subcollection
-    for (const liability of financialStatement.liabilities) {
+    for (const liabilityToBatch of financialStatement.liabilities) {
         const liabilityRef = userRef.collection('liabilities').doc();
-        batch.set(liabilityRef, { ...liability, id: liabilityRef.id });
+        batch.set(liabilityRef, { ...liabilityToBatch, id: liabilityRef.id });
     }
     // FIX: Add initial transactions to the transactions subcollection
-    for (const transaction of financialStatement.transactions) {
+    for (const transactionToBatch of financialStatement.transactions) {
         const transactionRef = userRef.collection('transactions').doc();
-        batch.set(transactionRef, { ...transaction, id: transactionRef.id });
+        batch.set(transactionRef, { ...transactionToBatch, id: transactionRef.id });
     }
 };
 
@@ -82,17 +82,17 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
                 batch.set(teamRef, mainTeamData);
                 
                 // Batch-create subcollections for the new team
-                for (const account of accounts) {
+                for (const teamAccountToBatch of accounts) {
                     const accountRef = teamRef.collection('accounts').doc(); // Auto-generate ID
-                    batch.set(accountRef, { ...account, id: accountRef.id });
+                    batch.set(accountRef, { ...teamAccountToBatch, id: accountRef.id });
                 }
-                for (const asset of financialStatement.assets) {
+                for (const teamAssetToBatch of financialStatement.assets) {
                     const assetRef = teamRef.collection('assets').doc();
-                    batch.set(assetRef, { ...asset, id: assetRef.id });
+                    batch.set(assetRef, { ...teamAssetToBatch, id: assetRef.id });
                 }
-                for (const liability of financialStatement.liabilities) {
+                for (const teamLiabilityToBatch of financialStatement.liabilities) {
                     const liabilityRef = teamRef.collection('liabilities').doc();
-                    batch.set(liabilityRef, { ...liability, id: liabilityRef.id });
+                    batch.set(liabilityRef, { ...teamLiabilityToBatch, id: liabilityRef.id });
                 }
             } else {
                 console.log("Shared team 'team-condo-1' found. Adding user to it.");
@@ -102,8 +102,8 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
                 });
                  // Also add user to the joint account ownerIds
                 const teamAccountsSnap = await teamRef.collection('accounts').get();
-                teamAccountsSnap.forEach(doc => {
-                    batch.update(doc.ref, {
+                teamAccountsSnap.forEach(accountDocument => {
+                    batch.update(accountDocument.ref, {
                         ownerIds: firebase.firestore.FieldValue.arrayUnion(firebaseUser.uid)
                     });
                 });
@@ -130,11 +130,11 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
     const liabilitiesSnap = await db.collection(`users/${firebaseUser.uid}/liabilities`).get();
     const transactionsSnap = await db.collection(`users/${firebaseUser.uid}/transactions`).get();
 
-    userData.accounts = accountsSnap.docs.map(accountDoc => ({ id: accountDoc.id, ...accountDoc.data() } as Account));
+    userData.accounts = accountsSnap.docs.map(userAccountDoc => ({ id: userAccountDoc.id, ...userAccountDoc.data() } as Account));
     userData.financialStatement = {
-        assets: assetsSnap.docs.map(assetDoc => ({ id: assetDoc.id, ...assetDoc.data() } as Asset)),
-        liabilities: liabilitiesSnap.docs.map(liabilityDoc => ({ id: liabilityDoc.id, ...liabilityDoc.data() } as Liability)),
-        transactions: transactionsSnap.docs.map(transactionDoc => ({ id: transactionDoc.id, ...transactionDoc.data() } as Transaction)),
+        assets: assetsSnap.docs.map(userAssetDoc => ({ id: userAssetDoc.id, ...userAssetDoc.data() } as Asset)),
+        liabilities: liabilitiesSnap.docs.map(userLiabilityDoc => ({ id: userLiabilityDoc.id, ...userLiabilityDoc.data() } as Liability)),
+        transactions: transactionsSnap.docs.map(userTransactionDoc => ({ id: userTransactionDoc.id, ...userTransactionDoc.data() } as Transaction)),
     };
     
     userData.budgets = userData.budgets || [];
@@ -146,7 +146,7 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
 
 export const getUsers = async (uids: string[]): Promise<User[]> => {
     if (uids.length === 0) return [];
-    const userDocs = await Promise.all(uids.map(uid => db.collection('users').doc(uid).get()));
+    const userDocs = await Promise.all(uids.map(userId => db.collection('users').doc(userId).get()));
 
     const usersPromises = userDocs.map(async (userDocument) => {
         if (!userDocument.exists) return null;
@@ -159,11 +159,11 @@ export const getUsers = async (uids: string[]): Promise<User[]> => {
             db.collection(`users/${userDocument.id}/transactions`).get()
         ]);
         
-        userData.accounts = accountsSnap.docs.map(accountSubDoc => ({ id: accountSubDoc.id, ...accountSubDoc.data() } as Account));
+        userData.accounts = accountsSnap.docs.map(queriedUserAccountDoc => ({ id: queriedUserAccountDoc.id, ...queriedUserAccountDoc.data() } as Account));
         userData.financialStatement = {
-            assets: assetsSnap.docs.map(assetSubDoc => ({ id: assetSubDoc.id, ...assetSubDoc.data() } as Asset)),
-            liabilities: liabilitiesSnap.docs.map(liabilitySubDoc => ({ id: liabilitySubDoc.id, ...liabilitySubDoc.data() } as Liability)),
-            transactions: transactionsSnap.docs.map(transactionSubDoc => ({ id: transactionSubDoc.id, ...transactionSubDoc.data() } as Transaction)),
+            assets: assetsSnap.docs.map(queriedUserAssetDoc => ({ id: queriedUserAssetDoc.id, ...queriedUserAssetDoc.data() } as Asset)),
+            liabilities: liabilitiesSnap.docs.map(queriedUserLiabilityDoc => ({ id: queriedUserLiabilityDoc.id, ...queriedUserLiabilityDoc.data() } as Liability)),
+            transactions: transactionsSnap.docs.map(queriedUserTransactionDoc => ({ id: queriedUserTransactionDoc.id, ...queriedUserTransactionDoc.data() } as Transaction)),
         };
         userData.budgets = userData.budgets || [];
         userData.goals = userData.goals || [];
@@ -173,7 +173,7 @@ export const getUsers = async (uids: string[]): Promise<User[]> => {
     });
     
     const users = await Promise.all(usersPromises);
-    return users.filter((u): u is User => u !== null);
+    return users.filter((userOrNull): userOrNull is User => userOrNull !== null);
 };
 
 export const findUserByEmail = async (email: string): Promise<{id: string, name: string} | null> => {
@@ -191,7 +191,7 @@ export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
     const teamIds = (userDoc.data() as User).teamIds || [];
     if (teamIds.length === 0) return [];
 
-    const teamDocs = await Promise.all(teamIds.map(id => db.collection('teams').doc(id).get()));
+    const teamDocs = await Promise.all(teamIds.map(teamId => db.collection('teams').doc(teamId).get()));
 
     const teamsPromises = teamDocs.map(async (teamDocument) => {
         if (!teamDocument.exists) return null;
@@ -204,17 +204,17 @@ export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
             db.collection(`teams/${teamDocument.id}/accounts`).get()
         ]);
 
-        teamData.accounts = accountsSnap.docs.map(accountSubDoc => ({ id: accountSubDoc.id, ...accountSubDoc.data() } as Account));
+        teamData.accounts = accountsSnap.docs.map(teamAccountSubDoc => ({ id: teamAccountSubDoc.id, ...teamAccountSubDoc.data() } as Account));
         teamData.financialStatement = {
-            assets: assetsSnap.docs.map(assetSubDoc => ({ id: assetSubDoc.id, ...assetSubDoc.data() } as Asset)),
-            liabilities: liabilitiesSnap.docs.map(liabilitySubDoc => ({ id: liabilitySubDoc.id, ...liabilitySubDoc.data() } as Liability)),
-            transactions: transactionsSnap.docs.map(transactionSubDoc => ({ id: transactionSubDoc.id, ...transactionSubDoc.data() } as Transaction)),
+            assets: assetsSnap.docs.map(teamAssetSubDoc => ({ id: teamAssetSubDoc.id, ...teamAssetSubDoc.data() } as Asset)),
+            liabilities: liabilitiesSnap.docs.map(teamLiabilitySubDoc => ({ id: teamLiabilitySubDoc.id, ...teamLiabilitySubDoc.data() } as Liability)),
+            transactions: transactionsSnap.docs.map(teamTransactionSubDoc => ({ id: teamTransactionSubDoc.id, ...teamTransactionSubDoc.data() } as Transaction)),
         };
         return teamData;
     });
     
     const teams = await Promise.all(teamsPromises);
-    return teams.filter((t): t is Team => t !== null);
+    return teams.filter((teamOrNull): teamOrNull is Team => teamOrNull !== null);
 };
 
 // --- DATA MODIFICATION ---
