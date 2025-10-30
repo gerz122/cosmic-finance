@@ -90,33 +90,33 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
         
         const relevantTransactions = dateRange.start || dateRange.end || categoryFilter !== 'all' ? filteredTransactions : statement.transactions;
 
-        relevantTransactions.forEach(t => {
-            if (t.type === TransactionType.INCOME) {
+        relevantTransactions.forEach(transactionRecord => {
+            if (transactionRecord.type === TransactionType.INCOME) {
                 let incomeShare = 0;
                 if(team) {
-                    incomeShare = t.amount;
+                    incomeShare = transactionRecord.amount;
                 } else {
-                    const userShare = t.paymentShares.find(s => s.userId === user.id)?.amount;
+                    const userShare = transactionRecord.paymentShares.find(shareDetail => shareDetail.userId === user.id)?.amount;
                     if(userShare) {
                         incomeShare = userShare;
-                    } else if (t.teamId) {
-                        const team = teams.find(tm => tm.id === t.teamId);
-                        if(team) incomeShare = t.amount / team.memberIds.length;
+                    } else if (transactionRecord.teamId) {
+                        const teamData = teams.find(tm => tm.id === transactionRecord.teamId);
+                        if(teamData) incomeShare = transactionRecord.amount / teamData.memberIds.length;
                     }
                 }
                 totalIncome += incomeShare;
-                if(t.isPassive) totalPassive += incomeShare;
+                if(transactionRecord.isPassive) totalPassive += incomeShare;
             } else { // EXPENSE
                 let expenseShare = 0;
                  if(team) {
-                    expenseShare = t.amount;
+                    expenseShare = transactionRecord.amount;
                  } else {
-                    const userShare = t.expenseShares?.find(s => s.userId === user.id)?.amount;
+                    const userShare = transactionRecord.expenseShares?.find(shareDetail => shareDetail.userId === user.id)?.amount;
                      if (userShare) {
                         expenseShare = userShare;
-                    } else if (t.teamId) {
-                        const team = teams.find(tm => tm.id === t.teamId);
-                        if(team) expenseShare = t.amount / team.memberIds.length;
+                    } else if (transactionRecord.teamId) {
+                        const teamData = teams.find(tm => tm.id === transactionRecord.teamId);
+                        if(teamData) expenseShare = transactionRecord.amount / teamData.memberIds.length;
                     }
                 }
                 totalExpenses += expenseShare;
@@ -126,32 +126,32 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
         const cashflow = totalIncome - totalExpenses;
         
         let totalAssets = 0;
-        statement.assets.forEach(a => {
+        statement.assets.forEach(assetRecord => {
             if(team) {
-                totalAssets += a.value;
+                totalAssets += assetRecord.value;
             } else {
                  let share = 1.0;
-                if(a.shares) share = (a.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
-                else if (a.teamId) {
-                    const team = teams.find(t => t.id === a.teamId);
-                    if(team) share = 1 / team.memberIds.length; else share = 0;
+                if(assetRecord.shares) share = (assetRecord.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
+                else if (assetRecord.teamId) {
+                    const teamData = teams.find(t => t.id === assetRecord.teamId);
+                    if(teamData) share = 1 / teamData.memberIds.length; else share = 0;
                 }
-                totalAssets += a.value * share;
+                totalAssets += assetRecord.value * share;
             }
         });
         
         let totalLiabilities = 0;
-        statement.liabilities.forEach(l => {
+        statement.liabilities.forEach(liabilityRecord => {
              if(team) {
-                totalLiabilities += l.balance;
+                totalLiabilities += liabilityRecord.balance;
             } else {
                 let share = 1.0;
-                if(l.shares) share = (l.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
-                else if (l.teamId) {
-                    const team = teams.find(t => t.id === l.teamId);
-                    if(team) share = 1 / team.memberIds.length; else share = 0;
+                if(liabilityRecord.shares) share = (liabilityRecord.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
+                else if (liabilityRecord.teamId) {
+                    const teamData = teams.find(t => t.id === liabilityRecord.teamId);
+                    if(teamData) share = 1 / teamData.memberIds.length; else share = 0;
                 }
-                totalLiabilities += l.balance * share;
+                totalLiabilities += liabilityRecord.balance * share;
             }
         });
 

@@ -85,8 +85,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         statement.transactions.forEach(transaction => {
             if (!transaction.date.startsWith(currentMonth)) return;
         
-            const userExpenseShare = transaction.expenseShares?.find(share => share.userId === user.id)?.amount;
-            const userIncomeShare = transaction.paymentShares?.find(share => share.userId === user.id)?.amount;
+            const userExpenseShare = transaction.expenseShares?.find(shareDetail => shareDetail.userId === user.id)?.amount;
+            const userIncomeShare = transaction.paymentShares?.find(shareDetail => shareDetail.userId === user.id)?.amount;
         
             if (transaction.type === TransactionType.INCOME) {
                 if (userIncomeShare !== undefined) {
@@ -115,7 +115,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         let totalAssets = 0;
         statement.assets.forEach(asset => {
             let share = 1.0;
-            if(asset.shares) share = (asset.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
+            if(asset.shares) share = (asset.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
             else if (asset.teamId) {
                 const team = teams.find(t => t.id === asset.teamId);
                 if(team && team.memberIds.includes(user.id)) share = 1 / team.memberIds.length; else share = 0;
@@ -126,7 +126,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         let totalLiabilities = 0;
         statement.liabilities.forEach(liability => {
             let share = 1.0;
-            if(liability.shares) share = (liability.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
+            if(liability.shares) share = (liability.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
             else if (liability.teamId) {
                 const team = teams.find(t => t.id === liability.teamId);
                 if(team && team.memberIds.includes(user.id)) share = 1 / team.memberIds.length; else share = 0;

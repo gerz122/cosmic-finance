@@ -4,88 +4,88 @@ import { TransactionType } from '../types';
 export const generateHistoricalData = (user: User, teams: Team[]): HistoricalDataPoint[] => {
     if (!user) return [];
 
-    const userTeams = teams.filter(t => t.memberIds.includes(user.id));
+    const userTeams = teams.filter(teamInstance => teamInstance.memberIds.includes(user.id));
     
     // Combine all relevant transactions
     const allTransactions: Transaction[] = [
         ...user.financialStatement.transactions,
-        ...userTeams.flatMap(t => t.financialStatement.transactions)
+        ...userTeams.flatMap(teamData => teamData.financialStatement.transactions)
     ];
     
     // Ensure uniqueness and sort by date
-    const uniqueTransactions = Array.from(new Map(allTransactions.map(t => [t.id, t])).values())
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const uniqueTransactions = Array.from(new Map(allTransactions.map(transactionToMap => [transactionToMap.id, transactionToMap])).values())
+        .sort((txA, txB) => new Date(txA.date).getTime() - new Date(txB.date).getTime());
 
     let runningNetWorth = 0;
     const monthlyData: { [key: string]: { cashFlow: number; passiveIncome: number; expenses: number } } = {};
     const dataPoints: HistoricalDataPoint[] = [];
 
     // Calculate initial Net Worth from non-transactional assets/liabilities
-    user.financialStatement.assets.forEach(a => {
+    user.financialStatement.assets.forEach(assetRecord => {
         let share = 1.0;
-        if (a.shares) {
-            share = (a.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
-        } else if (a.teamId) {
+        if (assetRecord.shares) {
+            share = (assetRecord.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
+        } else if (assetRecord.teamId) {
             share = 0; // Handled separately
         }
-        runningNetWorth += a.value * share;
+        runningNetWorth += assetRecord.value * share;
     });
-    user.financialStatement.liabilities.forEach(l => {
+    user.financialStatement.liabilities.forEach(liabilityRecord => {
          let share = 1.0;
-        if (l.shares) {
-            share = (l.shares.find(s => s.userId === user.id)?.percentage || 0) / 100;
-        } else if (l.teamId) {
+        if (liabilityRecord.shares) {
+            share = (liabilityRecord.shares.find(shareDetail => shareDetail.userId === user.id)?.percentage || 0) / 100;
+        } else if (liabilityRecord.teamId) {
             share = 0; // Handled separately
         }
-        runningNetWorth -= l.balance * share;
+        runningNetWorth -= liabilityRecord.balance * share;
     });
 
-    userTeams.forEach(team => {
-        const userShare = 1 / team.memberIds.length;
-        team.financialStatement.assets.forEach(a => runningNetWorth += a.value * userShare);
-        team.financialStatement.liabilities.forEach(l => runningNetWorth -= l.balance * userShare);
+    userTeams.forEach(teamForCalc => {
+        const userShare = 1 / teamForCalc.memberIds.length;
+        teamForCalc.financialStatement.assets.forEach(teamAsset => runningNetWorth += teamAsset.value * userShare);
+        teamForCalc.financialStatement.liabilities.forEach(teamLiability => runningNetWorth -= teamLiability.balance * userShare);
     });
     
-    uniqueTransactions.forEach(tx => {
-        const month = tx.date.slice(0, 7); // YYYY-MM
+    uniqueTransactions.forEach(transactionForHistory => {
+        const month = transactionForHistory.date.slice(0, 7); // YYYY-MM
         if (!monthlyData[month]) {
             monthlyData[month] = { cashFlow: 0, passiveIncome: 0, expenses: 0 };
         }
         
         let userAmount = 0;
 
-        if (tx.type === TransactionType.INCOME) {
-            const incomeShare = tx.paymentShares.find(ps => ps.userId === user.id);
+        if (transactionForHistory.type === TransactionType.INCOME) {
+            const incomeShare = transactionForHistory.paymentShares.find(paymentShareDetail => paymentShareDetail.userId === user.id);
             if (incomeShare) {
                 userAmount = incomeShare.amount;
                 runningNetWorth += userAmount;
                 monthlyData[month].cashFlow += userAmount;
-                if (tx.isPassive) {
+                if (transactionForHistory.isPassive) {
                     monthlyData[month].passiveIncome += userAmount;
                 }
-            } else if (tx.teamId) {
-                const team = teams.find(t => t.id === tx.teamId);
+            } else if (transactionForHistory.teamId) {
+                const team = teams.find(teamRecord => teamRecord.id === transactionForHistory.teamId);
                 if (team && team.memberIds.includes(user.id)) {
-                    const shareAmount = tx.amount / team.memberIds.length;
+                    const shareAmount = transactionForHistory.amount / team.memberIds.length;
                     userAmount = shareAmount;
                     runningNetWorth += userAmount;
                     monthlyData[month].cashFlow += userAmount;
-                    if (tx.isPassive) {
+                    if (transactionForHistory.isPassive) {
                        monthlyData[month].passiveIncome += userAmount;
                     }
                 }
             }
         } else { // EXPENSE
-            const expenseShare = tx.expenseShares?.find(es => es.userId === user.id);
+            const expenseShare = transactionForHistory.expenseShares?.find(expenseShareDetail => expenseShareDetail.userId === user.id);
              if (expenseShare) {
                 userAmount = expenseShare.amount;
                 runningNetWorth -= userAmount;
                 monthlyData[month].cashFlow -= userAmount;
                 monthlyData[month].expenses += userAmount;
-            } else if (tx.teamId) {
-                const team = teams.find(t => t.id === tx.teamId);
+            } else if (transactionForHistory.teamId) {
+                const team = teams.find(teamRecord => teamRecord.id === transactionForHistory.teamId);
                 if (team && team.memberIds.includes(user.id)) {
-                    const shareAmount = tx.amount / team.memberIds.length;
+                    const shareAmount = transactionForHistory.amount / team.memberIds.length;
                     userAmount = shareAmount;
                     runningNetWorth -= userAmount;
                     monthlyData[month].cashFlow -= userAmount;
@@ -95,15 +95,15 @@ export const generateHistoricalData = (user: User, teams: Team[]): HistoricalDat
         }
         
         dataPoints.push({
-            date: tx.date,
+            date: transactionForHistory.date,
             netWorth: runningNetWorth,
         });
     });
 
     // Aggregate monthly data into the final data points array
     const finalData: { [date: string]: any } = {};
-    dataPoints.forEach(dp => {
-        finalData[dp.date] = { ...finalData[dp.date], netWorth: dp.netWorth };
+    dataPoints.forEach(dataPoint => {
+        finalData[dataPoint.date] = { ...finalData[dataPoint.date], netWorth: dataPoint.netWorth };
     });
 
     Object.keys(monthlyData).forEach(month => {
@@ -118,6 +118,6 @@ export const generateHistoricalData = (user: User, teams: Team[]): HistoricalDat
     });
 
     return Object.keys(finalData)
-        .sort((a,b) => new Date(a).getTime() - new Date(b).getTime())
+        .sort((dateA, dateB) => new Date(dateA).getTime() - new Date(dateB).getTime())
         .map(date => ({ date, ...finalData[date] }));
 };
