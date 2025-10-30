@@ -18,7 +18,7 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
         const w = 800;
         const h = 400;
 
-        const dateValues = data.map(d => new Date(d.date).getTime());
+        const dateValues = data.map(dataPoint => new Date(dataPoint.date).getTime());
         const minTime = Math.min(...dateValues);
         const maxTime = Math.max(...dateValues);
 
@@ -29,7 +29,7 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
         let allValues: number[] = [];
 
         series.forEach(s => {
-            const values = data.map(d => d[s.key] as number).filter(v => v !== undefined && v !== null);
+            const values = data.map(dataPoint => dataPoint[s.key] as number).filter(v => v !== undefined && v !== null);
             allValues.push(...values);
         });
         
@@ -40,10 +40,10 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
              localYScales[s.key] = (val: number) => h - PADDING.bottom - ((val - minY) / (maxY - minY || 1)) * (h - PADDING.top - PADDING.bottom);
              
              const points = data
-                .map(d => {
-                    const val = d[s.key] as number;
+                .map(dataPoint => {
+                    const val = dataPoint[s.key] as number;
                     if(val === undefined || val === null) return null;
-                    const x = localXScale(new Date(d.date).getTime());
+                    const x = localXScale(new Date(dataPoint.date).getTime());
                     const y = localYScales[s.key](val);
                     return `${x},${y}`;
                 })
