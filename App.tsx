@@ -24,7 +24,6 @@ import { TransactionDetailModal } from './components/TransactionDetailModal';
 import { CategoryTransactionListModal } from './components/CategoryTransactionListModal';
 import { CreateTeamModal } from './components/CreateTeamModal';
 import { NetWorthBreakdownModal } from './components/NetWorthBreakdownModal';
-import { AddCategoryModal } from './components/AddCategoryModal';
 import { TeamDashboard } from './components/TeamDashboard';
 import { Balances } from './components/Balances';
 import { AccountTransactionsModal } from './components/AccountTransactionsModal';
@@ -112,7 +111,7 @@ const AppContent: React.FC = () => {
         switch (activeView) {
             case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick} onShowFreedomModal={() => actions.setModalOpen('isFreedomModalOpen', true)} />;
             case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails}/>;
-            case 'importer': return <StatementImporter user={activeUser} onImport={actions.handleImportTransactions} allCategories={allCategories} onAddCategory={actions.handleAddCategory} />;
+            case 'importer': return <StatementImporter user={activeUser} teams={teams} onImport={actions.handleImportTransactions} allCategories={allCategories} onAddCategory={actions.handleAddCategory} />;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => actions.setModalOpen('isAddAccountModalOpen', true)} onOpenAccountTransactions={actions.handleOpenAccountTransactionsModal} onEditAccount={actions.handleOpenEditAccountModal} />;
             case 'coach': return <AICoach user={activeUser} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => actions.handleOpenAddStockModal()} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability')} onEditStock={actions.handleOpenEditStockModal} onDeleteStock={actions.handleDeleteStock} onLogDividend={actions.handleOpenLogDividendModal} onOpenLargeChart={actions.openLargeChartModal} teams={teams} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} />;
@@ -212,7 +211,7 @@ const AppContent: React.FC = () => {
                 />
             </main>
             
-            <AddTransactionModal isOpen={modalStates.isAddTransactionModalOpen} onClose={() => actions.setModalOpen('isAddTransactionModalOpen', false)} onSave={actions.handleSaveTransaction} transactionToEdit={modalData.transactionToEdit} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={() => { actions.setModalOpen('isAddTransactionModalOpen', false); actions.setModalOpen('isAddAccountModalOpen', true); }} onAddCategory={actions.handleAddCategory} defaultTeamId={modalData.modalDefaultTeamId} />
+            <AddTransactionModal isOpen={modalStates.isAddTransactionModalOpen} onClose={() => actions.setModalOpen('isAddTransactionModalOpen', false)} onSave={actions.handleSaveTransaction} transactionToEdit={modalData.transactionToEdit} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={() => { actions.setModalOpen('isAddTransactionModalOpen', true); actions.setModalOpen('isAddAccountModalOpen', false); }} onAddCategory={actions.handleAddCategory} defaultTeamId={modalData.modalDefaultTeamId} />
             <TransferModal isOpen={modalStates.isTransferModalOpen} onClose={() => actions.setModalOpen('isTransferModalOpen', false)} onTransfer={actions.handleTransfer} currentUser={activeUser}/>
             <CosmicEventModal isOpen={modalStates.isCosmicEventModalOpen} isGenerating={modalData.isGeneratingCosmicEvent} event={modalData.currentCosmicEvent} onClose={() => actions.setModalOpen('isCosmicEventModalOpen', false)} onResolve={actions.handleCosmicEventResolution}/>
             <AddStockModal isOpen={modalStates.isAddStockModalOpen} onClose={() => actions.setModalOpen('isAddStockModalOpen', false)} onSave={actions.handleSaveStock} stockToEdit={modalData.stockToEdit} accounts={activeUser?.accounts || []} teams={teams} defaultTeamId={modalData.modalDefaultTeamId} />

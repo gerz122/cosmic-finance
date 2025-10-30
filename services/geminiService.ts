@@ -151,6 +151,7 @@ export const parseStatementWithGemini = async (statementText: string) => {
     const prompt = `
         Analyze the following bank statement text and extract all transactions.
         For each transaction, determine the date, a clean description, the amount, and whether it's an income or an expense.
+        Also, determine if an income is 'isPassive' (like dividends, rent) and if a transaction is a 'isTransfer' between accounts.
         The date should be in YYYY-MM-DD format. Today's date is ${new Date().toLocaleDateString()}.
         If a year is not specified, assume the current year.
         Text to analyze:
@@ -176,7 +177,9 @@ export const parseStatementWithGemini = async (statementText: string) => {
                                     date: { type: Type.STRING, description: "Date in YYYY-MM-DD format." },
                                     description: { type: Type.STRING, description: "Cleaned-up transaction description." },
                                     amount: { type: Type.NUMBER, description: "The transaction amount as a positive number." },
-                                    type: { type: Type.STRING, description: "Either 'income' or 'expense'." }
+                                    type: { type: Type.STRING, description: "Either 'income' or 'expense'." },
+                                    isPassive: { type: Type.BOOLEAN, description: "True if the income is from passive sources like dividends or rent." },
+                                    isTransfer: { type: Type.BOOLEAN, description: "True if this is likely a transfer between accounts." }
                                 },
                                 required: ['date', 'description', 'amount', 'type']
                             }

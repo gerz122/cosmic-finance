@@ -258,6 +258,22 @@ export const addPersonalTransaction = async (userId: string, transaction: Omit<T
 export const addTeamTransaction = async (transaction: Omit<Transaction, 'id'>): Promise<Transaction> => {
     if (!transaction.teamId) throw new Error("Team ID required");
     const newDocRef = await db.collection(`teams/${transaction.teamId}/transactions`).add(transaction);
+
+    await db.runTransaction(async (t) => {
+        for (const share of transaction.paymentShares) {
+            const accountRef = db.collection(`teams/${transaction.teamId}/accounts`).doc(share.accountId);
+            const accountDoc = await t.get(accountRef);
+            if (accountDoc.exists) {
+                const data = accountDoc.data();
+                if (data) {
+                    const currentBalance = data.balance;
+                    const newBalance = currentBalance + (transaction.type === TransactionType.INCOME ? share.amount : -share.amount);
+                    t.update(accountRef, { balance: newBalance });
+                }
+            }
+        }
+    });
+
     return { ...transaction, id: newDocRef.id };
 };
 
@@ -271,10 +287,12 @@ export const deleteTransaction = async (transaction: Transaction): Promise<void>
     await db.doc(`${path}/${transaction.id}`).delete();
 };
 
-export const performTransfer = (userId: string, fromAccountId: string, toAccountId: string, amount: number) => {
+export const performTransfer = (userId: string, fromAccountId: string, toAccountId: string, amount: number, teamId?: string) => {
     return db.runTransaction(async (t) => {
-        const fromRef = db.collection(`users/${userId}/accounts`).doc(fromAccountId);
-        const toRef = db.collection(`users/${userId}/accounts`).doc(toAccountId);
+        const basePath = teamId ? `teams/${teamId}` : `users/${userId}`;
+        const fromRef = db.collection(basePath).doc(fromAccountId);
+        const toRef = db.collection(basePath).doc(toAccountId);
+        
         const fromDoc = await t.get(fromRef);
         const toDoc = await t.get(toRef);
         if (!fromDoc.exists || !toDoc.exists) throw new Error("Account not found");

@@ -119,7 +119,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const selectedTeam = useMemo(() => teams.find(teamRecord => teamRecord.id === selectedTeamId), [teams, selectedTeamId]);
-    const allUserAccounts = useMemo(() => users.flatMap(userRecord => userRecord.accounts || []), [users]);
+    const allUserAccounts = useMemo(() => {
+        const personalAccounts = users.flatMap(userRecord => userRecord.accounts || []);
+        const teamAccounts = teams.flatMap(teamRecord => teamRecord.accounts || []);
+        return [...personalAccounts, ...teamAccounts];
+    }, [users, teams]);
+
 
     const effectiveFinancialStatement = useMemo(() => {
         // DEFINITIVE FIX: This guard prevents calculations on partially loaded data.
@@ -410,32 +415,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleImportTransactions = async (parsedTransactions: any[]) => {
         if (!activeUser) return;
         try {
-            // Use a batch to ensure all transactions are added or none are.
             const batch = db.batch();
             for (const ptx of parsedTransactions) {
-                const transactionData: Omit<Transaction, 'id'> = {
-                    description: ptx.description,
-                    amount: ptx.amount,
-                    type: ptx.type === 'income' ? TransactionType.INCOME : TransactionType.EXPENSE,
-                    category: ptx.category,
-                    date: ptx.date,
-                    // For simplicity, imported transactions are marked as personal and not split.
-                    paymentShares: [{ userId: activeUser.id, accountId: ptx.accountId, amount: ptx.amount }],
-                    expenseShares: [{ userId: activeUser.id, amount: ptx.amount }]
-                };
-                
-                // Add the transaction itself to the batch
-                const txRef = db.collection(`users/${activeUser.id}/transactions`).doc();
-                batch.set(txRef, transactionData);
-                
-                // Add the balance update to the batch
-                const accountRef = db.collection(`users/${activeUser.id}/accounts`).doc(ptx.accountId);
-                const increment = transactionData.type === TransactionType.INCOME ? ptx.amount : -ptx.amount;
-                batch.update(accountRef, { balance: firebase.firestore.FieldValue.increment(increment) });
+                if (ptx.isTransfer) {
+                    // This is a simplified transfer for import, assuming it's personal
+                    const fromRef = db.collection(`users/${activeUser.id}/accounts`).doc(ptx.fromAccountId);
+                    const toRef = db.collection(`users/${activeUser.id}/accounts`).doc(ptx.toAccountId);
+                    batch.update(fromRef, { balance: firebase.firestore.FieldValue.increment(-ptx.amount) });
+                    batch.update(toRef, { balance: firebase.firestore.FieldValue.increment(ptx.amount) });
+                } else {
+                    const transactionData: Omit<Transaction, 'id'> = {
+                        description: ptx.description,
+                        amount: ptx.amount,
+                        type: ptx.type === 'income' ? TransactionType.INCOME : TransactionType.EXPENSE,
+                        category: ptx.category,
+                        date: ptx.date,
+                        isPassive: ptx.isPassive || false,
+                        teamId: ptx.teamId || undefined,
+                        paymentShares: [{ userId: activeUser.id, accountId: ptx.accountId, amount: ptx.amount }],
+                        expenseShares: [{ userId: activeUser.id, amount: ptx.amount }]
+                    };
+
+                    const collectionPath = ptx.teamId ? `teams/${ptx.teamId}/transactions` : `users/${activeUser.id}/transactions`;
+                    const txRef = db.collection(collectionPath).doc();
+                    batch.set(txRef, transactionData);
+
+                    const accountCollectionPath = ptx.teamId ? `teams/${ptx.teamId}/accounts` : `users/${activeUser.id}/accounts`;
+                    const accountRef = db.collection(accountCollectionPath).doc(ptx.accountId);
+                    const increment = transactionData.type === TransactionType.INCOME ? ptx.amount : -ptx.amount;
+                    batch.update(accountRef, { balance: firebase.firestore.FieldValue.increment(increment) });
+                }
             }
             await batch.commit();
             await refreshData(activeUser.id);
-            showSuccessModal(`${parsedTransactions.length} transactions imported!`);
+            showSuccessModal(`${parsedTransactions.length} items imported!`);
         } catch (e) {
             console.error("Failed to import transactions:", e);
             showNotification(`An error occurred during import: ${(e as Error).message}`, 'error');
