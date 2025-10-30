@@ -28,29 +28,29 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
         const localPaths: { [key: string]: string } = {};
         let allValues: number[] = [];
 
-        series.forEach(s => {
-            const values = data.map(dataPoint => dataPoint[s.key] as number).filter(v => v !== undefined && v !== null);
+        series.forEach(seriesItem => {
+            const values = data.map(dataPoint => dataPoint[seriesItem.key] as number).filter(v => v !== undefined && v !== null);
             allValues.push(...values);
         });
         
         const minY = Math.min(0, ...allValues);
         const maxY = Math.max(...allValues);
 
-        series.forEach(s => {
-             localYScales[s.key] = (val: number) => h - PADDING.bottom - ((val - minY) / (maxY - minY || 1)) * (h - PADDING.top - PADDING.bottom);
+        series.forEach(seriesItem => {
+             localYScales[seriesItem.key] = (val: number) => h - PADDING.bottom - ((val - minY) / (maxY - minY || 1)) * (h - PADDING.top - PADDING.bottom);
              
              const points = data
-                .map(dataPoint => {
-                    const val = dataPoint[s.key] as number;
+                .map(point => {
+                    const val = point[seriesItem.key] as number;
                     if(val === undefined || val === null) return null;
-                    const x = localXScale(new Date(dataPoint.date).getTime());
-                    const y = localYScales[s.key](val);
+                    const x = localXScale(new Date(point.date).getTime());
+                    const y = localYScales[seriesItem.key](val);
                     return `${x},${y}`;
                 })
                 .filter(Boolean)
                 .join(' ');
 
-            localPaths[s.key] = points;
+            localPaths[seriesItem.key] = points;
         });
 
         // Grid Lines and Labels
@@ -71,7 +71,7 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
             };
         });
 
-        return { width: w, height: h, xScale: localXScale, yScales, paths: localPaths, gridLines: localGridLines, xLabels: localXLabels, yLabels: localGridLines };
+        return { width: w, height: h, xScale: localXScale, yScales: localYScales, paths: localPaths, gridLines: localGridLines, xLabels: localXLabels, yLabels: localGridLines };
     }, [data, series]);
     
     const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
@@ -105,20 +105,20 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
         <div className="w-full h-full relative">
             <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} className="w-full h-full" onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip(null)}>
                 {/* Grid */}
-                {gridLines.map(line => (
-                    <g key={line.y}>
-                        <line x1={PADDING.left} y1={line.y} x2={width - PADDING.right} y2={line.y} stroke="#30363D" strokeWidth="1" />
-                        <text x={PADDING.left - 8} y={line.y} fill="#8B949E" fontSize="10" textAnchor="end" alignmentBaseline="middle">{line.value}</text>
+                {gridLines.map(gridLine => (
+                    <g key={gridLine.y}>
+                        <line x1={PADDING.left} y1={gridLine.y} x2={width - PADDING.right} y2={gridLine.y} stroke="#30363D" strokeWidth="1" />
+                        <text x={PADDING.left - 8} y={gridLine.y} fill="#8B949E" fontSize="10" textAnchor="end" alignmentBaseline="middle">{gridLine.value}</text>
                     </g>
                 ))}
-                {xLabels.map(label => (
-                     <text key={label.label} x={label.x} y={height - PADDING.bottom + 15} fill="#8B949E" fontSize="10" textAnchor="middle">{label.label}</text>
+                {xLabels.map(xLabel => (
+                     <text key={xLabel.label} x={xLabel.x} y={height - PADDING.bottom + 15} fill="#8B949E" fontSize="10" textAnchor="middle">{xLabel.label}</text>
                 ))}
 
                 {/* Paths */}
-                {series.map(s => (
-                    paths[s.key] && (
-                        <polyline key={s.key} fill="none" stroke={s.color} strokeWidth="2.5" points={paths[s.key]} strokeLinecap="round" strokeLinejoin="round" />
+                {series.map(seriesItem => (
+                    paths[seriesItem.key] && (
+                        <polyline key={seriesItem.key} fill="none" stroke={seriesItem.color} strokeWidth="2.5" points={paths[seriesItem.key]} strokeLinecap="round" strokeLinejoin="round" />
                     )
                 ))}
 
@@ -126,11 +126,11 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
                 {tooltip && (
                     <g>
                         <line x1={tooltip.x} y1={PADDING.top} x2={tooltip.x} y2={height - PADDING.bottom} stroke="#8B949E" strokeWidth="1" strokeDasharray="4" />
-                        {series.map(s => {
-                            const value = tooltip.data[s.key] as number;
+                        {series.map(seriesItem => {
+                            const value = tooltip.data[seriesItem.key] as number;
                             if (value === undefined || value === null) return null;
-                            const y = yScales[s.key](value);
-                            return <circle key={s.key} cx={tooltip.x} cy={y} r="5" fill={s.color} stroke="#161B22" strokeWidth="2" />;
+                            const y = yScales[seriesItem.key](value);
+                            return <circle key={seriesItem.key} cx={tooltip.x} cy={y} r="5" fill={seriesItem.color} stroke="#161B22" strokeWidth="2" />;
                         })}
                     </g>
                 )}
@@ -138,10 +138,10 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
 
             {/* Legend */}
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex gap-4 text-xs">
-                {series.map(s => (
-                    <div key={s.key} className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }}></span>
-                        <span className="text-cosmic-text-secondary">{s.label}</span>
+                {series.map(seriesItem => (
+                    <div key={seriesItem.key} className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: seriesItem.color }}></span>
+                        <span className="text-cosmic-text-secondary">{seriesItem.label}</span>
                     </div>
                 ))}
             </div>
@@ -156,12 +156,12 @@ export const AdvancedLineChart: React.FC<AdvancedLineChartProps> = ({ data, seri
                     }}
                 >
                     <p className="font-bold mb-1">{new Date(tooltip.data.date).toLocaleDateString()}</p>
-                    {series.map(s => {
-                        const value = tooltip.data[s.key] as number;
+                    {series.map(seriesItem => {
+                        const value = tooltip.data[seriesItem.key] as number;
                         if (value === undefined || value === null) return null;
                         return (
-                            <div key={s.key} className="flex justify-between items-center gap-4">
-                                <span style={{ color: s.color }}>{s.label}:</span>
+                            <div key={seriesItem.key} className="flex justify-between items-center gap-4">
+                                <span style={{ color: seriesItem.color }}>{seriesItem.label}:</span>
                                 <span className="font-semibold">{value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
                             </div>
                         );
