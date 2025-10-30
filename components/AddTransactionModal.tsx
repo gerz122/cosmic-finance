@@ -56,7 +56,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             setReceiptImage(null); // Always reset image preview
             setIsTaxDeductible(isEditMode ? transactionToEdit.isTaxDeductible || false : false);
 
-            setPaymentShares(isEditMode ? transactionToEdit.paymentShares : [{ userId: currentUser.id, accountId: '', amount: 0 }]);
+            setPaymentShares(isEditMode ? transactionToEdit.paymentShares : [{ userId: currentUser.id, accountId: '', amount: parseFloat(totalAmount) || 0 }]);
             
             if (isEditMode) {
                 setExpenseShares(transactionToEdit.expenseShares || contextMembers.map(member => ({ userId: member.id, amount: 0 })));
@@ -66,7 +66,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             
             setSplitMode('equal');
         }
-    }, [isOpen, transactionToEdit, isEditing, currentUser, contextMembers, defaultTeamId]);
+    }, [isOpen, transactionToEdit, isEditing, currentUser, contextMembers, defaultTeamId, totalAmount]);
 
     useEffect(() => {
         const amount = parseFloat(totalAmount) || 0;
@@ -78,6 +78,30 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             setPaymentShares(prev => [{...prev[0], amount}]);
         }
     }, [totalAmount, splitMode, contextMembers, paymentShares.length]);
+
+    const handlePaymentShareChange = (index: number, field: keyof Omit<PaymentShare, 'userId'>, value: string) => {
+        const newShares = [...paymentShares];
+        const share = newShares[index];
+        
+        if (field === 'accountId') {
+            share.accountId = value;
+        } else if (field === 'amount') {
+            share.amount = parseFloat(value) || 0;
+        }
+        setPaymentShares(newShares);
+    };
+
+    const handlePaymentShareUserChange = (index: number, userId: string) => {
+        const newShares = [...paymentShares];
+        newShares[index].userId = userId;
+        newShares[index].accountId = ''; // Reset account when user changes
+        setPaymentShares(newShares);
+    };
+
+    const addPayer = () => {
+        const nextUser = contextMembers.find(m => !paymentShares.some(s => s.userId === m.id));
+        setPaymentShares(prev => [...prev, { userId: nextUser?.id || '', accountId: '', amount: 0 }]);
+    };
     
     const handleExpenseShareChange = (index: number, field: 'amount' | 'percentage', value: string) => {
         const newShares = [...expenseShares];
@@ -106,6 +130,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
+        const totalAmountFloat = parseFloat(totalAmount) || 0;
+        const paymentSharesTotal = paymentShares.reduce((sum, s) => sum + s.amount, 0);
+
+        if (paymentShares.length > 1 && Math.abs(totalAmountFloat - paymentSharesTotal) > 0.01) {
+            alert('The sum of payments does not match the total transaction amount.');
+            return;
+        }
+
         for (const share of paymentShares) {
             if (!share.accountId) {
                 alert('Please select an account for all payment shares.');
@@ -215,6 +247,72 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                             <input type="date" id="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 date-input" required/>
                         </div>
                     </div>
+
+                    <div className="space-y-3 pt-3 border-t border-cosmic-border">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-medium text-cosmic-text-primary">
+                                {type === TransactionType.EXPENSE ? 'Paid From' : 'Deposited To'}
+                            </h3>
+                            {paymentShares.length > 1 && (
+                                <span className="text-xs text-cosmic-text-secondary">
+                                    Total Paid: ${paymentShares.reduce((sum, s) => sum + s.amount, 0).toFixed(2)}
+                                </span>
+                            )}
+                        </div>
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                            {paymentShares.map((share, index) => (
+                                <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
+                                    <select
+                                        value={share.userId}
+                                        onChange={(e) => handlePaymentShareUserChange(index, e.target.value)}
+                                        className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1.5 md:col-span-2"
+                                        disabled={paymentShares.length === 1 && !teamId}
+                                    >
+                                        {contextMembers.map(member => (
+                                            <option key={member.id} value={member.id}>
+                                                {member.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        value={share.accountId}
+                                        onChange={(e) => handlePaymentShareChange(index, 'accountId', e.target.value)}
+                                        className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1.5 md:col-span-2"
+                                        required
+                                    >
+                                        <option value="">Select Account...</option>
+                                        {getAccountsForUser(share.userId).map(acc => (
+                                            <option key={acc.id} value={acc.id}>
+                                                {acc.name} ({acc.type})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="relative md:col-span-1">
+                                        <input
+                                            type="number"
+                                            value={share.amount.toString()}
+                                            onChange={(e) => handlePaymentShareChange(index, 'amount', e.target.value)}
+                                            className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-right pr-4"
+                                            required
+                                            disabled={paymentShares.length === 1}
+                                        />
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-cosmic-text-secondary text-xs">$</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <button type="button" onClick={addPayer} className="text-cosmic-primary hover:underline">
+                                + Add another payer
+                            </button>
+                            {paymentShares.length > 1 && Math.abs(parseFloat(totalAmount) - paymentShares.reduce((sum, s) => sum + s.amount, 0)) > 0.01 && (
+                                <span className="text-xs text-cosmic-danger">
+                                    Paid total does not match transaction amount!
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    
 
                     <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
                         {type === TransactionType.INCOME &&
