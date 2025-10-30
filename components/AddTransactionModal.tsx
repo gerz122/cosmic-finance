@@ -56,7 +56,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             setReceiptImage(null); // Always reset image preview
             setIsTaxDeductible(isEditMode ? transactionToEdit.isTaxDeductible || false : false);
 
-            setPaymentShares(isEditMode ? transactionToEdit.paymentShares : [{ userId: currentUser.id, accountId: '', amount: parseFloat(totalAmount) || 0 }]);
+            setPaymentShares(isEditMode ? transactionToEdit.paymentShares : [{ userId: currentUser.id, accountId: '', amount: 0 }]);
             
             if (isEditMode) {
                 setExpenseShares(transactionToEdit.expenseShares || contextMembers.map(member => ({ userId: member.id, amount: 0 })));
@@ -66,7 +66,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             
             setSplitMode('equal');
         }
-    }, [isOpen, transactionToEdit, isEditing, currentUser, contextMembers, defaultTeamId, totalAmount]);
+    }, [isOpen, transactionToEdit, isEditing, currentUser, contextMembers, defaultTeamId]);
 
     useEffect(() => {
         const amount = parseFloat(totalAmount) || 0;
