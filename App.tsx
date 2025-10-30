@@ -3,7 +3,7 @@ import { AppProvider, useAppContext } from './AppContext';
 import Auth from './Auth';
 import Onboarding from './Onboarding';
 import type { View } from './types';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, HistoryIcon, TrophyIcon, UploadIcon, LogOutIcon } from './components/icons';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, HistoryIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -54,6 +54,24 @@ const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolea
     </button>
 );
 
+const Notification: React.FC<{ message: string; type: 'success' | 'error'; onClose: () => void }> = ({ message, type, onClose }) => {
+    const bgColor = type === 'success' ? 'bg-cosmic-success' : 'bg-cosmic-danger';
+
+    return (
+        <div 
+            className={`fixed top-5 right-5 z-[100] max-w-sm p-4 rounded-lg border border-cosmic-border shadow-lg transition-all duration-300 animate-slide-in-up ${bgColor}`}
+            role="alert"
+        >
+            <div className="flex items-center justify-between gap-4">
+                <p className="text-white font-semibold text-sm">{message}</p>
+                <button onClick={onClose} className="text-white opacity-70 hover:opacity-100 flex-shrink-0">
+                    <XIcon className="w-5 h-5" />
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const AppContent: React.FC = () => {
     const context = useAppContext();
     if (!context) return null; // Should be handled by AppProvider
@@ -62,6 +80,7 @@ const AppContent: React.FC = () => {
         activeView, setActiveView, users, teams, activeUser, selectedTeam,
         isLoading, error, handleLogout,
         effectiveFinancialStatement, historicalData, allUserAccounts,
+        notification,
         
         // Modals State
         modalStates,
@@ -149,6 +168,13 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="md:flex h-screen bg-cosmic-bg text-cosmic-text-primary font-sans">
+             {notification && (
+                <Notification 
+                    message={notification.message} 
+                    type={notification.type} 
+                    onClose={() => actions.setNotification(null)} 
+                />
+            )}
             {isMobileNavOpen && (
                 <div className="fixed inset-0 bg-cosmic-bg bg-opacity-90 z-50 md:hidden" onClick={() => setIsMobileNavOpen(false)}>
                     <nav className="w-64 bg-cosmic-surface border-r border-cosmic-border p-4 flex flex-col h-full">

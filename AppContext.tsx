@@ -16,6 +16,7 @@ interface AppContextType {
     selectedTeam: Team | null;
     isLoading: boolean;
     error: string | null;
+    notification: { message: string; type: 'success' | 'error' } | null;
     modalStates: Record<string, boolean>;
     modalData: Record<string, any>;
     effectiveFinancialStatement: any;
@@ -36,9 +37,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     
     const [modalStates, setModalStates] = useState<Record<string, boolean>>({ isFreedomModalOpen: false, isTeamReportModalOpen: false, isFabOpen: false });
     const [modalData, setModalData] = useState<Record<string, any>>({});
+
+    const showNotification = (message: string, type: 'success' | 'error') => {
+        setNotification({ message, type });
+        setTimeout(() => {
+            setNotification(null);
+        }, 5000);
+    };
 
     const refreshData = useCallback(async (uid: string) => {
         setIsLoading(true);
@@ -160,7 +169,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (user) {
                     memberIds.push(user.id);
                 } else {
-                    alert(`User with email ${email} not found. They need to register first.`);
+                    showNotification(`User with email ${email} not found. They need to register first.`, 'error');
                 }
             }
             const newTeam = await dbService.createTeam(name, [...new Set(memberIds)]);
@@ -170,9 +179,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
             }
             await refreshData(activeUser.id);
+            showNotification('Team created successfully!', 'success');
         } catch (e) {
             console.error(e);
-            alert("Failed to create team.");
+            showNotification("Failed to create team.", 'error');
         }
     };
     
@@ -200,7 +210,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_TRANSACTION');
             }
             await refreshData(activeUser.id);
-        } catch(e) { console.error(e); alert(`Failed to save transaction: ${(e as Error).message}`); }
+            showNotification('Transaction saved!', 'success');
+        } catch(e) { console.error(e); showNotification(`Failed to save transaction: ${(e as Error).message}`, 'error'); }
     };
     
     const handleDeleteTransaction = async (transactionId: string) => {
@@ -210,7 +221,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             try {
                 await dbService.deleteTransaction(tx);
                 await refreshData(activeUser.id);
-            } catch(e) { console.error(e); alert('Failed to delete transaction.'); }
+                showNotification('Transaction deleted.', 'success');
+            } catch(e) { console.error(e); showNotification('Failed to delete transaction.', 'error'); }
         }
     };
     
@@ -219,7 +231,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.performTransfer(activeUser.id, fromAccountId, toAccountId, amount);
             await refreshData(activeUser.id);
-        } catch(e) { console.error(e); alert((e as Error).message); }
+            showNotification('Transfer successful!', 'success');
+        } catch(e) { console.error(e); showNotification((e as Error).message, 'error'); }
     };
     
     const handleDrawCosmicCard = async () => {
@@ -243,7 +256,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.applyEventOutcome(activeUser.id, outcome);
             await refreshData(activeUser.id);
-        } catch(e) { console.error(e); alert('Failed to apply event outcome.'); }
+        } catch(e) { console.error(e); showNotification('Failed to apply event outcome.', 'error'); }
     };
     
     const handleAddAccount = async (account: Omit<Account, 'id' | 'ownerIds'>) => {
@@ -251,14 +264,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.addAccount(activeUser.id, account);
             await refreshData(activeUser.id);
-        } catch(e) { console.error(e); alert('Failed to add account.'); }
+            showNotification('Account added!', 'success');
+        } catch(e) { console.error(e); showNotification('Failed to add account.', 'error'); }
     };
 
     const handleUpdateAccount = async (account: Account) => {
         try {
             await dbService.updateAccount(activeUser!.id, account);
              if (activeUser) await refreshData(activeUser.id);
-        } catch (e) { console.error(e); alert("Failed to update account."); }
+             showNotification('Account updated.', 'success');
+        } catch (e) { console.error(e); showNotification("Failed to update account.", 'error'); }
     };
 
     const handleSaveBudget = async (budget: Budget) => {
@@ -266,7 +281,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.saveBudget(activeUser.id, budget);
             await refreshData(activeUser.id);
-        } catch (e) { console.error(e); alert("Failed to save budget."); }
+            showNotification('Budget saved!', 'success');
+        } catch (e) { console.error(e); showNotification("Failed to save budget.", 'error'); }
     };
     
     const handleSaveGoal = async (goalData: Omit<Goal, 'id' | 'currentAmount'>) => {
@@ -274,7 +290,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.addGoal(activeUser.id, goalData);
             await refreshData(activeUser.id);
-        } catch (e) { console.error(e); alert("Failed to save goal."); }
+            showNotification('Goal created!', 'success');
+        } catch (e) { console.error(e); showNotification("Failed to save goal.", 'error'); }
     };
     
     const handleDeleteGoal = async (goalId: string) => {
@@ -282,7 +299,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.deleteGoal(activeUser.id, goalId);
             await refreshData(activeUser.id);
-        } catch (e) { console.error(e); alert("Failed to delete goal."); }
+            showNotification('Goal deleted.', 'success');
+        } catch (e) { console.error(e); showNotification("Failed to delete goal.", 'error'); }
     };
     
     const handleContributeToGoal = async (goal: Goal, amount: number, fromAccountId: string) => {
@@ -298,7 +316,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             await dbService.updateAccount(activeUser.id, fromAccount);
             
             await refreshData(activeUser.id);
-        } catch(e) { console.error(e); alert((e as Error).message); }
+            showNotification('Contribution successful!', 'success');
+        } catch(e) { console.error(e); showNotification((e as Error).message, 'error'); }
     };
 
     const handleSaveStock = async (stockData: Partial<Asset>, teamId?: string) => {
@@ -316,7 +335,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_INVESTMENT');
             }
             await refreshData(activeUser.id);
-        } catch (e) { console.error(e); alert("Failed to save stock."); }
+            showNotification('Stock saved to portfolio!', 'success');
+        } catch (e) { console.error(e); showNotification("Failed to save stock.", 'error'); }
     };
 
     const handleLogDividend = async (amount: number, accountId: string) => {
@@ -324,7 +344,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await dbService.logDividend(activeUser.id, modalData.stockForDividend, amount, accountId);
             await refreshData(activeUser.id);
-        } catch (e) { console.error(e); alert((e as Error).message); }
+            showNotification('Dividend logged as income!', 'success');
+        } catch (e) { console.error(e); showNotification((e as Error).message, 'error'); }
     };
 
     const handleDeleteStock = async (stockId: string) => {
@@ -333,7 +354,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             try {
                 await dbService.deleteAsset(activeUser.id, stockId);
                 await refreshData(activeUser.id);
-            } catch (e) { console.error(e); alert("Failed to delete stock."); }
+                showNotification('Stock sold and removed from portfolio.', 'success');
+            } catch (e) { console.error(e); showNotification("Failed to delete stock.", 'error'); }
         }
     };
 
@@ -348,7 +370,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 else await dbService.addLiability(activeUser.id, data);
             }
             await refreshData(activeUser.id);
-        } catch (e) { console.error(e); alert("Failed to add item."); }
+            showNotification('Item added to portfolio!', 'success');
+        } catch (e) { console.error(e); showNotification("Failed to add item.", 'error'); }
     };
     
     const handleUpdateAssetLiability = async (data: Partial<Asset | Liability>, teamId?: string) => {
@@ -363,19 +386,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 else await dbService.updateLiability(activeUser.id, itemId, data);
             }
             await refreshData(activeUser.id);
-        } catch (e) { console.error(e); alert("Failed to update item."); }
+            showNotification('Item updated!', 'success');
+        } catch (e) { console.error(e); showNotification("Failed to update item.", 'error'); }
     };
     
     const handleAddCategory = (category: string) => {
         // This is a client-side only operation for now.
         // In a real app, you might save this to user preferences in the DB.
-        alert(`Category "${category}" added to selection lists! (demo)`);
+        showNotification(`Category "${category}" added to selection lists! (demo)`, 'success');
     };
 
     const handleImportTransactions = (transactions: any[]) => {
         // This is a client-side only operation for now.
         // It would batch-add these to the database.
-        alert(`Simulating import of ${transactions.length} transactions.`);
+        showNotification(`Simulating import of ${transactions.length} transactions.`, 'success');
         console.log("Transactions to import:", transactions);
     };
 
@@ -419,11 +443,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleOpenEditAssetLiabilityModal: (item: Asset | Liability) => { setModalData({ assetLiabilityToAdd: 'value' in item ? 'asset' : 'liability', assetLiabilityToEdit: item, modalDefaultTeamId: item.teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenContributeToGoalModal: (goal: Goal) => { setModalData({ goalToContribute: goal }); setModalOpen('isContributeToGoalModalOpen', true); },
         setModalDataField,
+        setNotification,
     };
 
     return (
         <AppContext.Provider value={{
-            activeView, users, teams, activeUser, selectedTeam, isLoading, error,
+            activeView, users, teams, activeUser, selectedTeam, isLoading, error, notification,
             modalStates, modalData, effectiveFinancialStatement, historicalData, allUserAccounts,
             setActiveView, handleLogout, actions
         }}>

@@ -41,10 +41,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         return teamRecord ? allUsers.filter(userRecord => teamRecord.memberIds.includes(userRecord.id)) : [currentUser];
     }, [teamId, teams, allUsers, currentUser]);
     
-    // Comprehensive state reset
+    // DEFINITIVE FIX: The dependency array is now `[isOpen, transactionToEdit]`.
+    // This ensures the form ONLY resets when the modal is first opened (`isOpen` becomes true)
+    // or when a different transaction is passed for editing. It will NOT re-run
+    // when the user types in any field (like totalAmount), which fixes the input-clearing bug.
     useEffect(() => {
         if (isOpen) {
-            const isEditMode = isEditing && transactionToEdit;
+            const isEditMode = !!transactionToEdit;
+            const members = teamId ? teams.find(t=>t.id===teamId)?.memberIds.map(id => allUsers.find(u=>u.id===id)!) : allUsers;
 
             setDescription(isEditMode ? transactionToEdit.description : '');
             setTotalAmount(isEditMode ? String(transactionToEdit.amount) : '');
@@ -58,15 +62,15 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
 
             setPaymentShares(isEditMode ? transactionToEdit.paymentShares : [{ userId: currentUser.id, accountId: '', amount: 0 }]);
             
-            if (isEditMode) {
-                setExpenseShares(transactionToEdit.expenseShares || contextMembers.map(member => ({ userId: member.id, amount: 0 })));
+            if (isEditMode && transactionToEdit.expenseShares && transactionToEdit.expenseShares.length > 0) {
+                setExpenseShares(transactionToEdit.expenseShares);
             } else {
-                setExpenseShares(contextMembers.map(member => ({ userId: member.id, amount: 0 })));
+                setExpenseShares(members.map(member => ({ userId: member.id, amount: 0 })));
             }
             
             setSplitMode('equal');
         }
-    }, [isOpen, transactionToEdit, isEditing, currentUser, contextMembers, defaultTeamId]);
+    }, [isOpen, transactionToEdit]);
 
     useEffect(() => {
         const amount = parseFloat(totalAmount) || 0;
@@ -152,7 +156,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                 finalReceiptUrl = await dbService.uploadReceipt(receiptImage, currentUser.id);
             } catch (error) {
                 console.error("Failed to upload receipt:", error);
-                alert("There was an error uploading the receipt. Please try again.");
+                alert("There was an error uploading the receipt. Please check your network connection and Firebase Storage rules/billing.");
                 return;
             }
         }
@@ -169,6 +173,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             isTaxDeductible,
         };
         
+        // Only include receiptUrl if it has a value.
         if (finalReceiptUrl) {
             transactionBase.receiptUrl = finalReceiptUrl;
         }
