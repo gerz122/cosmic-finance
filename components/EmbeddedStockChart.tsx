@@ -16,10 +16,11 @@ interface EmbeddedStockChartProps {
 const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height = '400px', takeProfit, stopLoss }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetRef = useRef<any>(null); // To hold the widget instance
+    const containerId = `tv-advanced-chart-container-${ticker}`; // Use a stable ID
 
     useEffect(() => {
         const createWidget = () => {
-            if (!containerRef.current || !window.TradingView) return;
+            if (!containerRef.current || !window.TradingView || document.getElementById(containerId)?.childElementCount > 0) return;
 
             // Clear previous widget if it exists
             containerRef.current.innerHTML = '';
@@ -67,7 +68,7 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height 
                 "allow_symbol_change": true,
                 "details": true,
                 "studies": studies,
-                "container_id": containerRef.current.id,
+                "container_id": containerId,
                 "backgroundColor": "rgba(13, 17, 23, 1)",
                 "gridColor": "rgba(48, 54, 61, 0.5)",
                 "horz_lines": horzLines,
@@ -84,18 +85,12 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height 
 
         return () => {
             clearInterval(scriptCheck);
-            if (widgetRef.current && typeof widgetRef.current.remove === 'function') {
-                widgetRef.current.remove();
-                widgetRef.current = null;
-            }
              if (containerRef.current) {
                 containerRef.current.innerHTML = '';
             }
         };
 
-    }, [ticker, takeProfit, stopLoss]);
-
-    const containerId = `tv-advanced-chart-container-${ticker}-${Math.random().toString(36).substring(7)}`;
+    }, [ticker, takeProfit, stopLoss, containerId]);
 
     return (
         <div className="tradingview-widget-container" style={{ height: height, width: '100%' }}>

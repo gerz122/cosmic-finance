@@ -1,25 +1,35 @@
 import React, { useState } from 'react';
-import type { Goal } from '../types';
+import type { Goal, Account } from '../types';
 import { XIcon } from './icons';
 
 interface AddGoalModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (goal: Omit<Goal, 'id' | 'currentAmount'>) => void;
+    onSave: (goal: Omit<Goal, 'id' | 'currentAmount'>, initialContribution: number, fromAccountId: string) => void;
+    userAccounts: Account[];
 }
 
-export const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, onSave }) => {
+export const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, onSave, userAccounts }) => {
     const [name, setName] = useState('');
     const [targetAmount, setTargetAmount] = useState('');
     const [targetDate, setTargetDate] = useState('');
+    const [initialContribution, setInitialContribution] = useState('');
+    const [fromAccountId, setFromAccountId] = useState(userAccounts[0]?.id || '');
     
     if (!isOpen) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const numericTarget = parseFloat(targetAmount);
+        const numericInitial = parseFloat(initialContribution) || 0;
+
         if (!name || !numericTarget || numericTarget <= 0) {
             alert('Please enter a valid name and target amount.');
+            return;
+        }
+
+        if (numericInitial > 0 && !fromAccountId) {
+            alert('Please select an account for the initial contribution.');
             return;
         }
 
@@ -27,11 +37,13 @@ export const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, onS
             name,
             targetAmount: numericTarget,
             targetDate: targetDate || undefined,
-        });
+        }, numericInitial, fromAccountId);
 
         setName('');
         setTargetAmount('');
         setTargetDate('');
+        setInitialContribution('');
+        setFromAccountId(userAccounts[0]?.id || '');
         onClose();
     };
 
@@ -55,6 +67,24 @@ export const AddGoalModal: React.FC<AddGoalModalProps> = ({ isOpen, onClose, onS
                         <label htmlFor="targetDate" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Target Date (Optional)</label>
                         <input type="date" id="targetDate" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary date-input" />
                     </div>
+
+                    <div className="pt-3 border-t border-cosmic-border space-y-2">
+                        <p className="text-sm font-medium text-cosmic-text-secondary">Initial Contribution (Optional)</p>
+                        <div className="grid grid-cols-2 gap-4">
+                             <div>
+                                <label htmlFor="initialContribution" className="sr-only">Initial Amount</label>
+                                <input type="number" id="initialContribution" value={initialContribution} onChange={e => setInitialContribution(e.target.value)} min="0" step="any" placeholder="Amount" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" />
+                            </div>
+                            <div>
+                                 <label htmlFor="fromAccountId" className="sr-only">From Account</label>
+                                <select id="fromAccountId" value={fromAccountId} onChange={e => setFromAccountId(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2">
+                                     {userAccounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+
                     <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border">Cancel</button>
                         <button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400">Create Goal</button>

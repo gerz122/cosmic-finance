@@ -24,16 +24,20 @@ interface StatementImporterProps {
     teams: Team[];
     onImport: (transactions: ParsedTransactionForReview[]) => void;
     allCategories: string[];
-    onAddCategory: (category: string) => void;
+    onAddCategory: (category: string, callback?: (newCategory: string) => void) => void;
+    actions: {
+        handleOpenAddAccountModal: (contextTeamId?: string, onSuccess?: (newAccount: Account) => void) => void;
+    }
 }
 
-export const StatementImporter: React.FC<StatementImporterProps> = ({ user, teams, onImport, allCategories, onAddCategory }) => {
+export const StatementImporter: React.FC<StatementImporterProps> = ({ user, teams, onImport, allCategories, onAddCategory, actions }) => {
     const [text, setText] = useState('');
     const [fileName, setFileName] = useState('');
     const [parsedTransactions, setParsedTransactions] = useState<ParsedTransactionForReview[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+    const [categoryTargetTxId, setCategoryTargetTxId] = useState<number | null>(null);
 
     const availableAccounts = useMemo(() => {
         const accounts: Record<string, Account[]> = { personal: user.accounts };
@@ -102,6 +106,18 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
             })
         );
     };
+    
+    const handleAccountChange = (txId: number, field: 'accountId' | 'fromAccountId' | 'toAccountId', value: string) => {
+        if (value === 'add-new') {
+            const tx = parsedTransactions.find(t => t.id === txId);
+            actions.handleOpenAddAccountModal(tx?.teamId, (newAccount) => {
+                // This callback runs after the new account is created and saved
+                handleTransactionUpdate(txId, field, newAccount.id);
+            });
+        } else {
+            handleTransactionUpdate(txId, field, value);
+        }
+    };
 
     const handleImportClick = () => {
         const incompleteTransaction = parsedTransactions.find(tx => {
@@ -119,13 +135,18 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
         setText('');
         setFileName('');
     };
+    
+    const handleOpenAddCategoryModal = (txId: number) => {
+        setCategoryTargetTxId(txId);
+        setIsAddCategoryModalOpen(true);
+    };
 
     const handleAddNewCategory = (newCategory: string) => {
-        onAddCategory(newCategory);
-        const firstUncategorized = parsedTransactions.find(tx => !tx.category);
-        if (firstUncategorized) {
-            handleTransactionUpdate(firstUncategorized.id, 'category', newCategory);
-        }
+        onAddCategory(newCategory, (cat) => {
+            if (categoryTargetTxId) {
+                handleTransactionUpdate(categoryTargetTxId, 'category', cat);
+            }
+        });
     };
 
 
@@ -182,9 +203,6 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
                 <div className="bg-cosmic-surface p-4 rounded-lg border border-cosmic-border">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold text-cosmic-text-primary">Step 3: Review Transactions</h2>
-                         <button onClick={() => setIsAddCategoryModalOpen(true)} className="flex items-center gap-2 text-sm bg-cosmic-bg border border-cosmic-border text-cosmic-primary font-semibold py-1 px-3 rounded-md hover:bg-cosmic-border">
-                            <PlusIcon className="w-4 h-4" /> Add New Category
-                        </button>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -222,25 +240,31 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
                                         <td className="p-2 space-y-1">
                                             {tx.type === 'transfer' ? (
                                                 <>
-                                                    <select value={tx.fromAccountId} onChange={(e) => handleTransactionUpdate(tx.id, 'fromAccountId', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
+                                                    <select value={tx.fromAccountId} onChange={(e) => handleAccountChange(tx.id, 'fromAccountId', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
                                                         <option value="">From Account...</option>
                                                         {accountsForScope.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                                                        <option value="add-new" className="font-bold text-cosmic-primary">+ Add New Account...</option>
                                                     </select>
-                                                    <select value={tx.toAccountId} onChange={(e) => handleTransactionUpdate(tx.id, 'toAccountId', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
+                                                    <select value={tx.toAccountId} onChange={(e) => handleAccountChange(tx.id, 'toAccountId', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
                                                         <option value="">To Account...</option>
                                                         {accountsForScope.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                                                        <option value="add-new" className="font-bold text-cosmic-primary">+ Add New Account...</option>
                                                     </select>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <select value={tx.accountId} onChange={(e) => handleTransactionUpdate(tx.id, 'accountId', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
+                                                    <select value={tx.accountId} onChange={(e) => handleAccountChange(tx.id, 'accountId', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
                                                         <option value="">Select Account...</option>
                                                         {accountsForScope.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                                                        <option value="add-new" className="font-bold text-cosmic-primary">+ Add New Account...</option>
                                                     </select>
-                                                    <select value={tx.category} onChange={(e) => handleTransactionUpdate(tx.id, 'category', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
-                                                        <option value="">Select Category...</option>
-                                                        {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                                    </select>
+                                                    <div className="flex">
+                                                        <select value={tx.category} onChange={(e) => handleTransactionUpdate(tx.id, 'category', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-l-md p-1">
+                                                            <option value="">Select Category...</option>
+                                                            {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                        </select>
+                                                        <button type="button" onClick={() => handleOpenAddCategoryModal(tx.id)} className="p-1.5 bg-cosmic-primary rounded-r-md text-white"><PlusIcon className="w-4 h-4"/></button>
+                                                    </div>
                                                     {tx.type === 'income' && <label className="text-xs flex items-center gap-1.5 p-1"><input type="checkbox" checked={tx.isPassive} onChange={e => handleTransactionUpdate(tx.id, 'isPassive', e.target.checked)} className="rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border" /> Passive Income</label>}
                                                 </>
                                             )}

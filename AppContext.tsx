@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback, ErrorInfo } from 'react';
 import { auth, db, firebase } from './services/firebase';
 import type { User as FirebaseUser } from './services/firebase';
 import * as dbService from './services/dbService';
@@ -55,15 +55,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const taskId = `task_${Date.now()}_${Math.random()}`;
         setActiveTasks(prev => [...prev, { id: taskId, name, status: 'processing', createdAt: Date.now(), onRetry: options.onRetry }]);
         try {
-            await taskFn();
+            const result = await taskFn();
             setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'success' } : t));
-            // Auto-dismiss successful tasks
-            setTimeout(() => {
-                setActiveTasks(prev => prev.filter(t => t.id !== taskId));
-            }, 4000);
+            setTimeout(() => setActiveTasks(prev => prev.filter(t => t.id !== taskId)), 4000);
+            return result;
         } catch (e) {
             console.error(`Task "${name}" failed:`, e);
             setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'failed', error: (e as Error).message } : t));
+            throw e; // Re-throw to be caught by caller if needed
         }
     }, []);
 
@@ -154,8 +153,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // ACTIONS
     const setModalOpen = (modal: string, isOpen: boolean) => setModalStates(prev => ({ ...prev, [modal]: isOpen }));
     const setModalDataField = (field: string, value: any) => setModalData(p => ({...p, [field]: value}));
+    
+    const logErrorTask = (error: Error, errorInfo: ErrorInfo) => {
+        const taskId = `error_${Date.now()}`;
+        const name = `UI Error: ${error.message}`;
+        const errorDetails = `Component Stack:\n${errorInfo.componentStack}`;
+        setActiveTasks(prev => [...prev, { id: taskId, name, status: 'failed', error: errorDetails, createdAt: Date.now() }]);
+    };
 
-    const handleCreateTeam = (name: string, invitedEmails: string[]) => {
+    const handleCreateTeam = (name: string, invitedEmails: string[], initialGoal: string, initialAccountName: string) => {
         if (!activeUser) return;
         const task = async () => {
             const memberIds = [activeUser.id];
@@ -163,12 +169,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const user = await dbService.findUserByEmail(email);
                 if (user) memberIds.push(user.id);
             }
-            const newTeam = await dbService.createTeam(name, [...new Set(memberIds)]);
-            await Promise.all(newTeam.memberIds.map(memberId => dbService.addMemberToTeam(newTeam.id, memberId)));
+            await dbService.createTeam(name, [...new Set(memberIds)], initialGoal, initialAccountName);
             await refreshData(activeUser.id);
             showSuccessModal('Team Created!');
         };
-        runTask('Creating Team', task, { onRetry: () => handleCreateTeam(name, invitedEmails) });
+        runTask('Creating Team', task, { onRetry: () => handleCreateTeam(name, invitedEmails, initialGoal, initialAccountName) });
     };
     
     const handleCompleteOnboarding = async () => {
@@ -248,18 +253,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, { onRetry: () => handleCosmicEventResolution(outcome) });
     };
     
-    const handleAddAccount = (accountData: Omit<Account, 'id' | 'ownerIds'>) => {
-        if (!activeUser) return;
-        runTask('Adding Account', async () => {
-            const newAccount: Account = {
-                ...accountData,
-                id: crypto.randomUUID(),
-                ownerIds: [activeUser.id],
-            };
-            await dbService.addAccount(activeUser.id, newAccount);
+    const handleAddAccount = (accountData: Omit<Account, 'id' | 'ownerIds'>, teamId?: string): Promise<Account | void> => {
+        if (!activeUser) return Promise.resolve();
+        const team = teams.find(t => t.id === teamId);
+        const task = async () => {
+            let newAccount: Account;
+            if (teamId && team) {
+                newAccount = await dbService.addTeamAccount(teamId, team.memberIds, accountData);
+            } else {
+                newAccount = await dbService.addAccount(activeUser.id, accountData);
+            }
             await refreshData(activeUser.id);
             showSuccessModal('Account Added!');
-        }, { onRetry: () => handleAddAccount(accountData) });
+            return newAccount;
+        };
+        return runTask('Adding Account', task, { onRetry: () => handleAddAccount(accountData, teamId) });
     };
 
     const handleUpdateAccount = (account: Account) => {
@@ -278,19 +286,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, { onRetry: () => handleSaveBudget(budget) });
     };
     
-    const handleSaveGoal = async (goalData: Omit<Goal, 'id' | 'currentAmount'>) => {
+    const handleSaveGoal = async (goalData: Omit<Goal, 'id' | 'currentAmount'>, initialContribution: number, fromAccountId: string) => {
         if (!activeUser) return;
         const newGoal: Goal = { ...goalData, id: crypto.randomUUID(), currentAmount: 0 };
-        await dbService.addGoal(activeUser.id, newGoal);
-        await refreshData(activeUser.id);
-        showSuccessModal('Goal Created!');
+        runTask('Creating Goal', async () => {
+            await dbService.addGoal(activeUser.id, newGoal, initialContribution, fromAccountId);
+            await refreshData(activeUser.id);
+            showSuccessModal('Goal Created!');
+        }, { onRetry: () => handleSaveGoal(goalData, initialContribution, fromAccountId) });
     };
     
     const handleDeleteGoal = async (goalId: string) => {
         if (!activeUser) return;
         if (!window.confirm("Are you sure you want to delete this goal?")) return;
-        await dbService.deleteGoal(activeUser.id, goalId);
-        await refreshData(activeUser.id);
+        runTask('Deleting Goal', async () => {
+            await dbService.deleteGoal(activeUser.id, goalId);
+            await refreshData(activeUser.id);
+        });
     };
     
     const handleContributeToGoal = async (goal: Goal, amount: number, fromAccountId: string) => {
@@ -369,8 +381,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, { onRetry: () => handleUpdateAssetLiability(data, teamId) });
     };
     
-    const handleAddCategory = (category: string) => {
-        // This is a client-side only action now, handled by allCategories memo
+    const handleAddCategory = (category: string, callback?: (newCategory: string) => void) => {
+        // This is a client-side only action now, but we keep the structure for potential future persistence
+        if (callback) callback(category);
     };
     
     const handleImportData = (data: { user: User, teams: Team[] }) => {
@@ -378,20 +391,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         runTask('Importing Data', async () => {
             const batch = db.batch();
             
-            // --- Helper for processing transactions with embedded receipts ---
             const processTransactions = async (transactions: any[], ownerId: string, isTeam: boolean) => {
                 const collectionPath = isTeam ? `teams/${ownerId}/transactions` : `users/${ownerId}/transactions`;
                 for (let t of transactions) {
                     if (t.receiptDataUrl) {
-                        // Re-upload receipt and get new URL
                         t.receiptUrl = await dbService.uploadReceipt(t.receiptDataUrl, activeUser.id);
-                        delete t.receiptDataUrl; // Don't save base64 to Firestore
+                        delete t.receiptDataUrl;
                     }
                     batch.set(db.collection(collectionPath).doc(t.id), t, { merge: true });
                 }
             };
 
-            // User data
             const { financialStatement, accounts, budgets, goals, ...mainUser } = data.user;
             batch.set(db.collection('users').doc(mainUser.id), mainUser, { merge: true });
             accounts.forEach(a => batch.set(db.collection('users').doc(mainUser.id).collection('accounts').doc(a.id), a, { merge: true }));
@@ -401,7 +411,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             financialStatement.liabilities.forEach(l => batch.set(db.collection('users').doc(mainUser.id).collection('liabilities').doc(l.id), l, { merge: true }));
             await processTransactions(financialStatement.transactions, mainUser.id, false);
 
-            // Team data
             for (const team of data.teams) {
                 const { financialStatement: tf, accounts: ta, ...mainTeam } = team;
                 batch.set(db.collection('teams').doc(mainTeam.id), mainTeam, { merge: true });
@@ -452,7 +461,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const actions = {
-        setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding,
+        setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding, logErrorTask,
         handleTeamClick: (teamId: string) => { setActiveView('team-detail'); setSelectedTeamId(teamId); },
         handleBackToTeams: () => { setActiveView('teams'); setSelectedTeamId(null); },
         handleOpenAddTransactionModal: (teamId?: string) => { setModalData({ transactionToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddTransactionModalOpen', true); },
@@ -476,6 +485,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleOpenAddAssetLiabilityModal: (type: 'asset' | 'liability', teamId?: string) => { setModalData({ assetLiabilityToAdd: type, assetLiabilityToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenEditAssetLiabilityModal: (item: Asset | Liability) => { setModalData({ assetLiabilityToAdd: 'value' in item ? 'asset' : 'liability', assetLiabilityToEdit: item, modalDefaultTeamId: item.teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenContributeToGoalModal: (goal: Goal) => { setModalData({ goalToContribute: goal }); setModalOpen('isContributeToGoalModalOpen', true); },
+        handleOpenAddAccountModal: (contextTeamId?: string, onSuccess?: (newAccount: Account) => void) => { setModalData({ modalDefaultTeamId: contextTeamId, addAccountSuccessCallback: onSuccess }); setModalOpen('isAddAccountModalOpen', true); },
+        // FIX: Replaced call to non-existent 'onAddCategory' with the correct 'handleAddCategory'.
+        handleOpenAddCategoryModal: (category: string, callback?: (newCategory: string) => void) => { handleAddCategory(category, callback); },
+        handleOpenCreateTeamModal: () => setModalOpen('isCreateTeamModalOpen', true),
+        handleOpenAddGoalModal: () => setModalOpen('isAddGoalModalOpen', true),
         setModalDataField,
         dismissTask: (taskId: string) => setActiveTasks(prev => prev.filter(t => t.id !== taskId)),
     };

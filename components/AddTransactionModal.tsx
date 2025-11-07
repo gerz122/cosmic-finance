@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { Transaction, User, Team, PaymentShare, ExpenseShare, Account, SplitMode } from '../types';
 import { TransactionType } from '../types';
 import { XIcon, PlusIcon, UploadIcon } from './icons';
-import { AddCategoryModal } from './AddCategoryModal';
 
 interface AddTransactionModalProps {
     isOpen: boolean;
@@ -12,12 +11,13 @@ interface AddTransactionModalProps {
     currentUser: User;
     allUsers: User[];
     teams: Team[];
-    onAddAccountClick: () => void;
-    onAddCategory: (category: string) => void;
+    onAddAccountClick: (contextTeamId?: string, onSuccess?: (newAccount: Account) => void) => void;
+    onAddCategory: (category: string, callback?: (newCategory: string) => void) => void;
     defaultTeamId?: string;
+    allCategories: string[];
 }
 
-export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategory, defaultTeamId }) => {
+export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategory, defaultTeamId, allCategories }) => {
     const [description, setDescription] = useState('');
     const [totalAmount, setTotalAmount] = useState('');
     const [categoryInput, setCategoryInput] = useState('');
@@ -33,26 +33,29 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     
     const [splitMode, setSplitMode] = useState<SplitMode>('equal');
     const isEditing = !!transactionToEdit;
-    
-    const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
 
     const { contextMembers, userAccounts } = useMemo(() => {
-        const members = teamId ? allUsers.filter(u => teams.find(t => t.id === teamId)?.memberIds.includes(u.id)) : [currentUser];
+        const selectedTeam = teams.find(t => t.id === teamId);
+        const members = selectedTeam ? allUsers.filter(u => selectedTeam.memberIds.includes(u.id)) : [currentUser];
         const accounts: Record<string, Account[]> = {};
+        
         allUsers.forEach(u => {
             accounts[u.id] = u.accounts;
         });
+
         teams.forEach(t => {
             t.accounts.forEach(acc => {
-                t.memberIds.forEach(memberId => {
-                    if (!accounts[memberId]) accounts[memberId] = [];
-                    // Avoid duplicating team accounts for every member
-                    if (!accounts[memberId].find(a => a.id === acc.id)) {
-                        accounts[memberId].push(acc);
-                    }
-                })
-            })
-        })
+                if (acc.teamId) { // Only associate team accounts with their team members
+                    const teamForAccount = teams.find(team => team.id === acc.teamId);
+                    teamForAccount?.memberIds.forEach(memberId => {
+                        if (!accounts[memberId]) accounts[memberId] = [];
+                        if (!accounts[memberId].find(a => a.id === acc.id)) {
+                            accounts[memberId].push(acc);
+                        }
+                    });
+                }
+            });
+        });
         return { contextMembers: members, userAccounts: accounts };
     }, [teamId, teams, allUsers, currentUser]);
     
@@ -141,15 +144,27 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         onSave(transactionData);
         onClose();
     };
-
-    const handleAddNewCategory = (newCategory: string) => {
-        onAddCategory(newCategory);
-        setCategoryInput(newCategory);
-        setIsAddCategoryModalOpen(false);
+    
+    const handleCategoryChange = (value: string) => {
+        if (value === 'add-new') {
+            onAddCategory(value, (newCategory) => {
+                setCategoryInput(newCategory);
+            });
+        } else {
+            setCategoryInput(value);
+        }
     };
 
     const updatePaymentShare = (index: number, field: keyof PaymentShare, value: string | number) => {
         const newShares = [...paymentShares];
+        if (field === 'accountId' && value === 'add-new') {
+            onAddAccountClick(teamId, (newAccount) => {
+                const updatedShares = [...paymentShares];
+                updatedShares[index].accountId = newAccount.id;
+                setPaymentShares(updatedShares);
+            });
+            return;
+        }
         (newShares[index] as any)[field] = value;
         setPaymentShares(newShares);
     }
@@ -168,8 +183,6 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     if (!isOpen) return null;
     
     return (
-        <>
-        <AddCategoryModal isOpen={isAddCategoryModalOpen} onClose={() => setIsAddCategoryModalOpen(false)} onAddCategory={handleAddNewCategory} />
         <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
             <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-3xl shadow-2xl p-6 m-4 animate-slide-in-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                  <div className="flex justify-between items-center mb-6 flex-shrink-0">
@@ -200,13 +213,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                         </div>
                          <div>
                              <label className="block text-sm font-medium text-cosmic-text-secondary mb-1">Category</label>
-                             <div className="flex gap-2">
-                                <input type="text" value={categoryInput} onChange={e => setCategoryInput(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required list="categories" />
-                                <datalist id="categories">
-                                    {(currentUser.financialStatement.transactions.map(t => t.category)).reduce((acc: string[], cur) => acc.includes(cur) ? acc : [...acc, cur], []).map(c => <option key={c} value={c} />)}
-                                </datalist>
-                                <button type="button" onClick={() => setIsAddCategoryModalOpen(true)} className="p-2 bg-cosmic-primary rounded-md text-white"><PlusIcon className="w-5 h-5"/></button>
-                             </div>
+                            <select value={categoryInput} onChange={e => handleCategoryChange(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2">
+                                <option value="" disabled>Select a category...</option>
+                                {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                <option value="add-new" className="font-bold text-cosmic-primary">+ Add New Category...</option>
+                            </select>
                         </div>
                          <div>
                              <label className="block text-sm font-medium text-cosmic-text-secondary mb-1">Team (Optional)</label>
@@ -232,6 +243,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                                 <select value={share.accountId} onChange={e => updatePaymentShare(index, 'accountId', e.target.value)} className="col-span-4 bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-sm">
                                     <option value="">Select Account...</option>
                                     {(userAccounts[share.userId] || []).map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                                    <option value="add-new" className="font-bold text-cosmic-primary">+ Add New Account...</option>
                                 </select>
                                 <input type="number" value={share.amount} onChange={e => updatePaymentShare(index, 'amount', parseFloat(e.target.value) || 0)} className="col-span-3 bg-cosmic-bg border border-cosmic-border rounded p-1.5 text-sm text-right"/>
                                 <button type="button" onClick={() => removePaymentShare(index)} disabled={paymentShares.length <= 1} className="col-span-1 text-cosmic-danger disabled:text-cosmic-border"><XIcon className="w-4 h-4"/></button>
@@ -301,6 +313,5 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                 </div>
             </div>
         </div>
-        </>
     );
 };

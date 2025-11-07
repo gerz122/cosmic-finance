@@ -36,8 +36,7 @@ const createInitialDataWithSubcollections = async (batch: firebase.firestore.Wri
         batch.set(userRef.collection('liabilities').doc(liability.id), liability);
     }
     for (const transaction of financialStatement.transactions) {
-        const transactionRef = userRef.collection('transactions').doc();
-        batch.set(transactionRef, { ...transaction, id: transactionRef.id });
+        batch.set(userRef.collection('transactions').doc(transaction.id), transaction);
     }
 };
 
@@ -245,11 +244,13 @@ export const applyEventOutcome = async (uid: string, outcome: EventOutcome): Pro
     }
 };
 
-export const addAccount = (uid: string, newAccount: Omit<Account, 'id' | 'ownerIds'>): Promise<any> => {
+export const addAccount = async (uid: string, newAccount: Omit<Account, 'id' | 'ownerIds'>): Promise<Account> => {
     const accountRef = getUserDoc(uid).collection('accounts').doc();
-    const fullAccount = { ...newAccount, id: accountRef.id, ownerIds: [uid] };
+    const fullAccount: Account = { ...newAccount, id: accountRef.id, ownerIds: [uid] };
 
-    // If there's an initial balance, create a transaction for it
+    const batch = db.batch();
+    batch.set(accountRef, fullAccount);
+
     if (fullAccount.balance > 0) {
         const transaction: Transaction = {
             id: crypto.randomUUID(),
@@ -261,26 +262,60 @@ export const addAccount = (uid: string, newAccount: Omit<Account, 'id' | 'ownerI
             paymentShares: [{ userId: uid, accountId: fullAccount.id, amount: fullAccount.balance }],
         };
         const transactionRef = getUserDoc(uid).collection('transactions').doc(transaction.id);
-        const batch = db.batch();
-        batch.set(accountRef, fullAccount);
         batch.set(transactionRef, transaction);
-        return batch.commit();
-    } else {
-        return accountRef.set(fullAccount);
     }
+    
+    await batch.commit();
+    return fullAccount;
+};
+
+export const addTeamAccount = async (teamId: string, memberIds: string[], newAccount: Omit<Account, 'id' | 'ownerIds' | 'teamId'>): Promise<Account> => {
+    const teamRef = getTeamDoc(teamId);
+    const accountRef = teamRef.collection('accounts').doc();
+    const fullAccount: Account = { ...newAccount, id: accountRef.id, ownerIds: memberIds, teamId };
+
+    const batch = db.batch();
+    batch.set(accountRef, fullAccount);
+
+    if (fullAccount.balance > 0) {
+        // Create an initial balance transaction for the team
+    }
+    await batch.commit();
+    return fullAccount;
 };
 
 export const updateAccount = (uid: string, account: Account): Promise<void> => {
-    return getUserDoc(uid).collection('accounts').doc(account.id).update(account);
+    const collectionPath = account.teamId ? `teams/${account.teamId}/accounts` : `users/${uid}/accounts`;
+    return db.collection(collectionPath).doc(account.id).update(account);
 };
 
 export const saveBudget = (uid: string, budget: Budget): Promise<void> => {
     return getUserDoc(uid).collection('budgets').doc(budget.month).set(budget, { merge: true });
 };
 
-export const addGoal = (uid: string, newGoal: Goal): Promise<void> => {
-    const goalRef = getUserDoc(uid).collection('goals').doc(newGoal.id);
-    return goalRef.set(newGoal);
+export const addGoal = (uid: string, newGoal: Goal, initialContribution: number, fromAccountId: string): Promise<void> => {
+    const userRef = getUserDoc(uid);
+    const goalRef = userRef.collection('goals').doc(newGoal.id);
+    
+    const batch = db.batch();
+    batch.set(goalRef, newGoal);
+    
+    if (initialContribution > 0 && fromAccountId) {
+        newGoal.currentAmount += initialContribution;
+        const accountRef = userRef.collection('accounts').doc(fromAccountId);
+        const transactionRef = userRef.collection('transactions').doc();
+        const transactionData: Omit<Transaction, 'id'> = {
+            description: `Initial contribution to: ${newGoal.name}`,
+            amount: initialContribution,
+            type: TransactionType.EXPENSE, category: 'Goals',
+            date: new Date().toISOString().split('T')[0],
+            paymentShares: [{ userId: uid, accountId: fromAccountId, amount: initialContribution }],
+            expenseShares: [{ userId: uid, amount: initialContribution }],
+        };
+        batch.update(accountRef, { balance: firebase.firestore.FieldValue.increment(-initialContribution) });
+        batch.set(transactionRef, { ...transactionData, id: transactionRef.id });
+    }
+    return batch.commit();
 };
 
 export const updateGoal = (uid: string, goal: Goal): Promise<void> => {
@@ -316,6 +351,8 @@ export const contributeToGoal = (uid: string, goal: Goal, amount: number, fromAc
 };
 
 export const logDividend = async (uid: string, stock: Asset, amount: number, accountId: string): Promise<void> => {
+    const isTeamStock = !!stock.teamId;
+    
     const transaction: Transaction = {
         id: crypto.randomUUID(),
         description: `Dividend from ${stock.name}`,
@@ -324,10 +361,15 @@ export const logDividend = async (uid: string, stock: Asset, amount: number, acc
         category: 'Investment',
         date: new Date().toISOString().split('T')[0],
         isPassive: true,
+        teamId: stock.teamId,
         paymentShares: [{ userId: uid, accountId, amount }],
-        expenseShares: [{ userId: uid, amount }],
     };
-    await addPersonalTransaction(uid, transaction);
+
+    if(isTeamStock){
+       await addTeamTransaction(transaction);
+    } else {
+       await addPersonalTransaction(uid, transaction);
+    }
 };
 
 export const checkAndUnlockAchievement = async (uid: string, achievementId: string): Promise<void> => {
@@ -378,18 +420,25 @@ export const getTeamsForUser = async (uid: string): Promise<Team[]> => {
     }));
 };
 
-export const createTeam = async (name: string, memberIds: string[]): Promise<Team> => {
+export const createTeam = async (name: string, memberIds: string[], initialGoalDesc: string, initialAccountName: string): Promise<Team> => {
     const teamRef = db.collection('teams').doc();
-    const newTeamData: Omit<Team, 'id'> = {
-        name,
-        memberIds,
-        financialStatement: { transactions: [], assets: [], liabilities: [] },
-        accounts: [],
-        goals: [{ description: 'Initial Team Goal', target: 10000, current: 0 }],
-    };
-    await teamRef.set(newTeamData);
-    await Promise.all(memberIds.map(uid => getUserDoc(uid).update({ teamIds: firebase.firestore.FieldValue.arrayUnion(teamRef.id) })));
-    return { ...newTeamData, id: teamRef.id };
+    const batch = db.batch();
+
+    const newTeamData: Omit<Team, 'id' | 'accounts' | 'financialStatement' | 'goals'> = { name, memberIds };
+    batch.set(teamRef, newTeamData);
+    
+    if (initialAccountName) {
+        await addTeamAccount(teamRef.id, memberIds, { name: initialAccountName, type: AccountType.CHECKING, balance: 0 });
+    }
+    
+    const goals = initialGoalDesc ? [{ description: initialGoalDesc, target: 10000, current: 0 }] : [];
+    batch.update(teamRef, { goals });
+
+    await Promise.all(memberIds.map(uid => batch.update(getUserDoc(uid), { teamIds: firebase.firestore.FieldValue.arrayUnion(teamRef.id) })));
+    
+    await batch.commit();
+    // This is a simplified return, the full team object with subcollections will be fetched on next refresh
+    return { ...newTeamData, id: teamRef.id, accounts: [], financialStatement: { assets: [], liabilities: [], transactions: [] }, goals };
 };
 
 export const addMemberToTeam = async (teamId: string, memberId: string): Promise<void> => {

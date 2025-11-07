@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import type { Asset, Account } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import type { Asset, Account, User, Team } from '../types';
 import { XIcon } from './icons';
 
 interface LogDividendModalProps {
@@ -7,18 +7,29 @@ interface LogDividendModalProps {
     onClose: () => void;
     onLogDividend: (amount: number, accountId: string) => void;
     stock: Asset;
-    accounts: Account[];
+    user: User;
+    teams: Team[];
 }
 
-export const LogDividendModal: React.FC<LogDividendModalProps> = ({ isOpen, onClose, onLogDividend, stock, accounts }) => {
+export const LogDividendModal: React.FC<LogDividendModalProps> = ({ isOpen, onClose, onLogDividend, stock, user, teams }) => {
     const [amount, setAmount] = useState('');
     const [accountId, setAccountId] = useState('');
 
-    useEffect(() => {
-        if(isOpen && accounts.length > 0) {
-            setAccountId(accounts[0].id)
+    const relevantAccounts = useMemo(() => {
+        if (stock.teamId) {
+            const team = teams.find(t => t.id === stock.teamId);
+            return team?.accounts || [];
         }
-    }, [isOpen, accounts]);
+        return user.accounts;
+    }, [stock, user.accounts, teams]);
+
+    useEffect(() => {
+        if(isOpen && relevantAccounts.length > 0) {
+            setAccountId(relevantAccounts[0].id)
+        } else {
+            setAccountId('');
+        }
+    }, [isOpen, relevantAccounts]);
 
     if (!isOpen) return null;
 
@@ -59,7 +70,7 @@ export const LogDividendModal: React.FC<LogDividendModalProps> = ({ isOpen, onCl
                             onChange={e => setAmount(e.target.value)}
                             min="0.01"
                             step="0.01"
-                            className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary"
+                            className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary"
                             required
                             autoFocus
                         />
@@ -70,11 +81,11 @@ export const LogDividendModal: React.FC<LogDividendModalProps> = ({ isOpen, onCl
                             id="account" 
                             value={accountId} 
                             onChange={e => setAccountId(e.target.value)}
-                            className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary"
+                            className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary"
                             required
                         >
                             <option value="" disabled>Select an account</option>
-                            {accounts.map(accountItem => (
+                            {relevantAccounts.map(accountItem => (
                                 <option key={accountItem.id} value={accountItem.id}>{accountItem.name}</option>
                             ))}
                         </select>

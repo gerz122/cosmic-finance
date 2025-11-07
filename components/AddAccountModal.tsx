@@ -1,41 +1,69 @@
-import React, { useState } from 'react';
-import type { Account } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { Account, Team } from '../types';
 import { AccountType } from '../types';
 import { XIcon } from './icons';
 
 interface AddAccountModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onAddAccount: (account: Omit<Account, 'id' | 'ownerIds'>) => void;
+    onAddAccount: (account: Omit<Account, 'id' | 'ownerIds'>, teamId?: string) => Promise<Account | void>;
+    teams: Team[];
+    defaultOwnerId: string;
+    contextTeamId?: string; // Team context from parent modal
+    onSuccess?: (newAccount: Account) => void;
 }
 
-export const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onAddAccount }) => {
+export const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onAddAccount, teams, defaultOwnerId, contextTeamId, onSuccess }) => {
     const [name, setName] = useState('');
     const [type, setType] = useState<AccountType>(AccountType.CHECKING);
     const [balance, setBalance] = useState('');
+    const [scope, setScope] = useState<'personal' | 'team'>('personal');
+    const [teamId, setTeamId] = useState('');
+
+    useEffect(() => {
+        if(isOpen) {
+            // If opened with a team context, default to that team
+            if (contextTeamId) {
+                setScope('team');
+                setTeamId(contextTeamId);
+            } else {
+                setScope('personal');
+                setTeamId(teams[0]?.id || '');
+            }
+            // Reset fields
+            setName('');
+            setType(AccountType.CHECKING);
+            setBalance('');
+        }
+    }, [isOpen, contextTeamId, teams]);
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name || !type) {
-            alert('Please fill out all fields.');
+        if (!name || !type || (scope === 'team' && !teamId)) {
+            alert('Please fill out all required fields.');
             return;
         }
 
-        onAddAccount({
+        const newAccountData = {
             name,
             type,
             balance: parseFloat(balance) || 0,
-        });
-        setName('');
-        setType(AccountType.CHECKING);
-        setBalance('');
+        };
+        
+        const finalTeamId = scope === 'team' ? teamId : undefined;
+        const result = await onAddAccount(newAccountData, finalTeamId);
+
+        if (onSuccess && result) {
+            onSuccess(result);
+        }
+        
         onClose();
     };
 
     return (
-        <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+        <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-[51] animate-fade-in" onClick={onClose}>
             <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-md shadow-2xl p-6 m-4 animate-slide-in-up" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold text-cosmic-text-primary">Add New Account</h2>
@@ -46,12 +74,27 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClos
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
+                        <label className="block text-sm font-medium text-cosmic-text-secondary mb-1">Scope</label>
+                        <div className="flex gap-2">
+                             <button type="button" onClick={() => setScope('personal')} className={`w-full p-2 text-sm rounded-md ${scope === 'personal' ? 'bg-cosmic-primary text-white' : 'bg-cosmic-bg border border-cosmic-border'}`}>Personal</button>
+                             <button type="button" onClick={() => setScope('team')} className={`w-full p-2 text-sm rounded-md ${scope === 'team' ? 'bg-cosmic-primary text-white' : 'bg-cosmic-bg border border-cosmic-border'}`}>Team</button>
+                        </div>
+                    </div>
+                    {scope === 'team' && (
+                         <div>
+                            <label htmlFor="team" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Team</label>
+                            <select id="team" value={teamId} onChange={e => setTeamId(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2">
+                                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                        </div>
+                    )}
+                    <div>
                         <label htmlFor="accountName" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Account Name</label>
-                        <input type="text" id="accountName" value={name} onChange={e => setName(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" required />
+                        <input type="text" id="accountName" value={name} onChange={e => setName(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary" required />
                     </div>
                     <div>
                         <label htmlFor="accountType" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Account Type</label>
-                        <select id="accountType" value={type} onChange={e => setType(e.target.value as AccountType)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary">
+                        <select id="accountType" value={type} onChange={e => setType(e.target.value as AccountType)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary">
                             {Object.values(AccountType).map(accountType => <option key={accountType} value={accountType}>{accountType}</option>)}
                         </select>
                     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Account, User, Share } from '../types';
+import type { Account, User, Share, Team } from '../types';
 import { AccountType } from '../types';
 import { XIcon } from './icons';
 
@@ -9,9 +9,10 @@ interface EditAccountModalProps {
     onSave: (account: Account) => void;
     accountToEdit: Account | null;
     allUsers: User[];
+    team?: Team | null;
 }
 
-export const EditAccountModal: React.FC<EditAccountModalProps> = ({ isOpen, onClose, onSave, accountToEdit, allUsers }) => {
+export const EditAccountModal: React.FC<EditAccountModalProps> = ({ isOpen, onClose, onSave, accountToEdit, allUsers, team }) => {
     const [name, setName] = useState('');
     const [type, setType] = useState<AccountType>(AccountType.CHECKING);
     const [shares, setShares] = useState<Share[]>([]);
@@ -82,6 +83,12 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({ isOpen, onCl
                     </button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {team && (
+                        <div className="p-2 bg-cosmic-bg rounded-md text-sm text-center">
+                            <span className="text-cosmic-text-secondary">This is a team account for: </span>
+                            <span className="font-bold text-cosmic-primary">{team.name}</span>
+                        </div>
+                    )}
                     <div>
                         <label htmlFor="accountName" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Account Name</label>
                         <input type="text" id="accountName" value={name} onChange={e => setName(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2" required />
@@ -93,7 +100,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({ isOpen, onCl
                         </select>
                     </div>
 
-                    {accountToEdit.ownerIds.length > 1 && (
+                    {accountToEdit.ownerIds.length > 1 && !accountToEdit.teamId && (
                         <div className="space-y-3 pt-3 border-t border-cosmic-border">
                             <div className="flex justify-between items-center">
                                 <h3 className="font-medium text-cosmic-text-primary">Ownership Split</h3>

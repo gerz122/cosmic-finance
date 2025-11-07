@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import type { User } from '../types';
+import type { User, Account } from '../types';
+import { AccountType } from '../types';
 import { XIcon, PlusIcon } from './icons';
 
 interface CreateTeamModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onCreateTeam: (name: string, invitedEmails: string[]) => void;
+    onCreateTeam: (name: string, invitedEmails: string[], initialGoal: string, initialAccountName: string) => void;
     currentUser: User;
 }
 
@@ -13,6 +14,8 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
     const [name, setName] = useState('');
     const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
     const [currentEmail, setCurrentEmail] = useState('');
+    const [initialGoal, setInitialGoal] = useState('');
+    const [initialAccountName, setInitialAccountName] = useState('');
 
     if (!isOpen) return null;
 
@@ -33,26 +36,28 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
             alert("Please provide a team name.");
             return;
         }
-        onCreateTeam(name, invitedEmails);
+        onCreateTeam(name, invitedEmails, initialGoal, initialAccountName || `${name} Joint Account`);
         setName('');
         setInvitedEmails([]);
         setCurrentEmail('');
+        setInitialGoal('');
+        setInitialAccountName('');
         onClose();
     };
 
     return (
         <div className="fixed inset-0 bg-cosmic-bg bg-opacity-75 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
-            <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-md shadow-2xl p-6 m-4 animate-slide-in-up" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6">
+            <div className="bg-cosmic-surface rounded-lg border border-cosmic-border w-full max-w-lg shadow-2xl p-6 m-4 animate-slide-in-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6 flex-shrink-0">
                     <h2 className="text-2xl font-bold text-cosmic-text-primary">Create New Team</h2>
                     <button onClick={onClose} className="text-cosmic-text-secondary hover:text-cosmic-text-primary">
                         <XIcon className="w-6 h-6" />
                     </button>
                 </div>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-2">
                     <div>
                         <label htmlFor="teamName" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Team / Project Name</label>
-                        <input type="text" id="teamName" value={name} onChange={e => setName(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary" required />
+                        <input type="text" id="teamName" value={name} onChange={e => setName(e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary" required />
                     </div>
                      <div>
                         <label htmlFor="inviteEmail" className="block text-sm font-medium text-cosmic-text-secondary mb-1">Invite Members by Email</label>
@@ -63,7 +68,7 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
                                 value={currentEmail}
                                 onChange={e => setCurrentEmail(e.target.value)}
                                 placeholder="player@email.com"
-                                className="flex-grow bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary focus:outline-none focus:ring-2 focus:ring-cosmic-primary"
+                                className="flex-grow bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary"
                             />
                             <button type="button" onClick={handleAddEmail} className="p-2 bg-cosmic-primary rounded-md text-white hover:bg-blue-400">
                                 <PlusIcon className="w-5 h-5" />
@@ -82,7 +87,18 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
                             ))}
                         </div>
                     )}
-                    <div className="flex justify-end gap-3 pt-4">
+                    <div className="pt-3 border-t border-cosmic-border space-y-2">
+                         <p className="text-sm font-medium text-cosmic-text-secondary">Quickstart (Optional)</p>
+                         <div>
+                            <label htmlFor="initialGoal" className="block text-xs font-medium text-cosmic-text-secondary mb-1">Initial Team Goal</label>
+                            <input type="text" id="initialGoal" value={initialGoal} onChange={e => setInitialGoal(e.target.value)} placeholder="e.g., Reach $10k passive income" className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary" />
+                        </div>
+                         <div>
+                            <label htmlFor="initialAccount" className="block text-xs font-medium text-cosmic-text-secondary mb-1">Create Joint Account</label>
+                            <input type="text" id="initialAccount" value={initialAccountName} onChange={e => setInitialAccountName(e.target.value)} placeholder={`${name} Joint Account`} className="w-full bg-cosmic-bg border border-cosmic-border rounded-md p-2 text-cosmic-text-primary" />
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4 mt-auto border-t border-cosmic-border">
                         <button type="button" onClick={onClose} className="px-4 py-2 bg-cosmic-surface border border-cosmic-border rounded-md text-cosmic-text-primary hover:bg-cosmic-border">Cancel</button>
                         <button type="submit" className="px-4 py-2 bg-cosmic-primary rounded-md text-white font-semibold hover:bg-blue-400">Create Team</button>
                     </div>
