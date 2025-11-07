@@ -1,421 +1,374 @@
 import type { User, Transaction, Asset, Liability, EventOutcome, Account, Team, Budget, Goal } from '../types';
-import { TransactionType } from '../types';
-// FIX: Update firebase imports to align with v8 syntax changes. Using compat API now.
+import { TransactionType, AccountType, AssetType } from '../types';
 import { auth, db, storage, firebase, User as FirebaseUser } from './firebase';
 import { initialDataForGerman, initialDataForValeria, getInitialTeamData } from './initial.data';
+import { ALL_ACHIEVEMENTS } from '../components/Achievements';
 
-// --- STRUCTURED DATA CREATION ---
+// --- Helper Functions ---
 
-const createInitialDataWithSubcollections = async (batch: firebase.firestore.WriteBatch, uid: string, initialData: User) => {
-    const userRef = db.collection('users').doc(uid);
-    
-    // Separate subcollection data from the main user document
-    const { accounts, financialStatement, ...mainUserData } = initialData;
-    batch.set(userRef, mainUserData);
+const getUserDoc = (uid: string) => db.collection('users').doc(uid);
+const getTeamDoc = (teamId: string) => db.collection('teams').doc(teamId);
 
-    // Add accounts to subcollection
-    for (const accountToBatch of accounts) {
-        const accountRef = userRef.collection('accounts').doc();
-        batch.set(accountRef, { ...accountToBatch, id: accountRef.id }); // Ensure ID is set
-    }
-    // Add assets to subcollection
-    for (const assetToBatch of financialStatement.assets) {
-        const assetRef = userRef.collection('assets').doc();
-        batch.set(assetRef, { ...assetToBatch, id: assetRef.id });
-    }
-    // Add liabilities to subcollection
-    for (const liabilityToBatch of financialStatement.liabilities) {
-        const liabilityRef = userRef.collection('liabilities').doc();
-        batch.set(liabilityRef, { ...liabilityToBatch, id: liabilityRef.id });
-    }
-    // FIX: Add initial transactions to the transactions subcollection
-    for (const transactionToBatch of financialStatement.transactions) {
-        const transactionRef = userRef.collection('transactions').doc();
-        batch.set(transactionRef, { ...transactionToBatch, id: transactionRef.id });
-    }
+const getSubcollection = async <T>(docRef: firebase.firestore.DocumentReference, collectionName: string): Promise<T[]> => {
+    const snapshot = await docRef.collection(collectionName).get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as T));
 };
 
 // --- AUTH & USER DATA ---
+export const findUserByEmail = async (email: string): Promise<User | null> => {
+    const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+    if (snapshot.empty) return null;
+    return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as User;
+}
+
+const createInitialDataWithSubcollections = async (batch: firebase.firestore.WriteBatch, uid: string, initialData: User) => {
+    const userRef = getUserDoc(uid);
+    const { accounts, financialStatement, ...mainUserData } = initialData;
+    batch.set(userRef, mainUserData);
+
+    for (const account of accounts) {
+        batch.set(userRef.collection('accounts').doc(account.id), account);
+    }
+    for (const asset of financialStatement.assets) {
+        batch.set(userRef.collection('assets').doc(asset.id), asset);
+    }
+    for (const liability of financialStatement.liabilities) {
+        batch.set(userRef.collection('liabilities').doc(liability.id), liability);
+    }
+    for (const transaction of financialStatement.transactions) {
+        const transactionRef = userRef.collection('transactions').doc();
+        batch.set(transactionRef, { ...transaction, id: transactionRef.id });
+
+        for (const payment of transaction.paymentShares) {
+            const accountRef = userRef.collection('accounts').doc(payment.accountId);
+            const amount = transaction.type === TransactionType.INCOME ? transaction.amount : -transaction.amount;
+            const doc = await accountRef.get();
+            if (doc.exists) { // Only update if account exists in batch/db
+                 batch.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amount) });
+            }
+        }
+    }
+};
 
 export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User> => {
-    const userRef = db.collection('users').doc(firebaseUser.uid);
+    const userRef = getUserDoc(firebaseUser.uid);
     const userDoc = await userRef.get();
 
-    const email = firebaseUser.email!;
-    const name = firebaseUser.displayName || 'New Player';
-    const avatar = firebaseUser.photoURL || `https://api.dicebear.com/8.x/pixel-art/svg?seed=${name}`;
-
-    const isGerman = email === 'gerzbogado@gmail.com';
-    const isValeria = email === 'valeriasisterna01@gmail.com';
-
-    let userData: User;
-
     if (userDoc.exists) {
-        const existingData = { id: userDoc.id, ...userDoc.data() } as User;
-        const accountsSnap = await db.collection(`users/${firebaseUser.uid}/accounts`).get();
-        
-        if ((isGerman || isValeria) && accountsSnap.empty) {
-            console.log(`Data migration required for ${email}. Re-initializing data structure.`);
-            const initialData = isGerman ? initialDataForGerman(firebaseUser.uid, name, avatar, email) : initialDataForValeria(firebaseUser.uid, name, avatar, email);
-            const batch = db.batch();
-            await createInitialDataWithSubcollections(batch, firebaseUser.uid, initialData);
-            await batch.commit();
-            
-            const migratedDoc = await userRef.get();
-            userData = { id: migratedDoc.id, ...migratedDoc.data() } as User;
-        } else {
-             userData = existingData;
-        }
-
+        const userData = userDoc.data() as Omit<User, 'financialStatement' | 'accounts' | 'budgets' | 'goals'>;
+        const [accounts, assets, liabilities, transactions, budgets, goals] = await Promise.all([
+            getSubcollection<Account>(userRef, 'accounts'),
+            getSubcollection<Asset>(userRef, 'assets'),
+            getSubcollection<Liability>(userRef, 'liabilities'),
+            getSubcollection<Transaction>(userRef, 'transactions'),
+            getSubcollection<Budget>(userRef, 'budgets'),
+            getSubcollection<Goal>(userRef, 'goals'),
+        ]);
+        return { 
+            ...userData, 
+            id: userDoc.id,
+            accounts,
+            financialStatement: { assets, liabilities, transactions },
+            budgets,
+            goals,
+        };
     } else {
+        const { uid, email, displayName, photoURL } = firebaseUser;
+        const name = displayName || email?.split('@')[0] || 'New Player';
+        const avatar = photoURL || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${uid}`;
+
+        const isGerman = email === 'german@example.com';
+        const isValeria = email === 'valeria@example.com';
+        const initialData = isGerman
+            ? initialDataForGerman(uid, name, avatar, email!)
+            : isValeria
+            ? initialDataForValeria(uid, name, avatar, email!)
+            : {
+                id: uid, name, email: email!, avatar, teamIds: [], onboardingCompleted: false, accounts: [{id: 'initial-checking', name: 'Checking', type: AccountType.CHECKING, balance: 1000, ownerIds: [uid]}],
+                financialStatement: { transactions: [], assets: [], liabilities: [] },
+                budgets: [], goals: [], achievements: []
+            };
+
         const batch = db.batch();
-        let initialData: User;
+        await createInitialDataWithSubcollections(batch, uid, initialData);
 
         if (isGerman || isValeria) {
-            // Special user: ensure the shared team exists or is updated.
-            const teamRef = db.collection('teams').doc('team-condo-1');
-            const teamDoc = await teamRef.get();
+            const germanUser = isGerman ? { id: uid } : await findUserByEmail('german@example.com');
+            const valeriaUser = isValeria ? { id: uid } : await findUserByEmail('valeria@example.com');
 
-            if (!teamDoc.exists) {
-                console.log("Shared team 'team-condo-1' not found. Creating it...");
-                const { accounts, financialStatement, ...mainTeamData } = getInitialTeamData([firebaseUser.uid]);
-                batch.set(teamRef, mainTeamData);
-                
-                // Batch-create subcollections for the new team
-                for (const teamAccountToBatch of accounts) {
-                    const accountRef = teamRef.collection('accounts').doc(); // Auto-generate ID
-                    batch.set(accountRef, { ...teamAccountToBatch, id: accountRef.id });
-                }
-                for (const teamAssetToBatch of financialStatement.assets) {
-                    const assetRef = teamRef.collection('assets').doc();
-                    batch.set(assetRef, { ...teamAssetToBatch, id: assetRef.id });
-                }
-                for (const teamLiabilityToBatch of financialStatement.liabilities) {
-                    const liabilityRef = teamRef.collection('liabilities').doc();
-                    batch.set(liabilityRef, { ...teamLiabilityToBatch, id: liabilityRef.id });
-                }
-            } else {
-                console.log("Shared team 'team-condo-1' found. Adding user to it.");
-                // Team exists, just add this user to it
-                batch.update(teamRef, {
-                    memberIds: firebase.firestore.FieldValue.arrayUnion(firebaseUser.uid)
-                });
-                 // Also add user to the joint account ownerIds
-                const teamAccountsSnap = await teamRef.collection('accounts').get();
-                teamAccountsSnap.forEach(accountDocument => {
-                    batch.update(accountDocument.ref, {
-                        ownerIds: firebase.firestore.FieldValue.arrayUnion(firebaseUser.uid)
-                    });
-                });
+            if (germanUser && valeriaUser) {
+                const teamData = getInitialTeamData([germanUser.id, valeriaUser.id]);
+                const teamRef = db.collection('teams').doc('team-condo-1');
+                batch.set(teamRef, { id: 'team-condo-1', ...teamData });
+                teamData.accounts.forEach(acc => batch.set(teamRef.collection('accounts').doc(acc.id), acc));
+                teamData.financialStatement.assets.forEach(asset => batch.set(teamRef.collection('assets').doc(asset.id), asset));
+                teamData.financialStatement.liabilities.forEach(lia => batch.set(teamRef.collection('liabilities').doc(lia.id), lia));
+                batch.update(getUserDoc(germanUser.id), { teamIds: ['team-condo-1'] });
+                batch.update(getUserDoc(valeriaUser.id), { teamIds: ['team-condo-1'] });
             }
-            initialData = isGerman 
-                ? initialDataForGerman(firebaseUser.uid, 'German', avatar, email) 
-                : initialDataForValeria(firebaseUser.uid, 'Valeria', avatar, email);
-        } else {
-            // Standard new user
-            initialData = {
-                id: firebaseUser.uid, name, email, avatar, teamIds: [], achievements: [], onboardingCompleted: false,
-                accounts: [], financialStatement: { transactions: [], assets: [], liabilities: [] }, budgets: [], goals: [],
-            };
         }
-        await createInitialDataWithSubcollections(batch, firebaseUser.uid, initialData);
         await batch.commit();
-
-        const newUserDoc = await userRef.get();
-        userData = { id: newUserDoc.id, ...newUserDoc.data() } as User;
+        return getOrCreateUser(firebaseUser);
     }
-
-    const accountsSnap = await db.collection(`users/${firebaseUser.uid}/accounts`).get();
-    const assetsSnap = await db.collection(`users/${firebaseUser.uid}/assets`).get();
-    const liabilitiesSnap = await db.collection(`users/${firebaseUser.uid}/liabilities`).get();
-    const transactionsSnap = await db.collection(`users/${firebaseUser.uid}/transactions`).get();
-
-    userData.accounts = accountsSnap.docs.map(userAccountDoc => ({ id: userAccountDoc.id, ...userAccountDoc.data() } as Account));
-    userData.financialStatement = {
-        assets: assetsSnap.docs.map(userAssetDoc => ({ id: userAssetDoc.id, ...userAssetDoc.data() } as Asset)),
-        liabilities: liabilitiesSnap.docs.map(userLiabilityDoc => ({ id: userLiabilityDoc.id, ...userLiabilityDoc.data() } as Liability)),
-        transactions: transactionsSnap.docs.map(userTransactionDoc => ({ id: userTransactionDoc.id, ...userTransactionDoc.data() } as Transaction)),
-    };
-    
-    userData.budgets = userData.budgets || [];
-    userData.goals = userData.goals || [];
-    userData.achievements = userData.achievements || [];
-
-    return userData;
 };
 
 export const getUsers = async (uids: string[]): Promise<User[]> => {
     if (uids.length === 0) return [];
-    const userDocs = await Promise.all(uids.map(userId => db.collection('users').doc(userId).get()));
+    const snapshot = await db.collection('users').where(firebase.firestore.FieldPath.documentId(), 'in', uids).get();
+    return Promise.all(snapshot.docs.map(doc => getOrCreateUser({ uid: doc.id } as FirebaseUser)));
+};
 
-    const usersPromises = userDocs.map(async (userDocument) => {
-        if (!userDocument.exists) return null;
-        const userData = { id: userDocument.id, ...userDocument.data() } as User;
-        
-        const [accountsSnap, assetsSnap, liabilitiesSnap, transactionsSnap] = await Promise.all([
-            db.collection(`users/${userDocument.id}/accounts`).get(),
-            db.collection(`users/${userDocument.id}/assets`).get(),
-            db.collection(`users/${userDocument.id}/liabilities`).get(),
-            db.collection(`users/${userDocument.id}/transactions`).get()
-        ]);
-        
-        userData.accounts = accountsSnap.docs.map(queriedUserAccountDoc => ({ id: queriedUserAccountDoc.id, ...queriedUserAccountDoc.data() } as Account));
-        userData.financialStatement = {
-            assets: assetsSnap.docs.map(queriedUserAssetDoc => ({ id: queriedUserAssetDoc.id, ...queriedUserAssetDoc.data() } as Asset)),
-            liabilities: liabilitiesSnap.docs.map(queriedUserLiabilityDoc => ({ id: queriedUserLiabilityDoc.id, ...queriedUserLiabilityDoc.data() } as Liability)),
-            transactions: transactionsSnap.docs.map(queriedUserTransactionDoc => ({ id: queriedUserTransactionDoc.id, ...queriedUserTransactionDoc.data() } as Transaction)),
-        };
-        userData.budgets = userData.budgets || [];
-        userData.goals = userData.goals || [];
-        userData.achievements = userData.achievements || [];
+export const updateUserField = (uid: string, field: keyof User, value: any): Promise<void> => {
+    return getUserDoc(uid).update({ [field]: value });
+};
 
-        return userData;
-    });
+export const resetPassword = (email: string): Promise<void> => {
+    return auth.sendPasswordResetEmail(email);
+};
+
+// --- TRANSACTION MANAGEMENT (ATOMIC) ---
+const addTransactionWithBalanceUpdate = async (
+    collectionRef: firebase.firestore.CollectionReference,
+    accountCollectionRef: firebase.firestore.CollectionReference,
+    transactionData: Omit<Transaction, 'id'>
+): Promise<void> => {
+    const transactionRef = collectionRef.doc();
+    const batch = db.batch();
+
+    batch.set(transactionRef, { ...transactionData, id: transactionRef.id });
+
+    for (const payment of transactionData.paymentShares) {
+        const accountRef = accountCollectionRef.doc(payment.accountId);
+        const amount = transactionData.type === TransactionType.INCOME ? payment.amount : -payment.amount;
+        batch.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amount) });
+    }
     
-    const users = await Promise.all(usersPromises);
-    return users.filter((userOrNull): userOrNull is User => userOrNull !== null);
+    await batch.commit();
 };
 
-export const findUserByEmail = async (email: string): Promise<{id: string, name: string} | null> => {
-    const usersQuery = db.collection('users').where('email', '==', email);
-    const snapshot = await usersQuery.get();
-    if (snapshot.empty) { return null; }
-    const userDoc = snapshot.docs[0];
-    return { id: userDoc.id, name: userDoc.data().name };
+export const addPersonalTransaction = (uid: string, transactionData: Omit<Transaction, 'id'>): Promise<void> => {
+    const userRef = getUserDoc(uid);
+    return addTransactionWithBalanceUpdate(userRef.collection('transactions'), userRef.collection('accounts'), transactionData);
 };
 
-export const getTeamsForUser = async (userId: string): Promise<Team[]> => {
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) return [];
-
-    const teamIds = (userDoc.data() as User).teamIds || [];
-    if (teamIds.length === 0) return [];
-
-    const teamDocs = await Promise.all(teamIds.map(teamId => db.collection('teams').doc(teamId).get()));
-
-    const teamsPromises = teamDocs.map(async (teamDocument) => {
-        if (!teamDocument.exists) return null;
-        const teamData = { id: teamDocument.id, ...teamDocument.data() } as Team;
-
-        const [assetsSnap, liabilitiesSnap, transactionsSnap, accountsSnap] = await Promise.all([
-            db.collection(`teams/${teamDocument.id}/assets`).get(),
-            db.collection(`teams/${teamDocument.id}/liabilities`).get(),
-            db.collection(`teams/${teamDocument.id}/transactions`).get(),
-            db.collection(`teams/${teamDocument.id}/accounts`).get()
-        ]);
-
-        teamData.accounts = accountsSnap.docs.map(teamAccountSubDoc => ({ id: teamAccountSubDoc.id, ...teamAccountSubDoc.data() } as Account));
-        teamData.financialStatement = {
-            assets: assetsSnap.docs.map(teamAssetSubDoc => ({ id: teamAssetSubDoc.id, ...teamAssetSubDoc.data() } as Asset)),
-            liabilities: liabilitiesSnap.docs.map(teamLiabilitySubDoc => ({ id: teamLiabilitySubDoc.id, ...teamLiabilitySubDoc.data() } as Liability)),
-            transactions: transactionsSnap.docs.map(teamTransactionSubDoc => ({ id: teamTransactionSubDoc.id, ...teamTransactionSubDoc.data() } as Transaction)),
-        };
-        return teamData;
-    });
-    
-    const teams = await Promise.all(teamsPromises);
-    return teams.filter((teamOrNull): teamOrNull is Team => teamOrNull !== null);
+export const addTeamTransaction = (transactionData: Omit<Transaction, 'id'>): Promise<void> => {
+    if (!transactionData.teamId) throw new Error("Team ID is required.");
+    const teamRef = getTeamDoc(transactionData.teamId);
+    return addTransactionWithBalanceUpdate(teamRef.collection('transactions'), teamRef.collection('accounts'), transactionData);
 };
 
-// --- DATA MODIFICATION ---
-
-export const updateUserField = async (userId: string, field: string, value: any): Promise<void> => {
-    await db.collection('users').doc(userId).update({ [field]: value });
-};
-
-export const uploadReceipt = async (base64Image: string, userId: string): Promise<string> => {
-    const mimeType = base64Image.match(/data:(.*);/)?.[1] || 'image/jpeg';
-    const filePath = `receipts/${userId}/${Date.now()}`;
-    const storageRef = storage.ref(filePath);
-    await storageRef.putString(base64Image, 'data_url', { contentType: mimeType });
-    return storageRef.getDownloadURL();
-};
-
-// --- FULLY IMPLEMENTED FIRESTORE FUNCTIONS ---
-
-export const resetPassword = (email: string) => auth.sendPasswordResetEmail(email);
-
-export const addPersonalTransaction = async (userId: string, transaction: Omit<Transaction, 'id'>): Promise<Transaction> => {
-    const newDocRef = await db.collection(`users/${userId}/transactions`).add(transaction);
-    
-    await db.runTransaction(async (t) => {
-        for (const share of transaction.paymentShares) {
-            const accountRef = db.collection(`users/${share.userId}/accounts`).doc(share.accountId);
-            const accountDoc = await t.get(accountRef);
-            if (accountDoc.exists) {
-                const data = accountDoc.data();
-                if (data) {
-                    const currentBalance = data.balance;
-                    const newBalance = currentBalance + (transaction.type === TransactionType.INCOME ? share.amount : -share.amount);
-                    t.update(accountRef, { balance: newBalance });
-                }
-            }
-        }
-    });
-    return { ...transaction, id: newDocRef.id };
-};
-
-export const addTeamTransaction = async (transaction: Omit<Transaction, 'id'>): Promise<Transaction> => {
-    if (!transaction.teamId) throw new Error("Team ID required");
-    const newDocRef = await db.collection(`teams/${transaction.teamId}/transactions`).add(transaction);
-
-    await db.runTransaction(async (t) => {
-        for (const share of transaction.paymentShares) {
-            const accountRef = db.collection(`teams/${transaction.teamId}/accounts`).doc(share.accountId);
-            const accountDoc = await t.get(accountRef);
-            if (accountDoc.exists) {
-                const data = accountDoc.data();
-                if (data) {
-                    const currentBalance = data.balance;
-                    const newBalance = currentBalance + (transaction.type === TransactionType.INCOME ? share.amount : -share.amount);
-                    t.update(accountRef, { balance: newBalance });
-                }
-            }
-        }
-    });
-
-    return { ...transaction, id: newDocRef.id };
-};
-
-export const updateTransaction = async (transaction: Transaction): Promise<void> => {
-    const path = transaction.teamId ? `teams/${transaction.teamId}/transactions` : `users/${auth.currentUser!.uid}/transactions`;
-    await db.doc(`${path}/${transaction.id}`).set(transaction, { merge: true });
-};
-
-export const deleteTransaction = async (transaction: Transaction): Promise<void> => {
-    const path = transaction.teamId ? `teams/${transaction.teamId}/transactions` : `users/${auth.currentUser!.uid}/transactions`;
-    await db.doc(`${path}/${transaction.id}`).delete();
-};
-
-export const performTransfer = (userId: string, fromAccountId: string, toAccountId: string, amount: number, teamId?: string) => {
+export const updateTransaction = (transaction: Transaction): Promise<void> => {
     return db.runTransaction(async (t) => {
-        const basePath = teamId ? `teams/${teamId}` : `users/${userId}`;
-        const fromRef = db.collection(basePath).doc(fromAccountId);
-        const toRef = db.collection(basePath).doc(toAccountId);
+        const isTeamTx = !!transaction.teamId;
+        const ownerId = isTeamTx ? transaction.teamId : transaction.paymentShares[0].userId;
+        const collectionPath = isTeamTx ? `teams/${ownerId}` : `users/${ownerId}`;
         
-        const fromDoc = await t.get(fromRef);
-        const toDoc = await t.get(toRef);
-        if (!fromDoc.exists || !toDoc.exists) throw new Error("Account not found");
-        
-        const fromData = fromDoc.data();
-        const toData = toDoc.data();
+        const transactionRef = db.collection(`${collectionPath}/transactions`).doc(transaction.id);
+        const oldTransactionDoc = await t.get(transactionRef);
 
-        if (fromData && toData) {
-            const fromBalance = fromData.balance;
-            if (fromBalance < amount) throw new Error("Insufficient funds");
-            t.update(fromRef, { balance: fromBalance - amount });
-            t.update(toRef, { balance: toData.balance + amount });
+        if (!oldTransactionDoc.exists) throw new Error("Transaction does not exist!");
+        const oldTransaction = oldTransactionDoc.data() as Transaction;
+
+        const getAccountRef = (accountId: string, userId: string) => {
+             const path = isTeamTx ? `teams/${ownerId}/accounts` : `users/${userId}/accounts`;
+             return db.collection(path).doc(accountId);
         }
+
+        for (const payment of oldTransaction.paymentShares) {
+            const accountRef = getAccountRef(payment.accountId, payment.userId);
+            const amountToReverse = oldTransaction.type === TransactionType.INCOME ? -payment.amount : payment.amount;
+            t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
+        }
+
+        for (const payment of transaction.paymentShares) {
+            const accountRef = getAccountRef(payment.accountId, payment.userId);
+            const amountToAdd = transaction.type === TransactionType.INCOME ? payment.amount : -payment.amount;
+            t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToAdd) });
+        }
+
+        t.update(transactionRef, transaction);
     });
 };
 
-export const addAccount = async (userId: string, accountData: Omit<Account, 'id'|'ownerIds'>): Promise<Account> => {
-    const newAccountData = { ...accountData, ownerIds: [userId] };
-    const newDocRef = await db.collection(`users/${userId}/accounts`).add(newAccountData);
-    return { ...newAccountData, id: newDocRef.id };
+export const deleteTransaction = (transaction: Transaction): Promise<void> => {
+    return db.runTransaction(async (t) => {
+        const isTeamTx = !!transaction.teamId;
+        const ownerId = isTeamTx ? transaction.teamId : transaction.paymentShares[0].userId;
+        const collectionPath = isTeamTx ? `teams/${ownerId}` : `users/${ownerId}`;
+        const transactionRef = db.collection(`${collectionPath}/transactions`).doc(transaction.id);
+        
+        const getAccountRef = (accountId: string, userId: string) => {
+             const path = isTeamTx ? `teams/${ownerId}/accounts` : `users/${userId}/accounts`;
+             return db.collection(path).doc(accountId);
+        }
+
+        for (const payment of transaction.paymentShares) {
+            const accountRef = getAccountRef(payment.accountId, payment.userId);
+            const amountToReverse = transaction.type === TransactionType.INCOME ? -payment.amount : payment.amount;
+            t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
+        }
+
+        t.delete(transactionRef);
+    });
 };
 
-export const updateAccount = (userId: string, account: Account) => db.collection(`users/${userId}/accounts`).doc(account.id).update(account);
-export const addAsset = (userId: string, data: Partial<Asset>) => db.collection(`users/${userId}/assets`).add(data);
-export const addLiability = (userId: string, data: Partial<Liability>) => db.collection(`users/${userId}/liabilities`).add(data);
-export const updateAsset = (userId: string, id: string, data: Partial<Asset>) => db.collection(`users/${userId}/assets`).doc(id).update(data);
-export const updateLiability = (userId: string, id: string, data: Partial<Liability>) => db.collection(`users/${userId}/liabilities`).doc(id).update(data);
-export const deleteAsset = (userId: string, id: string) => db.collection(`users/${userId}/assets`).doc(id).delete();
+// --- Other Data Management ---
 
-export const addTeamAsset = (teamId: string, data: Partial<Asset>) => db.collection(`teams/${teamId}/assets`).add(data);
-export const addTeamLiability = (teamId: string, data: Partial<Liability>) => db.collection(`teams/${teamId}/liabilities`).add(data);
-export const updateTeamAsset = (teamId: string, id: string, data: Partial<Asset>) => db.collection(`teams/${teamId}/assets`).doc(id).update(data);
-export const updateTeamLiability = (teamId: string, id: string, data: Partial<Liability>) => db.collection(`teams/${teamId}/liabilities`).doc(id).update(data);
-
-export const createTeam = async (name: string, memberIds: string[]): Promise<Team> => {
-    const newTeamData = { name, memberIds, goals: [], accounts: [] }; // Financial statement is in subcollections
-    const newDocRef = await db.collection('teams').add(newTeamData);
-    return { ...newTeamData, id: newDocRef.id, financialStatement: { transactions: [], assets: [], liabilities: [] } };
+export const uploadReceipt = async (base64Image: string, uid: string): Promise<string> => {
+    const receiptId = Date.now().toString();
+    const ref = storage.ref(`receipts/${uid}/${receiptId}`);
+    const snapshot = await ref.putString(base64Image, 'data_url');
+    return snapshot.ref.getDownloadURL();
 };
 
-export const addMemberToTeam = async (teamId: string, userId: string) => {
-    await db.collection('teams').doc(teamId).update({ memberIds: firebase.firestore.FieldValue.arrayUnion(userId) });
-    await db.collection('users').doc(userId).update({ teamIds: firebase.firestore.FieldValue.arrayUnion(teamId) });
+export const performTransfer = (uid: string, fromAccountId: string, toAccountId: string, amount: number): Promise<void> => {
+    const fromRef = getUserDoc(uid).collection('accounts').doc(fromAccountId);
+    const toRef = getUserDoc(uid).collection('accounts').doc(toAccountId);
+    const batch = db.batch();
+    batch.update(fromRef, { balance: firebase.firestore.FieldValue.increment(-amount) });
+    batch.update(toRef, { balance: firebase.firestore.FieldValue.increment(amount) });
+    return batch.commit();
 };
 
-export const logDividend = async (userId: string, stock: Asset, amount: number, accountId: string) => {
-    const transactionData: Omit<Transaction, 'id'> = {
-        description: `Dividend from ${stock.ticker || stock.name}`,
-        amount,
+export const applyEventOutcome = async (uid: string, outcome: EventOutcome): Promise<void> => {
+    if (outcome.cashChange) {
+        const accounts = await getSubcollection<Account>(getUserDoc(uid), 'accounts');
+        const primaryAccount = accounts.find(a => a.type === AccountType.CHECKING) || accounts[0];
+        if (primaryAccount) {
+            await getUserDoc(uid).collection('accounts').doc(primaryAccount.id).update({
+                balance: firebase.firestore.FieldValue.increment(outcome.cashChange)
+            });
+        }
+    }
+};
+
+export const addAccount = (uid: string, accountData: Omit<Account, 'id' | 'ownerIds'>): Promise<any> => {
+    const accountRef = getUserDoc(uid).collection('accounts').doc();
+    const newAccount: Account = {
+        ...accountData,
+        id: accountRef.id,
+        ownerIds: [uid],
+    };
+
+    // If there's an initial balance, create a transaction for it
+    if (accountData.balance > 0) {
+        const transaction: Omit<Transaction, 'id'> = {
+            description: 'Initial Balance',
+            amount: accountData.balance,
+            type: TransactionType.INCOME,
+            category: 'Initial Balance',
+            date: new Date().toISOString().split('T')[0],
+            paymentShares: [{ userId: uid, accountId: accountRef.id, amount: accountData.balance }],
+        };
+        const transactionRef = getUserDoc(uid).collection('transactions').doc();
+        const batch = db.batch();
+        batch.set(accountRef, newAccount);
+        batch.set(transactionRef, {...transaction, id: transactionRef.id});
+        return batch.commit();
+    } else {
+        return accountRef.set(newAccount);
+    }
+};
+
+export const updateAccount = (uid: string, account: Account): Promise<void> => {
+    return getUserDoc(uid).collection('accounts').doc(account.id).update(account);
+};
+
+export const saveBudget = (uid: string, budget: Budget): Promise<void> => {
+    return getUserDoc(uid).collection('budgets').doc(budget.month).set(budget, { merge: true });
+};
+
+export const addGoal = (uid: string, goalData: Omit<Goal, 'id' | 'currentAmount'>): Promise<void> => {
+    const goalRef = getUserDoc(uid).collection('goals').doc();
+    const newGoal: Goal = { ...goalData, id: goalRef.id, currentAmount: 0 };
+    return goalRef.set(newGoal);
+};
+
+export const updateGoal = (uid: string, goal: Goal): Promise<void> => {
+    return getUserDoc(uid).collection('goals').doc(goal.id).update(goal);
+};
+
+export const deleteGoal = (uid: string, goalId: string): Promise<void> => {
+    return getUserDoc(uid).collection('goals').doc(goalId).delete();
+};
+
+export const logDividend = async (uid: string, stock: Asset, amount: number, accountId: string): Promise<void> => {
+    const transaction: Omit<Transaction, 'id'> = {
+        description: `Dividend from ${stock.name}`,
+        amount: amount,
         type: TransactionType.INCOME,
         category: 'Investment',
         date: new Date().toISOString().split('T')[0],
         isPassive: true,
-        paymentShares: [{ userId, accountId, amount }],
+        paymentShares: [{ userId: uid, accountId, amount }],
+        expenseShares: [{ userId: uid, amount }],
     };
-    await addPersonalTransaction(userId, transactionData);
+    await addPersonalTransaction(uid, transaction);
 };
 
-export const applyEventOutcome = async (userId: string, outcome: EventOutcome) => {
-     if (outcome.cashChange) {
-        // Find a cash account and create a transaction
-     }
-     if (outcome.newAsset) {
-        await addAsset(userId, outcome.newAsset);
-     }
-};
-
-export const checkAndUnlockAchievement = async (userId: string, achievementId: string): Promise<void> => {
-    const userRef = db.collection('users').doc(userId);
-    await userRef.update({
-        achievements: firebase.firestore.FieldValue.arrayUnion(achievementId)
-    });
-};
-
-export const saveBudget = async (userId: string, budget: Budget): Promise<void> => {
-    const userRef = db.collection('users').doc(userId);
+export const checkAndUnlockAchievement = async (uid: string, achievementId: string): Promise<void> => {
+    const userRef = getUserDoc(uid);
     const userDoc = await userRef.get();
-    if (!userDoc.exists) throw new Error("User not found");
-
-    const userData = userDoc.data() as User;
-    const budgets = userData.budgets || [];
-    const budgetIndex = budgets.findIndex(b => b.month === budget.month);
-
-    if (budgetIndex > -1) {
-        budgets[budgetIndex] = budget;
-    } else {
-        budgets.push(budget);
+    const achievements = userDoc.data()?.achievements || [];
+    if (!achievements.includes(achievementId) && ALL_ACHIEVEMENTS.find(a => a.id === achievementId)) {
+        await userRef.update({ achievements: firebase.firestore.FieldValue.arrayUnion(achievementId) });
     }
-    await userRef.update({ budgets });
 };
 
-export const addGoal = async (userId: string, goalData: Omit<Goal, 'id' | 'currentAmount'>): Promise<void> => {
-    const newGoal: Goal = { ...goalData, id: db.collection('users').doc().id, currentAmount: 0 };
-    const userRef = db.collection('users').doc(userId);
-    await userRef.update({
-        goals: firebase.firestore.FieldValue.arrayUnion(newGoal)
-    });
+// --- Generic Asset/Liability Management ---
+const addItem = (collectionPath: string, data: Partial<Asset | Liability>) => {
+    const ref = db.collection(collectionPath).doc();
+    return ref.set({ ...data, id: ref.id });
+}
+const updateItem = (collectionPath: string, id: string, data: Partial<Asset | Liability>) => db.collection(collectionPath).doc(id).update(data);
+const deleteItem = (collectionPath: string, id: string) => db.collection(collectionPath).doc(id).delete();
+
+export const addAsset = (uid: string, data: Partial<Asset>) => addItem(`users/${uid}/assets`, data);
+export const updateAsset = (uid: string, id: string, data: Partial<Asset>) => updateItem(`users/${uid}/assets`, id, data);
+export const deleteAsset = (uid: string, id: string) => deleteItem(`users/${uid}/assets`, id);
+export const addLiability = (uid: string, data: Partial<Liability>) => addItem(`users/${uid}/liabilities`, data);
+export const updateLiability = (uid: string, id: string, data: Partial<Liability>) => updateItem(`users/${uid}/liabilities`, id, data);
+export const addTeamAsset = (tid: string, data: Partial<Asset>) => addItem(`teams/${tid}/assets`, data);
+export const updateTeamAsset = (tid: string, id: string, data: Partial<Asset>) => updateItem(`teams/${tid}/assets`, id, data);
+export const addTeamLiability = (tid: string, data: Partial<Liability>) => addItem(`teams/${tid}/liabilities`, data);
+export const updateTeamLiability = (tid: string, id: string, data: Partial<Liability>) => updateItem(`teams/${tid}/liabilities`, id, data);
+
+// --- TEAMS ---
+export const getTeamsForUser = async (uid: string): Promise<Team[]> => {
+    const snapshot = await db.collection('teams').where('memberIds', 'array-contains', uid).get();
+    return Promise.all(snapshot.docs.map(async (doc) => {
+        const teamData = doc.data() as Team;
+        const teamRef = doc.ref;
+        const [accounts, assets, liabilities, transactions] = await Promise.all([
+            getSubcollection<Account>(teamRef, 'accounts'),
+            getSubcollection<Asset>(teamRef, 'assets'),
+            getSubcollection<Liability>(teamRef, 'liabilities'),
+            getSubcollection<Transaction>(teamRef, 'transactions'),
+        ]);
+        return {
+            ...teamData,
+            id: doc.id,
+            accounts,
+            financialStatement: { assets, liabilities, transactions },
+        };
+    }));
 };
 
-export const deleteGoal = async (userId: string, goalId: string): Promise<void> => {
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) throw new Error("User not found");
-
-    const userData = userDoc.data() as User;
-    const goals = userData.goals || [];
-    const updatedGoals = goals.filter(g => g.id !== goalId);
-    await userRef.update({ goals: updatedGoals });
+export const createTeam = async (name: string, memberIds: string[]): Promise<Team> => {
+    const teamRef = db.collection('teams').doc();
+    const newTeamData: Omit<Team, 'id'> = {
+        name,
+        memberIds,
+        financialStatement: { transactions: [], assets: [], liabilities: [] },
+        accounts: [],
+        goals: [{ description: 'Initial Team Goal', target: 10000, current: 0 }],
+    };
+    await teamRef.set(newTeamData);
+    await Promise.all(memberIds.map(uid => getUserDoc(uid).update({ teamIds: firebase.firestore.FieldValue.arrayUnion(teamRef.id) })));
+    return { ...newTeamData, id: teamRef.id };
 };
 
-export const updateGoal = async (userId: string, goalToUpdate: Goal): Promise<void> => {
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) throw new Error("User not found");
-    
-    const userData = userDoc.data() as User;
-    const goals = userData.goals || [];
-    const goalIndex = goals.findIndex(g => g.id === goalToUpdate.id);
-    
-    if (goalIndex > -1) {
-        goals[goalIndex] = goalToUpdate;
-        await userRef.update({ goals });
-    } else {
-        throw new Error("Goal not found to update");
-    }
+export const addMemberToTeam = async (teamId: string, memberId: string): Promise<void> => {
+    await getTeamDoc(teamId).update({ memberIds: firebase.firestore.FieldValue.arrayUnion(memberId) });
+    await getUserDoc(memberId).update({ teamIds: firebase.firestore.FieldValue.arrayUnion(teamId) });
 };

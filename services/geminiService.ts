@@ -1,9 +1,9 @@
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+// FIX: Removed non-exported member 'LiveSession' from import.
+import { GoogleGenAI, Type, GenerateContentResponse, LiveServerMessage, Modality, Blob } from "@google/genai";
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType, TransactionType } from '../types';
 
 let ai: GoogleGenAI | null = null;
-// FIX: Add type assertion to handle missing Vite env types.
 const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
 
 if (apiKey) {
@@ -15,6 +15,58 @@ if (apiKey) {
 } else {
   console.warn("VITE_GEMINI_API_KEY not found in environment variables. AI features will be disabled.");
 }
+
+// --- Audio Utility Functions for Live API ---
+function encode(bytes: Uint8Array) {
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+export function decode(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function createBlob(data: Float32Array): Blob {
+  const l = data.length;
+  const int16 = new Int16Array(l);
+  for (let i = 0; i < l; i++) {
+    int16[i] = data[i] * 32768;
+  }
+  return {
+    data: encode(new Uint8Array(int16.buffer)),
+    mimeType: 'audio/pcm;rate=16000',
+  };
+}
+
+export async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 
 function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: Account[]): string {
     const totalIncome = statement.transactions
@@ -204,4 +256,34 @@ export const parseStatementWithGemini = async (statementText: string) => {
         console.error("Error parsing statement with Gemini:", error);
         throw new Error("The AI failed to parse the statement. The text might be in an unsupported format.");
     }
+};
+
+// --- Live Assistant Service ---
+
+export const connectLiveAssistant = (callbacks: {
+    onopen: () => void,
+    onmessage: (message: LiveServerMessage) => void,
+    onerror: (e: ErrorEvent) => void,
+    onclose: (e: CloseEvent) => void,
+// FIX: Updated return type to use 'any' as 'LiveSession' is not an exported member.
+}, statement: FinancialStatement, accounts: Account[]): Promise<any> => {
+    if (!ai) {
+        throw new Error("AI Coach is disabled because API key is not configured.");
+    }
+    
+    const financialContext = formatFinancialDataForPrompt(statement, accounts);
+
+    return ai.live.connect({
+        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        callbacks,
+        config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
+            },
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            systemInstruction: `You are a friendly and helpful financial assistant for the game Cosmic Cashflow. Your goal is to provide concise, actionable advice based on the user's financial data. Keep your answers brief and conversational. Here is the user's current financial data: ${financialContext}`,
+        },
+    });
 };

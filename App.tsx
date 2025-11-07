@@ -40,6 +40,7 @@ import { StatementImporter } from './components/StatementImporter';
 import FreedomModal from './FreedomModal';
 import TeamReportModal from './TeamReportModal';
 import SuccessModal from './components/SuccessModal';
+import { FloatingAssistant } from './components/FloatingAssistant';
 
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
@@ -210,6 +211,8 @@ const AppContent: React.FC = () => {
                     onTransfer={() => { actions.setModalOpen('isTransferModalOpen', true); actions.setModalOpen('isFabOpen', false); }}
                 />
             </main>
+            
+            {activeUser && <FloatingAssistant user={activeUser} />}
             
             <AddTransactionModal isOpen={modalStates.isAddTransactionModalOpen} onClose={() => actions.setModalOpen('isAddTransactionModalOpen', false)} onSave={actions.handleSaveTransaction} transactionToEdit={modalData.transactionToEdit} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={() => { actions.setModalOpen('isAddTransactionModalOpen', true); actions.setModalOpen('isAddAccountModalOpen', false); }} onAddCategory={actions.handleAddCategory} defaultTeamId={modalData.modalDefaultTeamId} />
             <TransferModal isOpen={modalStates.isTransferModalOpen} onClose={() => actions.setModalOpen('isTransferModalOpen', false)} onTransfer={actions.handleTransfer} currentUser={activeUser}/>

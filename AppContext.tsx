@@ -208,26 +208,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await refreshData(activeUser.id);
     };
 
-    const handleSaveTransaction = async (transactionData: Omit<Transaction, 'id'> | Transaction) => {
+    const handleSaveTransaction = async (transactionData: (Omit<Transaction, 'id'> | Transaction) & { receiptImage?: string }) => {
         if (!activeUser) return;
         const isEditing = 'id' in transactionData;
+
         try {
+            // Handle receipt upload if a new image is attached
+            if (transactionData.receiptImage) {
+                const newReceiptUrl = await dbService.uploadReceipt(transactionData.receiptImage, activeUser.id);
+                transactionData.receiptUrl = newReceiptUrl;
+            }
+            // Remove the temporary base64 image data before saving
+            delete transactionData.receiptImage;
+
             if (isEditing) {
                 await dbService.updateTransaction(transactionData as Transaction);
             } else {
                 if (transactionData.teamId) {
-                    await dbService.addTeamTransaction(transactionData);
+                    await dbService.addTeamTransaction(transactionData as Omit<Transaction, 'id'>);
                 } else {
-                    // This is a personal transaction
-                    await dbService.addPersonalTransaction(activeUser.id, transactionData);
+                    await dbService.addPersonalTransaction(activeUser.id, transactionData as Omit<Transaction, 'id'>);
                 }
             }
+            
             if (!isEditing) {
                 await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_TRANSACTION');
             }
+
             await refreshData(activeUser.id);
             showSuccessModal(isEditing ? 'Transaction Updated!' : 'Transaction Added!');
-        } catch(e) { console.error(e); showNotification(`Failed to save transaction: ${(e as Error).message}`, 'error'); }
+        } catch(e) { 
+            console.error(e); 
+            showNotification(`Failed to save transaction: ${(e as Error).message}`, 'error'); 
+        }
     };
     
     const handleDeleteTransaction = async (transactionId: string) => {
