@@ -1,5 +1,5 @@
 // FIX: Removed non-exported member 'LiveSession' from import.
-import { GoogleGenAI, Type, GenerateContentResponse, LiveServerMessage, Modality, Blob } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse, LiveServerMessage, Modality, Blob, FunctionDeclaration } from "@google/genai";
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType, TransactionType } from '../types';
 
@@ -118,6 +118,34 @@ export const getFinancialAdvice = async (prompt: string, statement: FinancialSta
         throw new Error("Sorry, I encountered an issue while trying to generate advice. Please try again later.");
     }
 };
+
+export const getAgentResponse = async (prompt: string, statement: FinancialStatement, accounts: Account[], tools: FunctionDeclaration[]): Promise<GenerateContentResponse> => {
+    const ai = getAiInstance();
+    if (!ai) {
+        throw new Error("AI Coach is disabled because API key is not configured.");
+    }
+
+    const fullPrompt = `
+        ${formatFinancialDataForPrompt(statement, accounts)}
+        The current date is ${new Date().toLocaleDateString()}.
+        User request: "${prompt}"
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: fullPrompt,
+            config: {
+                tools: [{ functionDeclarations: tools }],
+            },
+        });
+        return response;
+    } catch (error) {
+        console.error("Error getting agent response from Gemini:", error);
+        throw new Error("Sorry, the AI agent encountered an error. Please try again.");
+    }
+};
+
 
 export const getCosmicEvent = async (statement: FinancialStatement, accounts: Account[]): Promise<CosmicEvent> => {
     const ai = getAiInstance();

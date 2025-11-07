@@ -165,7 +165,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (user) memberIds.push(user.id);
             }
             const newTeam = await dbService.createTeam(name, [...new Set(memberIds)]);
-            await Promise.all(newTeam.memberIds.map(memberId => dbService.addMemberToTeam(newTeam.id, memberId)));
+            await Promise.all(newTeam.memberIds.map(memberId => dbService.addMemberToTeam(newTeam.id, newTeam.id)));
             await refreshData(activeUser.id);
             showSuccessModal('Team Created!');
         };
@@ -178,24 +178,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await refreshData(activeUser.id);
     };
 
-    const handleSaveTransaction = (transactionData: (Omit<Transaction, 'id'> | Transaction) & { receiptImage?: string }) => {
+    const handleSaveTransaction = (transactionData: Omit<Transaction, 'id'> | (Transaction & { receiptImage?: string })) => {
         if (!activeUser) return;
         const isEditing = 'id' in transactionData;
         const task = async () => {
-            if (transactionData.receiptImage) {
+            let fullTransactionData: Transaction;
+            if ('receiptImage' in transactionData && transactionData.receiptImage) {
                 transactionData.receiptUrl = await dbService.uploadReceipt(transactionData.receiptImage, activeUser.id);
             }
-            delete transactionData.receiptImage;
+            delete (transactionData as any).receiptImage;
 
             if (isEditing) {
-                await dbService.updateTransaction(transactionData as Transaction);
+                fullTransactionData = transactionData as Transaction;
+                await dbService.updateTransaction(fullTransactionData);
             } else {
-                // FIX: The ternary operator for `action` caused a type error because the two functions have different signatures.
-                // Using an if/else block ensures the correct function is called with the correct arguments.
-                if (transactionData.teamId) {
-                    await dbService.addTeamTransaction(transactionData as Omit<Transaction, 'id'>);
+                 fullTransactionData = { ...transactionData, id: crypto.randomUUID() } as Transaction;
+                if (fullTransactionData.teamId) {
+                    await dbService.addTeamTransaction(fullTransactionData);
                 } else {
-                    await dbService.addPersonalTransaction(activeUser.id, transactionData as Omit<Transaction, 'id'>);
+                    await dbService.addPersonalTransaction(activeUser.id, fullTransactionData);
                 }
                 await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_TRANSACTION');
             }
@@ -248,13 +249,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, { onRetry: () => handleCosmicEventResolution(outcome) });
     };
     
-    const handleAddAccount = (account: Omit<Account, 'id' | 'ownerIds'>) => {
+    const handleAddAccount = (accountData: Omit<Account, 'id' | 'ownerIds'>) => {
         if (!activeUser) return;
         runTask('Adding Account', async () => {
-            await dbService.addAccount(activeUser.id, account);
+            const newAccount: Account = {
+                ...accountData,
+                id: crypto.randomUUID(),
+                ownerIds: [activeUser.id],
+            };
+            await dbService.addAccount(activeUser.id, newAccount);
             await refreshData(activeUser.id);
             showSuccessModal('Account Added!');
-        }, { onRetry: () => handleAddAccount(account) });
+        }, { onRetry: () => handleAddAccount(accountData) });
     };
 
     const handleUpdateAccount = (account: Account) => {
@@ -273,10 +279,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, { onRetry: () => handleSaveBudget(budget) });
     };
     
-    // Simplified actions for brevity. Production would use runTask.
     const handleSaveGoal = async (goalData: Omit<Goal, 'id' | 'currentAmount'>) => {
         if (!activeUser) return;
-        await dbService.addGoal(activeUser.id, goalData);
+        const newGoal: Goal = { ...goalData, id: crypto.randomUUID(), currentAmount: 0 };
+        await dbService.addGoal(activeUser.id, newGoal);
         await refreshData(activeUser.id);
         showSuccessModal('Goal Created!');
     };
@@ -302,13 +308,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const isEditing = modalData.stockToEdit;
         const task = async () => {
             const ownerId = teamId || activeUser.id;
-            const action = teamId 
-                ? (isEditing ? dbService.updateTeamAsset : dbService.addTeamAsset)
-                : (isEditing ? dbService.updateAsset : dbService.addAsset);
             
-            if (isEditing) await action(ownerId, modalData.stockToEdit.id, stockData);
-            else {
-                await action(ownerId, stockData);
+            if (isEditing) {
+                const action = teamId ? dbService.updateTeamAsset : dbService.updateAsset;
+                await action(ownerId, modalData.stockToEdit.id, stockData);
+            } else {
+                const action = teamId ? dbService.addTeamAsset : dbService.addAsset;
+                const fullAsset: Asset = { ...stockData, id: crypto.randomUUID() } as Asset;
+                await action(ownerId, fullAsset);
                 await dbService.checkAndUnlockAchievement(activeUser.id, 'FIRST_INVESTMENT');
             }
             await refreshData(activeUser.id);
@@ -338,10 +345,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!activeUser) return;
         runTask('Adding Portfolio Item', async () => {
             const ownerId = teamId || activeUser.id;
-            if ('value' in data) { // Asset
-                await (teamId ? dbService.addTeamAsset(ownerId, data) : dbService.addAsset(ownerId, data));
+            const fullItem = { ...data, id: crypto.randomUUID() };
+            if ('value' in fullItem) { // Asset
+                await (teamId ? dbService.addTeamAsset(ownerId, fullItem as Asset) : dbService.addAsset(ownerId, fullItem as Asset));
             } else { // Liability
-                await (teamId ? dbService.addTeamLiability(ownerId, data) : dbService.addLiability(ownerId, data));
+                await (teamId ? dbService.addTeamLiability(ownerId, fullItem as Liability) : dbService.addLiability(ownerId, fullItem as Liability));
             }
             await refreshData(activeUser.id);
             showSuccessModal('Item added!');
@@ -364,6 +372,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const handleAddCategory = (category: string) => {
         // Client-side only
+    };
+    
+    const handleImportData = (data: { user: User, teams: Team[] }) => {
+        if (!activeUser) return;
+        runTask('Importing Data', async () => {
+            const batch = db.batch();
+            
+            // NOTE: This is a simplified merge. A real-world scenario might need more complex logic.
+            // We use .set with merge:true to be non-destructive.
+
+            // User data
+            const { financialStatement, accounts, budgets, goals, ...mainUser } = data.user;
+            batch.set(db.collection('users').doc(mainUser.id), mainUser, { merge: true });
+            accounts.forEach(a => batch.set(db.collection('users').doc(mainUser.id).collection('accounts').doc(a.id), a, { merge: true }));
+            budgets.forEach(b => batch.set(db.collection('users').doc(mainUser.id).collection('budgets').doc(b.month), b, { merge: true }));
+            goals.forEach(g => batch.set(db.collection('users').doc(mainUser.id).collection('goals').doc(g.id), g, { merge: true }));
+            financialStatement.assets.forEach(a => batch.set(db.collection('users').doc(mainUser.id).collection('assets').doc(a.id), a, { merge: true }));
+            financialStatement.liabilities.forEach(l => batch.set(db.collection('users').doc(mainUser.id).collection('liabilities').doc(l.id), l, { merge: true }));
+            financialStatement.transactions.forEach(t => batch.set(db.collection('users').doc(mainUser.id).collection('transactions').doc(t.id), t, { merge: true }));
+
+            // Team data
+            for (const team of data.teams) {
+                const { financialStatement: tf, accounts: ta, ...mainTeam } = team;
+                batch.set(db.collection('teams').doc(mainTeam.id), mainTeam, { merge: true });
+                ta.forEach(a => batch.set(db.collection('teams').doc(mainTeam.id).collection('accounts').doc(a.id), a, { merge: true }));
+                tf.assets.forEach(a => batch.set(db.collection('teams').doc(mainTeam.id).collection('assets').doc(a.id), a, { merge: true }));
+                tf.liabilities.forEach(l => batch.set(db.collection('teams').doc(mainTeam.id).collection('liabilities').doc(l.id), l, { merge: true }));
+                tf.transactions.forEach(t => batch.set(db.collection('teams').doc(mainTeam.id).collection('transactions').doc(t.id), t, { merge: true }));
+            }
+            
+            await batch.commit();
+            await refreshData(activeUser.id);
+            showSuccessModal('Data imported successfully!');
+
+        }, { onRetry: () => handleImportData(data) });
     };
 
     const handleImportTransactions = (parsedTransactions: any[]) => {
@@ -408,7 +451,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleSaveTransaction, handleDeleteTransaction, handleTransfer, handleDrawCosmicCard, handleCosmicEventResolution,
         handleSaveStock, handleDeleteStock, handleLogDividend, handleAddAccount, handleUpdateAccount,
         handleAddAssetLiability, handleUpdateAssetLiability, handleSaveBudget, handleSaveGoal, handleDeleteGoal, handleContributeToGoal,
-        handleImportTransactions, handleAddCategory,
+        handleImportTransactions, handleAddCategory, handleImportData,
         handleTransactionClick: (transaction: Transaction) => { setModalData({ selectedTransaction: transaction }); setModalOpen('isTransactionDetailModalOpen', true); },
         handleCategoryClick: (category: string) => { setModalData({ selectedCategory: category }); setModalOpen('isCategoryModalOpen', true); },
         handleStatCardClick: () => setModalOpen('isNetWorthBreakdownModalOpen', true),

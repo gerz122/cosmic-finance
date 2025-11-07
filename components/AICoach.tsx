@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getFinancialAdvice } from '../services/geminiService';
-import type { User } from '../types';
+import { getAgentResponse } from '../services/geminiService';
+import { Type } from "@google/genai";
+import type { FunctionDeclaration } from "@google/genai";
+import type { User, Transaction } from '../types';
+import { TransactionType } from '../types';
 import { CoachIcon, SendIcon, StarIcon } from './icons';
 
 interface AICoachProps {
     user: User;
+    actions: Record<string, (...args: any[]) => any>;
 }
 
 interface Message {
@@ -12,9 +16,27 @@ interface Message {
     text: string;
 }
 
-export const AICoach: React.FC<AICoachProps> = ({ user }) => {
+const tools: FunctionDeclaration[] = [
+    {
+        name: 'add_transaction',
+        description: 'Logs a new income or expense transaction for the user.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                description: { type: Type.STRING, description: 'A brief summary of the transaction, e.g., "Groceries at Cosmic Mart" or "Salary".' },
+                amount: { type: Type.NUMBER, description: 'The transaction amount as a positive number.' },
+                type: { type: Type.STRING, description: 'The type of transaction, either "INCOME" or "EXPENSE".' },
+                category: { type: Type.STRING, description: 'The budget category for the transaction, e.g., "Food", "Housing", "Job".' },
+                is_passive: { type: Type.BOOLEAN, description: 'For income transactions, specifies if the income is passive (e.g., from investments, rent).' },
+            },
+            required: ['description', 'amount', 'type', 'category'],
+        },
+    },
+];
+
+export const AICoach: React.FC<AICoachProps> = ({ user, actions }) => {
     const [messages, setMessages] = useState<Message[]>([
-        { sender: 'ai', text: "Welcome to the Coach's Corner! How can we level up your financial game today?" }
+        { sender: 'ai', text: "Welcome to the Coach's Corner! You can ask for advice or tell me to perform actions, like 'Log a $50 expense for gas'." }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -35,11 +57,49 @@ export const AICoach: React.FC<AICoachProps> = ({ user }) => {
         setIsLoading(true);
 
         try {
-            const aiResponse = await getFinancialAdvice(input, user.financialStatement, user.accounts);
-            const aiMessage: Message = { sender: 'ai', text: aiResponse };
-            setMessages(prev => [...prev, aiMessage]);
+            const response = await getAgentResponse(input, user.financialStatement, user.accounts, tools);
+            
+            if (response.functionCalls && response.functionCalls.length > 0) {
+                for (const fc of response.functionCalls) {
+                    if (fc.name === 'add_transaction') {
+                        // FIX: Cast arguments from function call to their expected types.
+                        const { description, amount, type, category, is_passive } = fc.args as {
+                            description: string;
+                            amount: number;
+                            type: TransactionType;
+                            category: string;
+                            is_passive?: boolean;
+                        };
+                        const primaryAccount = user.accounts.find(a => a.type === 'Checking') || user.accounts[0];
+
+                        if (!primaryAccount) {
+                             throw new Error("No primary account found to log the transaction against.");
+                        }
+
+                        const transactionData: Omit<Transaction, 'id'> = {
+                            description,
+                            amount,
+                            type: type,
+                            category,
+                            isPassive: is_passive || false,
+                            date: new Date().toISOString().split('T')[0],
+                            paymentShares: [{ userId: user.id, accountId: primaryAccount.id, amount }],
+                            expenseShares: type === TransactionType.EXPENSE ? [{ userId: user.id, amount }] : [],
+                        };
+                        
+                        await actions.handleSaveTransaction(transactionData);
+                        
+                        const aiMessage: Message = { sender: 'ai', text: `Okay, I've logged a ${type.toLowerCase()} of $${amount} for "${description}".` };
+                        setMessages(prev => [...prev, aiMessage]);
+                    }
+                }
+            } else {
+                 const aiMessage: Message = { sender: 'ai', text: response.text };
+                 setMessages(prev => [...prev, aiMessage]);
+            }
+
         } catch (error) {
-            const errorMessage: Message = { sender: 'ai', text: "Sorry, I'm having trouble connecting to my cosmic wisdom. Please try again." };
+            const errorMessage: Message = { sender: 'ai', text: (error as Error).message || "Sorry, I'm having trouble connecting to my cosmic wisdom. Please try again." };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setIsLoading(false);
@@ -53,10 +113,10 @@ export const AICoach: React.FC<AICoachProps> = ({ user }) => {
     };
     
     const suggestionPrompts = [
-        "How can I increase my passive income?",
-        "Suggest a strategy to pay off my debts faster.",
-        "What's my next best 'move' to win the game?",
-        "Am I spending too much on something?"
+        "Add a $75 expense for 'Dinner' under 'Food'",
+        "Log a passive income of $200 for 'Stock Dividend'",
+        "What's my biggest expense category this month?",
+        "How can I improve my cash flow?"
     ];
 
     const handleSuggestionClick = (prompt: string) => {
@@ -68,7 +128,7 @@ export const AICoach: React.FC<AICoachProps> = ({ user }) => {
             <div className="p-4 border-b border-cosmic-border flex items-center gap-3">
                 <CoachIcon className="w-8 h-8 text-cosmic-primary" />
                 <div>
-                    <h1 className="text-xl font-bold text-cosmic-text-primary">AI Financial Coach</h1>
+                    <h1 className="text-xl font-bold text-cosmic-text-primary">AI Financial Agent</h1>
                     <p className="text-cosmic-text-secondary">Your personal strategist for the tournament.</p>
                 </div>
             </div>
@@ -99,7 +159,7 @@ export const AICoach: React.FC<AICoachProps> = ({ user }) => {
             
             {messages.length <= 1 && (
                 <div className="px-4 pb-4">
-                    <p className="text-sm text-cosmic-text-secondary mb-2">Not sure what to ask? Try one of these:</p>
+                    <p className="text-sm text-cosmic-text-secondary mb-2">Not sure what to do? Try one of these:</p>
                     <div className="flex flex-wrap gap-2">
                         {suggestionPrompts.map(prompt => (
                             <button
@@ -120,7 +180,7 @@ export const AICoach: React.FC<AICoachProps> = ({ user }) => {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        placeholder="Ask your coach anything..."
+                        placeholder="Ask for advice or issue a command..."
                         className="w-full bg-transparent p-3 text-cosmic-text-primary focus:outline-none"
                         disabled={isLoading}
                     />

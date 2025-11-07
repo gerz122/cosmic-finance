@@ -3,7 +3,7 @@ import { AppProvider, useAppContext } from './AppContext';
 import Auth from './Auth';
 import Onboarding from './Onboarding';
 import type { View } from './types';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, HistoryIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon, CheckCircleIcon, XCircleIcon } from './components/icons';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, HistoryIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon, CheckCircleIcon, XCircleIcon, DataIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -42,6 +42,7 @@ import TeamReportModal from './TeamReportModal';
 import SuccessModal from './components/SuccessModal';
 import { FloatingAssistant } from './components/FloatingAssistant';
 import { ActivityMonitor } from './components/ActivityMonitor';
+import { DataManagementView } from './components/DataManagementView';
 
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
@@ -116,7 +117,7 @@ const AppContent: React.FC = () => {
             case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails}/>;
             case 'importer': return <StatementImporter user={activeUser} teams={teams} onImport={actions.handleImportTransactions} allCategories={allCategories} onAddCategory={actions.handleAddCategory} />;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => actions.setModalOpen('isAddAccountModalOpen', true)} onOpenAccountTransactions={actions.handleOpenAccountTransactionsModal} onEditAccount={actions.handleOpenEditAccountModal} />;
-            case 'coach': return <AICoach user={activeUser} />;
+            case 'coach': return <AICoach user={activeUser} actions={actions} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => actions.handleOpenAddStockModal()} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability')} onEditStock={actions.handleOpenEditStockModal} onDeleteStock={actions.handleDeleteStock} onLogDividend={actions.handleOpenLogDividendModal} onOpenLargeChart={actions.openLargeChartModal} teams={teams} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} />;
             case 'teams': return <Teams teams={teams} onCreateTeam={() => actions.setModalOpen('isCreateTeamModalOpen', true)} onTeamClick={actions.handleTeamClick}/>;
             case 'team-detail': return selectedTeam ? <TeamDashboard team={selectedTeam} allUsers={users} onBack={actions.handleBackToTeams} onAddTransaction={() => actions.handleOpenAddTransactionModal(selectedTeam.id)} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset', selectedTeam.id)} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability', selectedTeam.id)} onAddStock={() => actions.handleOpenAddStockModal(selectedTeam.id)} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails} onOpenReportModal={() => actions.setModalOpen('isTeamReportModalOpen', true)}/> : null;
@@ -125,6 +126,7 @@ const AppContent: React.FC = () => {
             case 'goals': return <GoalsView user={activeUser} onAddGoal={() => actions.setModalOpen('isAddGoalModalOpen', true)} onDeleteGoal={actions.handleDeleteGoal} onContribute={actions.handleOpenContributeToGoalModal} />;
             case 'history': return <HistoricalPerformance data={historicalData} />;
             case 'achievements': return <Achievements user={activeUser} />;
+            case 'data': return <DataManagementView />;
             default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick} onShowFreedomModal={() => actions.setModalOpen('isFreedomModalOpen', true)} />;
         }
     };
@@ -153,6 +155,7 @@ const AppContent: React.FC = () => {
                 </div>
              )}
             <NavItem icon={<CoachIcon className="w-6 h-6" />} label="AI Coach" isActive={activeView === 'coach'} onClick={() => handleViewChange('coach')} />
+            <NavItem icon={<DataIcon className="w-6 h-6" />} label="Data Mgt" isActive={activeView === 'data'} onClick={() => handleViewChange('data')} />
         </div>
         <div className="mt-auto bg-cosmic-bg p-4 rounded-lg border border-cosmic-border flex items-center justify-between">
             <div className="flex items-center gap-3">

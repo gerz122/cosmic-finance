@@ -130,12 +130,12 @@ export const resetPassword = (email: string): Promise<void> => {
 const addTransactionWithBalanceUpdate = async (
     collectionRef: firebase.firestore.CollectionReference,
     accountCollectionRef: firebase.firestore.CollectionReference,
-    transactionData: Omit<Transaction, 'id'>
+    transactionData: Transaction
 ): Promise<void> => {
-    const transactionRef = collectionRef.doc();
+    const transactionRef = collectionRef.doc(transactionData.id);
     const batch = db.batch();
 
-    batch.set(transactionRef, { ...transactionData, id: transactionRef.id });
+    batch.set(transactionRef, transactionData);
 
     for (const payment of transactionData.paymentShares) {
         const accountRef = accountCollectionRef.doc(payment.accountId);
@@ -146,12 +146,12 @@ const addTransactionWithBalanceUpdate = async (
     await batch.commit();
 };
 
-export const addPersonalTransaction = (uid: string, transactionData: Omit<Transaction, 'id'>): Promise<void> => {
+export const addPersonalTransaction = (uid: string, transactionData: Transaction): Promise<void> => {
     const userRef = getUserDoc(uid);
     return addTransactionWithBalanceUpdate(userRef.collection('transactions'), userRef.collection('accounts'), transactionData);
 };
 
-export const addTeamTransaction = (transactionData: Omit<Transaction, 'id'>): Promise<void> => {
+export const addTeamTransaction = (transactionData: Transaction): Promise<void> => {
     if (!transactionData.teamId) throw new Error("Team ID is required.");
     const teamRef = getTeamDoc(transactionData.teamId);
     return addTransactionWithBalanceUpdate(teamRef.collection('transactions'), teamRef.collection('accounts'), transactionData);
@@ -242,28 +242,24 @@ export const applyEventOutcome = async (uid: string, outcome: EventOutcome): Pro
     }
 };
 
-export const addAccount = (uid: string, accountData: Omit<Account, 'id' | 'ownerIds'>): Promise<any> => {
-    const accountRef = getUserDoc(uid).collection('accounts').doc();
-    const newAccount: Account = {
-        ...accountData,
-        id: accountRef.id,
-        ownerIds: [uid],
-    };
+export const addAccount = (uid: string, newAccount: Account): Promise<any> => {
+    const accountRef = getUserDoc(uid).collection('accounts').doc(newAccount.id);
 
     // If there's an initial balance, create a transaction for it
-    if (accountData.balance > 0) {
-        const transaction: Omit<Transaction, 'id'> = {
+    if (newAccount.balance > 0) {
+        const transaction: Transaction = {
+            id: crypto.randomUUID(),
             description: 'Initial Balance',
-            amount: accountData.balance,
+            amount: newAccount.balance,
             type: TransactionType.INCOME,
             category: 'Initial Balance',
             date: new Date().toISOString().split('T')[0],
-            paymentShares: [{ userId: uid, accountId: accountRef.id, amount: accountData.balance }],
+            paymentShares: [{ userId: uid, accountId: newAccount.id, amount: newAccount.balance }],
         };
-        const transactionRef = getUserDoc(uid).collection('transactions').doc();
+        const transactionRef = getUserDoc(uid).collection('transactions').doc(transaction.id);
         const batch = db.batch();
         batch.set(accountRef, newAccount);
-        batch.set(transactionRef, {...transaction, id: transactionRef.id});
+        batch.set(transactionRef, transaction);
         return batch.commit();
     } else {
         return accountRef.set(newAccount);
@@ -278,9 +274,8 @@ export const saveBudget = (uid: string, budget: Budget): Promise<void> => {
     return getUserDoc(uid).collection('budgets').doc(budget.month).set(budget, { merge: true });
 };
 
-export const addGoal = (uid: string, goalData: Omit<Goal, 'id' | 'currentAmount'>): Promise<void> => {
-    const goalRef = getUserDoc(uid).collection('goals').doc();
-    const newGoal: Goal = { ...goalData, id: goalRef.id, currentAmount: 0 };
+export const addGoal = (uid: string, newGoal: Goal): Promise<void> => {
+    const goalRef = getUserDoc(uid).collection('goals').doc(newGoal.id);
     return goalRef.set(newGoal);
 };
 
@@ -293,7 +288,8 @@ export const deleteGoal = (uid: string, goalId: string): Promise<void> => {
 };
 
 export const logDividend = async (uid: string, stock: Asset, amount: number, accountId: string): Promise<void> => {
-    const transaction: Omit<Transaction, 'id'> = {
+    const transaction: Transaction = {
+        id: crypto.randomUUID(),
         description: `Dividend from ${stock.name}`,
         amount: amount,
         type: TransactionType.INCOME,
@@ -316,21 +312,21 @@ export const checkAndUnlockAchievement = async (uid: string, achievementId: stri
 };
 
 // --- Generic Asset/Liability Management ---
-const addItem = (collectionPath: string, data: Partial<Asset | Liability>) => {
-    const ref = db.collection(collectionPath).doc();
-    return ref.set({ ...data, id: ref.id });
+const addItem = (collectionPath: string, data: Asset | Liability) => {
+    const ref = db.collection(collectionPath).doc(data.id);
+    return ref.set(data);
 }
 const updateItem = (collectionPath: string, id: string, data: Partial<Asset | Liability>) => db.collection(collectionPath).doc(id).update(data);
 const deleteItem = (collectionPath: string, id: string) => db.collection(collectionPath).doc(id).delete();
 
-export const addAsset = (uid: string, data: Partial<Asset>) => addItem(`users/${uid}/assets`, data);
+export const addAsset = (uid: string, data: Asset) => addItem(`users/${uid}/assets`, data);
 export const updateAsset = (uid: string, id: string, data: Partial<Asset>) => updateItem(`users/${uid}/assets`, id, data);
 export const deleteAsset = (uid: string, id: string) => deleteItem(`users/${uid}/assets`, id);
-export const addLiability = (uid: string, data: Partial<Liability>) => addItem(`users/${uid}/liabilities`, data);
+export const addLiability = (uid: string, data: Liability) => addItem(`users/${uid}/liabilities`, data);
 export const updateLiability = (uid: string, id: string, data: Partial<Liability>) => updateItem(`users/${uid}/liabilities`, id, data);
-export const addTeamAsset = (tid: string, data: Partial<Asset>) => addItem(`teams/${tid}/assets`, data);
+export const addTeamAsset = (tid: string, data: Asset) => addItem(`teams/${tid}/assets`, data);
 export const updateTeamAsset = (tid: string, id: string, data: Partial<Asset>) => updateItem(`teams/${tid}/assets`, id, data);
-export const addTeamLiability = (tid: string, data: Partial<Liability>) => addItem(`teams/${tid}/liabilities`, data);
+export const addTeamLiability = (tid: string, data: Liability) => addItem(`teams/${tid}/liabilities`, data);
 export const updateTeamLiability = (tid: string, id: string, data: Partial<Liability>) => updateItem(`teams/${tid}/liabilities`, id, data);
 
 // --- TEAMS ---
