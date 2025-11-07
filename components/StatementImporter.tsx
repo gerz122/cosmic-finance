@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { SparklesIcon, UploadIcon, PlusIcon, CheckCircleIcon, CreditCardIcon, TeamsIcon } from './icons';
 import { analyzeTextWithTools } from '../services/geminiService';
 import type { User, Team, Account } from '../types';
-import { AccountType, TransactionType } from '../types';
 
 interface StatementImporterProps {
     user: User;
@@ -10,7 +9,6 @@ interface StatementImporterProps {
     onImport: (actions: any[]) => void;
     allCategories: string[];
     onAddCategory: (category: string, callback?: (newCategory: string) => void) => void;
-    // FIX: Changed actions type to 'any' to resolve type mismatch with AppContext
     actions: any;
 }
 
@@ -63,6 +61,42 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
         setProposedActions([]);
         setText('');
         setFileName('');
+    };
+    
+    const handleEditAction = (actionToEdit: any) => {
+        const onSaveOverride = (editedData: any) => {
+            setProposedActions(prev => prev.map(p => {
+                if (p.id === actionToEdit.id) {
+                    // When editing, we receive the full object, but only need to update the `args` part.
+                    const newArgs = { ...p.args, ...editedData };
+                    return { ...p, args: newArgs };
+                }
+                return p;
+            }));
+            // Close all modals, a bit of a brute force but effective
+            Object.keys(actions.modalStates).forEach(key => actions.setModalOpen(key, false));
+        };
+        
+        switch (actionToEdit.name) {
+            case 'add_transaction':
+                 actions.handleOpenEditTransactionModal({ ...actionToEdit.args, id: actionToEdit.id }, (editedTx: any) => {
+                    const { id, paymentShares, expenseShares, receiptImage, receiptUrl, ...rest } = editedTx;
+                    onSaveOverride(rest);
+                });
+                break;
+            case 'create_account':
+                 actions.setModalDataField('accountToEdit', actionToEdit.args);
+                 actions.handleOpenAddAccountModal(undefined, undefined, (editedAcc: any) => {
+                    onSaveOverride({name: editedAcc.name, type: editedAcc.type, initial_balance: editedAcc.balance });
+                 });
+                 break;
+            case 'create_team':
+                 actions.setModalDataField('teamToEdit', actionToEdit.args);
+                 actions.handleOpenCreateTeamModal((editedTeam: any) => {
+                    onSaveOverride({ name: editedTeam.name });
+                 });
+                 break;
+        }
     };
 
     const renderAction = (action: any) => {
@@ -156,7 +190,6 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
                     <div className="bg-cosmic-bg p-3 rounded-lg text-sm mb-4">
                         <p className="font-semibold text-cosmic-text-primary">AI Analysis Summary:</p>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-cosmic-text-secondary">
-                            {/* FIX: Cast Object.entries result to correctly type 'count' as a number */}
                             {(Object.entries(summary) as [string, number][]).map(([action, count]) => (
                                 <span key={action}>{count} {action.replace(/_/g, ' ')}{count > 1 ? 's' : ''}</span>
                             ))}
@@ -165,8 +198,11 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
 
                     <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
                         {proposedActions.map(action => (
-                            <div key={action.id} className="bg-cosmic-bg p-3 rounded-lg text-sm">
-                                {renderAction(action)}
+                            <div key={action.id} className="bg-cosmic-bg p-3 rounded-lg text-sm flex items-center justify-between group">
+                                <div className="flex-grow">{renderAction(action)}</div>
+                                <button onClick={() => handleEditAction(action)} className="text-xs text-yellow-500 font-semibold ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    EDIT
+                                </button>
                             </div>
                         ))}
                     </div>

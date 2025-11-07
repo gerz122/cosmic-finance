@@ -43,7 +43,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, o
 
     const isEditing = !!stockToEdit;
     
-    const currentUser = allUsers.find(u => u.accounts.some(a => accounts.includes(a)));
+    const currentUser = allUsers.find(u => u.accounts.some(a => (accounts || []).includes(a)));
 
 
     useEffect(() => {

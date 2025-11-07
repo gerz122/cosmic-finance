@@ -40,12 +40,12 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
         const accounts: Record<string, Account[]> = {};
         
         allUsers.forEach(u => {
-            accounts[u.id] = u.accounts;
+            accounts[u.id] = u.accounts || [];
         });
 
         teams.forEach(t => {
-            t.accounts.forEach(acc => {
-                if (acc.teamId) { // Only associate team accounts with their team members
+            (t.accounts || []).forEach(acc => {
+                if (acc.teamId) {
                     const teamForAccount = teams.find(team => team.id === acc.teamId);
                     teamForAccount?.memberIds.forEach(memberId => {
                         if (!accounts[memberId]) accounts[memberId] = [];
@@ -76,12 +76,16 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             setReceiptImage(null); // Always reset image preview
             setIsTaxDeductible(isEditMode ? transactionToEdit.isTaxDeductible || false : false);
 
-            setPaymentShares(isEditMode && transactionToEdit.paymentShares.length > 0 ? transactionToEdit.paymentShares : [{ userId: currentUser.id, accountId: userAccounts[currentUser.id]?.[0]?.id || '', amount: parseFloat(totalAmount) || 0 }]);
+            const initialPaymentAmount = parseFloat(isEditMode ? String(transactionToEdit.amount) : '0') || 0;
+            const initialPaymentShares = isEditMode && transactionToEdit.paymentShares.length > 0 
+                ? transactionToEdit.paymentShares 
+                : [{ userId: currentUser.id, accountId: userAccounts[currentUser.id]?.[0]?.id || '', amount: initialPaymentAmount }];
+            setPaymentShares(initialPaymentShares);
             
             if (isEditMode && transactionToEdit.expenseShares && transactionToEdit.expenseShares.length > 0) {
                 setExpenseShares(transactionToEdit.expenseShares);
             } else {
-                 setExpenseShares(members.map(member => ({ userId: member.id, amount: (parseFloat(totalAmount) || 0) / members.length })));
+                 setExpenseShares(members.map(member => ({ userId: member.id, amount: (initialPaymentAmount) / (members.length || 1) })));
             }
             
             setSplitMode('equal');
@@ -90,14 +94,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
 
     useEffect(() => {
         const amount = parseFloat(totalAmount) || 0;
-        if (splitMode === 'equal') {
+        if (type === TransactionType.EXPENSE && splitMode === 'equal') {
             const shareAmount = contextMembers.length > 0 ? amount / contextMembers.length : 0;
             setExpenseShares(contextMembers.map(member => ({ userId: member.id, amount: shareAmount })));
         }
         if (paymentShares.length === 1) {
             setPaymentShares(prev => [{...prev[0], amount}]);
         }
-    }, [totalAmount, splitMode, contextMembers]);
+    }, [totalAmount, splitMode, contextMembers, type]);
 
     const expenseSplitTotal = useMemo(() => expenseShares.reduce((sum, s) => sum + s.amount, 0), [expenseShares]);
     const paymentSplitTotal = useMemo(() => paymentShares.reduce((sum, s) => sum + s.amount, 0), [paymentShares]);
@@ -133,11 +137,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             date,
             type,
             isPassive: type === TransactionType.INCOME ? isPassive : false,
-            teamId: teamId || undefined,
+            ...(teamId && { teamId }),
             isTaxDeductible,
             paymentShares,
             expenseShares: type === TransactionType.EXPENSE ? expenseShares : [],
-            receiptImage: receiptImage || undefined,
+            ...(receiptImage && { receiptImage }),
             receiptUrl: transactionToEdit?.receiptUrl
         };
         
@@ -147,8 +151,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
     
     const handleCategoryChange = (value: string) => {
         if (value === 'add-new') {
-            onAddCategory(value, (newCategory) => {
-                setCategoryInput(newCategory);
+            onAddCategory('', (newCategory) => { // Open modal to add new category
+                if (newCategory) setCategoryInput(newCategory);
             });
         } else {
             setCategoryInput(value);

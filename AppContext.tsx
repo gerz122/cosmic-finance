@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import { auth, db, firebase } from './services/firebase';
 import type { User as FirebaseUser } from './services/firebase';
 import * as dbService from './services/dbService';
-import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal, AppTask, ActivityLogEntry } from './types';
+import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal, AppTask } from './types';
 import { TransactionType } from './types';
 import { generateHistoricalData } from './utils/financialCalculations';
 import { getCosmicEvent } from './services/geminiService';
@@ -17,7 +17,6 @@ interface AppContextType {
     error: string | null;
     syncState: 'synced' | 'syncing' | 'offline';
     activeTasks: AppTask[];
-    activityLog: ActivityLogEntry[];
     modalStates: Record<string, boolean>;
     modalData: Record<string, any>;
     effectiveFinancialStatement: any;
@@ -43,7 +42,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // New state for resilient architecture
     const [syncState, setSyncState] = useState<'synced' | 'syncing' | 'offline'>('synced');
     const [activeTasks, setActiveTasks] = useState<AppTask[]>([]);
-    const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
     
     const [modalStates, setModalStates] = useState<Record<string, boolean>>({ isFreedomModalOpen: false, isTeamReportModalOpen: false, isFabOpen: false, isSuccessModalOpen: false });
     const [modalData, setModalData] = useState<Record<string, any>>({});
@@ -53,34 +51,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setModalStates(prev => ({ ...prev, isSuccessModalOpen: true }));
     };
 
-    const logActivity = useCallback((message: string, type: ActivityLogEntry['type'], details?: string) => {
-        const newEntry: ActivityLogEntry = {
-            id: `log_${Date.now()}_${Math.random()}`,
-            timestamp: Date.now(),
-            message,
-            type,
-            details,
-        };
-        setActivityLog(prev => [newEntry, ...prev].slice(0, 200)); // Keep a reasonable history
-    }, []);
-
     const runTask = useCallback(async (name: string, taskFn: () => Promise<any>, options: { onRetry?: () => void } = {}) => {
         const taskId = `task_${Date.now()}_${Math.random()}`;
         setActiveTasks(prev => [...prev, { id: taskId, name, status: 'processing', createdAt: Date.now(), onRetry: options.onRetry }]);
         try {
             const result = await taskFn();
             setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'success' } : t));
-            setTimeout(() => setActiveTasks(prev => prev.filter(t => t.id !== taskId)), 4000);
-            logActivity(name, 'success');
             return result;
         } catch (e) {
             console.error(`Task "${name}" failed:`, e);
             const errorMessage = (e as Error).message;
             setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'failed', error: errorMessage } : t));
-            logActivity(name, 'error', errorMessage);
             throw e; // Re-throw to be caught by caller if needed
         }
-    }, [logActivity]);
+    }, []);
 
     const refreshData = useCallback(async (uid: string) => {
         setSyncState('syncing');
@@ -175,8 +159,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const name = `UI Error: ${error.message}`;
         const errorDetails = `Component Stack:\n${errorInfo.componentStack}`;
         setActiveTasks(prev => [...prev, { id: taskId, name, status: 'failed', error: errorDetails, createdAt: Date.now() }]);
-        logActivity(name, 'error', errorDetails);
-    }, [logActivity]);
+    }, []);
 
     const handleCreateTeam = (name: string, invitedEmails: string[], initialGoal: string, initialAccountName: string) => {
         if (!activeUser) return;
@@ -398,9 +381,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, { onRetry: () => handleUpdateAssetLiability(data, teamId) });
     };
     
-    const handleAddCategory = (category: string, callback?: (newCategory: string) => void) => {
-        // This is a client-side only action now, but we keep the structure for potential future persistence
-        if (callback) callback(category);
+    const handleAddCategory = useCallback((category: string) => {
+       // This is a client-side only action now, but we keep the structure for potential future persistence
+       console.log("New category added client-side:", category);
+    }, []);
+
+    const handleAddCategoryWithCallback = (category: string) => {
+        handleAddCategory(category);
+        if (modalData.addCategorySuccessCallback) {
+            modalData.addCategorySuccessCallback(category);
+        }
     };
     
     const handleImportData = (data: { user: User, teams: Team[] }) => {
@@ -444,49 +434,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, { onRetry: () => handleImportData(data) });
     };
 
-    const handleImportTransactions = (parsedTransactions: any[]) => {
+    const handleImportFromAI = (proposedActions: any[]) => {
         if (!activeUser) return;
-        runTask(`Importing ${parsedTransactions.length} items`, async () => {
-            const batch = db.batch();
-            for (const ptx of parsedTransactions) {
-                const ownerId = ptx.teamId || activeUser.id;
-                const accCollectionPath = ptx.teamId ? `teams/${ownerId}/accounts` : `users/${ownerId}/accounts`;
-                const txCollectionPath = ptx.teamId ? `teams/${ownerId}/transactions` : `users/${ownerId}/transactions`;
-
-                if (ptx.isTransfer) {
-                    const fromRef = db.collection(accCollectionPath).doc(ptx.fromAccountId);
-                    const toRef = db.collection(accCollectionPath).doc(ptx.toAccountId);
-                    batch.update(fromRef, { balance: firebase.firestore.FieldValue.increment(-ptx.amount) });
-                    batch.update(toRef, { balance: firebase.firestore.FieldValue.increment(ptx.amount) });
-                } else {
-                    const txData: Omit<Transaction, 'id'> = {
-                        description: ptx.description, amount: ptx.amount, type: ptx.type, category: ptx.category, date: ptx.date, isPassive: ptx.isPassive, teamId: ptx.teamId || undefined,
-                        paymentShares: [{ userId: activeUser.id, accountId: ptx.accountId, amount: ptx.amount }],
-                        expenseShares: [{ userId: activeUser.id, amount: ptx.amount }]
-                    };
-                    const txRef = db.collection(txCollectionPath).doc();
-                    batch.set(txRef, {...txData, id: txRef.id});
-                    const increment = txData.type === TransactionType.INCOME ? ptx.amount : -ptx.amount;
-                    const accountRef = db.collection(accCollectionPath).doc(ptx.accountId);
-                    batch.update(accountRef, 'balance', firebase.firestore.FieldValue.increment(increment));
+        runTask(`Importing ${proposedActions.length} AI actions`, async () => {
+            for (const action of proposedActions) {
+                const { name, args } = action;
+                switch (name) {
+                    case 'add_transaction': {
+                        const allAccounts = [...activeUser.accounts, ...teams.flatMap(t => t.accounts)];
+                        let account = allAccounts.find(a => a.name.toLowerCase() === args.account_name.toLowerCase());
+                        if (!account) { // Create if not exists
+                           const newAccData = { name: args.account_name, type: 'Checking' as any, balance: 0 };
+                           account = await dbService.addAccount(activeUser.id, newAccData);
+                        }
+                        const txData = {
+                             description: args.description, amount: args.amount, type: args.type, category: args.category, date: args.date, isPassive: args.is_passive,
+                             paymentShares: [{ userId: activeUser.id, accountId: account.id, amount: args.amount }],
+                             expenseShares: args.type === 'EXPENSE' ? [{ userId: activeUser.id, amount: args.amount }] : []
+                        };
+                        await handleSaveTransaction(txData);
+                        break;
+                    }
+                    case 'create_account': {
+                        await handleAddAccount({ name: args.name, type: args.type, balance: args.initial_balance });
+                        break;
+                    }
+                    case 'create_team': {
+                         await handleCreateTeam(args.name, [], '', '');
+                         break;
+                    }
                 }
             }
-            await batch.commit();
             await refreshData(activeUser.id);
-            showSuccessModal(`${parsedTransactions.length} items imported!`);
-        }, { onRetry: () => handleImportTransactions(parsedTransactions) });
+        });
     };
-
+    
     const actions = {
         setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding, logErrorTask,
         handleTeamClick: (teamId: string) => { setActiveView('team-detail'); setSelectedTeamId(teamId); },
         handleBackToTeams: () => { setActiveView('teams'); setSelectedTeamId(null); },
-        handleOpenAddTransactionModal: (teamId?: string) => { setModalData({ transactionToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddTransactionModalOpen', true); },
-        handleOpenEditTransactionModal: (transaction: Transaction) => { setModalData({ transactionToEdit: transaction, modalDefaultTeamId: transaction.teamId }); setModalOpen('isAddTransactionModalOpen', true); },
+        handleOpenAddTransactionModal: (teamId?: string, onSaveOverride?: (data: any) => void) => { setModalData({ transactionToEdit: null, modalDefaultTeamId: teamId, transactionSaveOverride: onSaveOverride }); setModalOpen('isAddTransactionModalOpen', true); },
+        handleOpenEditTransactionModal: (transaction: Transaction, onSaveOverride?: (data: any) => void) => { setModalData({ transactionToEdit: transaction, modalDefaultTeamId: transaction.teamId, transactionSaveOverride: onSaveOverride }); setModalOpen('isAddTransactionModalOpen', true); },
         handleSaveTransaction, handleDeleteTransaction, handleTransfer, handleDrawCosmicCard, handleCosmicEventResolution,
         handleSaveStock, handleDeleteStock, handleLogDividend, handleAddAccount, handleUpdateAccount,
         handleAddAssetLiability, handleUpdateAssetLiability, handleSaveBudget, handleSaveGoal, handleDeleteGoal, handleContributeToGoal,
-        handleImportTransactions, handleAddCategory, handleImportData,
+        handleImportFromAI, handleAddCategory, handleAddCategoryWithCallback, handleImportData,
         handleTransactionClick: (transaction: Transaction) => { setModalData({ selectedTransaction: transaction }); setModalOpen('isTransactionDetailModalOpen', true); },
         handleCategoryClick: (category: string) => { setModalData({ selectedCategory: category }); setModalOpen('isCategoryModalOpen', true); },
         handleStatCardClick: () => setModalOpen('isNetWorthBreakdownModalOpen', true),
@@ -502,10 +494,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleOpenAddAssetLiabilityModal: (type: 'asset' | 'liability', teamId?: string) => { setModalData({ assetLiabilityToAdd: type, assetLiabilityToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenEditAssetLiabilityModal: (item: Asset | Liability) => { setModalData({ assetLiabilityToAdd: 'value' in item ? 'asset' : 'liability', assetLiabilityToEdit: item, modalDefaultTeamId: item.teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenContributeToGoalModal: (goal: Goal) => { setModalData({ goalToContribute: goal }); setModalOpen('isContributeToGoalModalOpen', true); },
-        handleOpenAddAccountModal: (contextTeamId?: string, onSuccess?: (newAccount: Account) => void) => { setModalData({ modalDefaultTeamId: contextTeamId, addAccountSuccessCallback: onSuccess }); setModalOpen('isAddAccountModalOpen', true); },
-        // FIX: Replaced call to non-existent 'onAddCategory' with the correct 'handleAddCategory'.
-        handleOpenAddCategoryModal: (category: string, callback?: (newCategory: string) => void) => { handleAddCategory(category, callback); },
-        handleOpenCreateTeamModal: () => setModalOpen('isCreateTeamModalOpen', true),
+        handleOpenAddAccountModal: (contextTeamId?: string, onSuccess?: (newAccount: Account) => void, onSaveOverride?: (data: any) => void) => { setModalData({ modalDefaultTeamId: contextTeamId, addAccountSuccessCallback: onSuccess, accountSaveOverride: onSaveOverride }); setModalOpen('isAddAccountModalOpen', true); },
+        handleOpenAddCategoryModal: (onSuccess?: (newCategory: string) => void) => { setModalData(prev => ({ ...prev, addCategorySuccessCallback: onSuccess })); setModalOpen('isAddCategoryModalOpen', true); },
+        handleOpenCreateTeamModal: (onSaveOverride?: (data: any) => void) => { setModalData({ teamSaveOverride: onSaveOverride, teamToEdit: null }); setModalOpen('isCreateTeamModalOpen', true) },
         handleOpenAddGoalModal: () => setModalOpen('isAddGoalModalOpen', true),
         setModalDataField,
         dismissTask: (taskId: string) => setActiveTasks(prev => prev.filter(t => t.id !== taskId)),
@@ -513,7 +504,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     return (
         <AppContext.Provider value={{
-            activeView, users, teams, activeUser, selectedTeam, isLoading, error, syncState, activeTasks, activityLog,
+            activeView, users, teams, activeUser, selectedTeam, isLoading, error, syncState, activeTasks,
             modalStates, modalData, effectiveFinancialStatement, historicalData, allUserAccounts, allCategories,
             setActiveView, handleLogout, actions
         }}>

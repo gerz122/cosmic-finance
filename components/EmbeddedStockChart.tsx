@@ -75,16 +75,27 @@ const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height 
             });
         };
         
-        // Use a timeout to ensure the TradingView script has loaded
-        const scriptCheck = setInterval(() => {
-            if (window.TradingView) {
-                clearInterval(scriptCheck);
-                createWidget();
-            }
-        }, 100);
+        let scriptCheck: NodeJS.Timeout;
+        
+        if (window.TradingView) {
+            createWidget();
+        } else {
+             scriptCheck = setInterval(() => {
+                if (window.TradingView) {
+                    clearInterval(scriptCheck);
+                    createWidget();
+                }
+            }, 100);
+        }
 
         return () => {
-            clearInterval(scriptCheck);
+            if(scriptCheck) clearInterval(scriptCheck);
+             if (widgetRef.current && typeof widgetRef.current.remove === 'function') {
+                try {
+                    widgetRef.current.remove();
+                    widgetRef.current = null;
+                } catch(e) { console.error("Error removing TradingView widget:", e); }
+            }
              if (containerRef.current) {
                 containerRef.current.innerHTML = '';
             }

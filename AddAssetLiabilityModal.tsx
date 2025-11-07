@@ -224,3 +224,4 @@ export const AddAssetLiabilityModal: React.FC<AddAssetLiabilityModalProps> = ({ 
             </div>
         </div>
     );
+};

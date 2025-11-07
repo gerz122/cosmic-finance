@@ -148,7 +148,7 @@ export interface Team {
   }[];
 }
 
-export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals' | 'analysis' | 'achievements' | 'importer' | 'auth' | 'data' | 'history';
+export type View = 'dashboard' | 'statement' | 'portfolio' | 'accounts' | 'teams' | 'coach' | 'team-detail' | 'balances' | 'budget' | 'goals' | 'analysis' | 'achievements' | 'importer' | 'auth' | 'data';
 
 export interface EventOutcome {
   message: string;
@@ -186,12 +186,4 @@ export interface AppTask {
   error?: string;
   createdAt: number;
   onRetry?: () => void;
-}
-
-export interface ActivityLogEntry {
-    id: string;
-    timestamp: number;
-    message: string;
-    type: 'success' | 'error' | 'info';
-    details?: string;
 }

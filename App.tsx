@@ -3,7 +3,7 @@ import { AppProvider, useAppContext } from './AppContext';
 import Auth from './Auth';
 import Onboarding from './Onboarding';
 import type { View } from './types';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, AnalysisIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon, CheckCircleIcon, XCircleIcon, DataIcon, ClipboardListIcon } from './components/icons';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, AnalysisIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon, CheckCircleIcon, XCircleIcon, DataIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -44,7 +44,6 @@ import { FloatingAssistant } from './components/FloatingAssistant';
 import { ActivityMonitor } from './components/ActivityMonitor';
 import { DataManagementView } from './components/DataManagementView';
 import ErrorBoundary from './components/ErrorBoundary';
-import { HistoryView } from './components/HistoryView';
 import { AddCategoryModal } from './components/AddCategoryModal';
 
 
@@ -118,7 +117,7 @@ const AppContent: React.FC = () => {
         switch (activeView) {
             case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick} onShowFreedomModal={() => actions.setModalOpen('isFreedomModalOpen', true)} />;
             case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails}/>;
-            case 'importer': return <StatementImporter user={activeUser} teams={teams} onImport={actions.handleImportFromAI} allCategories={allCategories} onAddCategory={actions.handleAddCategory} actions={actions} />;
+            case 'importer': return <StatementImporter user={activeUser} teams={teams} onImport={actions.handleImportFromAI} allCategories={allCategories} onAddCategory={actions.handleOpenAddCategoryModal} actions={actions} />;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => actions.handleOpenAddAccountModal()} onOpenAccountTransactions={actions.handleOpenAccountTransactionsModal} onEditAccount={actions.handleOpenEditAccountModal} />;
             case 'coach': return <AICoach user={activeUser} actions={actions} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => actions.handleOpenAddStockModal()} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability')} onEditStock={actions.handleOpenEditStockModal} onDeleteStock={actions.handleDeleteStock} onLogDividend={actions.handleOpenLogDividendModal} onOpenLargeChart={actions.openLargeChartModal} teams={teams} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} />;
@@ -130,7 +129,6 @@ const AppContent: React.FC = () => {
             case 'analysis': return <HistoricalPerformance data={historicalData} />;
             case 'achievements': return <Achievements user={activeUser} />;
             case 'data': return <DataManagementView />;
-            case 'history': return <HistoryView />;
             default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick} onShowFreedomModal={() => actions.setModalOpen('isFreedomModalOpen', true)} />;
         }
     };
@@ -144,7 +142,6 @@ const AppContent: React.FC = () => {
         <div className="space-y-2">
             <NavItem icon={<DashboardIcon className="w-6 h-6" />} label="Dashboard" isActive={activeView === 'dashboard'} onClick={() => handleViewChange('dashboard')} />
             <NavItem icon={<AnalysisIcon className="w-6 h-6" />} label="Analysis" isActive={activeView === 'analysis'} onClick={() => handleViewChange('analysis')} />
-            <NavItem icon={<ClipboardListIcon className="w-6 h-6" />} label="History" isActive={activeView === 'history'} onClick={() => handleViewChange('history')} />
             <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Balances" isActive={activeView === 'balances'} onClick={() => handleViewChange('balances')} />
             <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Statement" isActive={activeView === 'statement'} onClick={() => handleViewChange('statement')} />
             <NavItem icon={<UploadIcon className="w-6 h-6" />} label="Import" isActive={activeView === 'importer'} onClick={() => handleViewChange('importer')} />
@@ -220,18 +217,18 @@ const AppContent: React.FC = () => {
             
             {activeUser && <FloatingAssistant user={activeUser} />}
             
-            <AddTransactionModal isOpen={modalStates.isAddTransactionModalOpen} onClose={() => actions.setModalOpen('isAddTransactionModalOpen', false)} onSave={actions.handleSaveTransaction} transactionToEdit={modalData.transactionToEdit} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={actions.handleOpenAddAccountModal} onAddCategory={actions.handleOpenAddCategoryModal} defaultTeamId={modalData.modalDefaultTeamId} allCategories={allCategories} />
+            <AddTransactionModal isOpen={modalStates.isAddTransactionModalOpen} onClose={() => actions.setModalOpen('isAddTransactionModalOpen', false)} onSave={modalData.transactionSaveOverride || actions.handleSaveTransaction} transactionToEdit={modalData.transactionToEdit} currentUser={activeUser} allUsers={users} teams={teams} onAddAccountClick={actions.handleOpenAddAccountModal} onAddCategory={actions.handleOpenAddCategoryModal} defaultTeamId={modalData.modalDefaultTeamId} allCategories={allCategories} />
             <TransferModal isOpen={modalStates.isTransferModalOpen} onClose={() => actions.setModalOpen('isTransferModalOpen', false)} onTransfer={actions.handleTransfer} currentUser={activeUser}/>
             <CosmicEventModal isOpen={modalStates.isCosmicEventModalOpen} isGenerating={modalData.isGeneratingCosmicEvent} event={modalData.currentCosmicEvent} onClose={() => actions.setModalOpen('isCosmicEventModalOpen', false)} onResolve={actions.handleCosmicEventResolution}/>
             <AddStockModal isOpen={modalStates.isAddStockModalOpen} onClose={() => actions.setModalOpen('isAddStockModalOpen', false)} onSave={actions.handleSaveStock} stockToEdit={modalData.stockToEdit} accounts={activeUser?.accounts || []} teams={teams} defaultTeamId={modalData.modalDefaultTeamId} allUsers={users} />
             {modalData.stockForDividend && <LogDividendModal isOpen={modalStates.isLogDividendModalOpen} onClose={() => { actions.setModalOpen('isLogDividendModalOpen', false); actions.setModalDataField('stockForDividend', null); }} onLogDividend={actions.handleLogDividend} stock={modalData.stockForDividend} user={activeUser} teams={teams} />}
             {modalData.stockForLargeChart && <LargeChartModal stock={modalData.stockForLargeChart} onClose={actions.closeLargeChartModal}/>}
-            <AddAccountModal isOpen={modalStates.isAddAccountModalOpen} onClose={() => actions.setModalOpen('isAddAccountModalOpen', false)} onAddAccount={actions.handleAddAccount} teams={teams} defaultOwnerId={activeUser.id} contextTeamId={modalData.modalDefaultTeamId} onSuccess={modalData.addAccountSuccessCallback} />
+            <AddAccountModal isOpen={modalStates.isAddAccountModalOpen} onClose={() => actions.setModalOpen('isAddAccountModalOpen', false)} onAddAccount={modalData.accountSaveOverride || actions.handleAddAccount} teams={teams} defaultOwnerId={activeUser.id} contextTeamId={modalData.modalDefaultTeamId} onSuccess={modalData.addAccountSuccessCallback} accountToEdit={modalData.accountToEdit} />
             <EditAccountModal isOpen={modalStates.isEditAccountModalOpen} onClose={() => actions.setModalOpen('isEditAccountModalOpen', false)} onSave={actions.handleUpdateAccount} accountToEdit={modalData.accountToEdit} allUsers={users} team={teams.find(t => t.id === modalData.accountToEdit?.teamId)} />
             <AddAssetLiabilityModal isOpen={modalStates.isAddAssetLiabilityModalOpen} type={modalData.assetLiabilityToAdd} itemToEdit={modalData.assetLiabilityToEdit} onClose={() => { actions.setModalOpen('isAddAssetLiabilityModalOpen', false); actions.setModalDataField('assetLiabilityToEdit', null); }} onSave={modalData.assetLiabilityToEdit ? actions.handleUpdateAssetLiability : actions.handleAddAssetLiability} teams={teams} defaultTeamId={modalData.modalDefaultTeamId} allUsers={users} currentUser={activeUser} />
             {modalData.selectedTransaction && <TransactionDetailModal isOpen={modalStates.isTransactionDetailModalOpen} onClose={() => { actions.setModalOpen('isTransactionDetailModalOpen', false); actions.setModalDataField('selectedTransaction', null); }} transaction={modalData.selectedTransaction} users={users}/>}
             {modalData.selectedCategory && <CategoryTransactionListModal isOpen={modalStates.isCategoryModalOpen} onClose={() => { actions.setModalOpen('isCategoryModalOpen', false); actions.setModalDataField('selectedCategory', null); }} category={modalData.selectedCategory} transactions={effectiveFinancialStatement.transactions}/>}
-            <CreateTeamModal isOpen={modalStates.isCreateTeamModalOpen} onClose={() => actions.setModalOpen('isCreateTeamModalOpen', false)} onCreateTeam={actions.handleCreateTeam} currentUser={activeUser}/>
+            <CreateTeamModal isOpen={modalStates.isCreateTeamModalOpen} onClose={() => actions.setModalOpen('isCreateTeamModalOpen', false)} onCreateTeam={modalData.teamSaveOverride || actions.handleCreateTeam} currentUser={activeUser} teamToEdit={modalData.teamToEdit} />
             <NetWorthBreakdownModal isOpen={modalStates.isNetWorthBreakdownModalOpen} onClose={() => actions.setModalOpen('isNetWorthBreakdownModalOpen', false)} user={activeUser} teams={teams} />
             {modalData.accountForTransactionList && <AccountTransactionsModal isOpen={modalStates.isAccountTransactionsModalOpen} onClose={() => actions.setModalOpen('isAccountTransactionsModalOpen', false)} account={modalData.accountForTransactionList} allTransactions={effectiveFinancialStatement.transactions} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} />}
             <AddBudgetModal isOpen={modalStates.isAddBudgetModalOpen} onClose={() => actions.setModalOpen('isAddBudgetModalOpen', false)} onSave={actions.handleSaveBudget} user={activeUser} />
@@ -242,7 +239,7 @@ const AppContent: React.FC = () => {
             <FreedomModal isOpen={modalStates.isFreedomModalOpen} onClose={() => actions.setModalOpen('isFreedomModalOpen', false)} />
             <TeamReportModal isOpen={modalStates.isTeamReportModalOpen} onClose={() => actions.setModalOpen('isTeamReportModalOpen', false)} team={selectedTeam} />
             <SuccessModal isOpen={modalStates.isSuccessModalOpen} message={modalData.successModalMessage} onClose={() => actions.setModalOpen('isSuccessModalOpen', false)} />
-            <AddCategoryModal isOpen={modalStates.isAddCategoryModalOpen} onClose={() => actions.setModalOpen('isAddCategoryModalOpen', false)} onAddCategory={modalData.addCategorySuccessCallback} />
+            <AddCategoryModal isOpen={modalStates.isAddCategoryModalOpen} onClose={() => actions.setModalOpen('isAddCategoryModalOpen', false)} onAddCategory={actions.handleAddCategoryWithCallback} />
         </div>
     );
 };
