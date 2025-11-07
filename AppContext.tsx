@@ -469,8 +469,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
     };
     
+    const handleResetProfile = async () => {
+        if (!activeUser) return;
+        if (!window.confirm("Are you sure you want to reset your entire profile? This will delete all your financial data and cannot be undone.")) return;
+        
+        runTask('Resetting Profile', async () => {
+            await dbService.resetUserProfile(activeUser.id);
+            // Full refresh after reset
+            await refreshData(activeUser.id);
+            showSuccessModal("Profile has been reset!");
+        }, {onRetry: handleResetProfile});
+    };
+    
     const actions = {
-        setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding, logErrorTask,
+        setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding, logErrorTask, handleResetProfile,
         handleTeamClick: (teamId: string) => { setActiveView('team-detail'); setSelectedTeamId(teamId); },
         handleBackToTeams: () => { setActiveView('teams'); setSelectedTeamId(null); },
         handleOpenAddTransactionModal: (teamId?: string, onSaveOverride?: (data: any) => void) => { setModalData({ transactionToEdit: null, modalDefaultTeamId: teamId, transactionSaveOverride: onSaveOverride }); setModalOpen('isAddTransactionModalOpen', true); },
@@ -494,8 +506,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleOpenAddAssetLiabilityModal: (type: 'asset' | 'liability', teamId?: string) => { setModalData({ assetLiabilityToAdd: type, assetLiabilityToEdit: null, modalDefaultTeamId: teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenEditAssetLiabilityModal: (item: Asset | Liability) => { setModalData({ assetLiabilityToAdd: 'value' in item ? 'asset' : 'liability', assetLiabilityToEdit: item, modalDefaultTeamId: item.teamId }); setModalOpen('isAddAssetLiabilityModalOpen', true); },
         handleOpenContributeToGoalModal: (goal: Goal) => { setModalData({ goalToContribute: goal }); setModalOpen('isContributeToGoalModalOpen', true); },
-        handleOpenAddAccountModal: (contextTeamId?: string, onSuccess?: (newAccount: Account) => void, onSaveOverride?: (data: any) => void) => { setModalData({ modalDefaultTeamId: contextTeamId, addAccountSuccessCallback: onSuccess, accountSaveOverride: onSaveOverride }); setModalOpen('isAddAccountModalOpen', true); },
-        handleOpenAddCategoryModal: (onSuccess?: (newCategory: string) => void) => { setModalData(prev => ({ ...prev, addCategorySuccessCallback: onSuccess })); setModalOpen('isAddCategoryModalOpen', true); },
+        handleOpenAddAccountModal: (contextTeamId?: string, onSuccess?: (newAccount: Account) => void, onSaveOverride?: (data: any) => void) => { setModalData({ modalDefaultTeamId: contextTeamId, addAccountSuccessCallback: onSuccess, accountSaveOverride: onSaveOverride, accountToEdit: null }); setModalOpen('isAddAccountModalOpen', true); },
+        handleOpenAddCategoryModal: (callback?: (newCategory: string) => void) => { 
+            setModalData(prev => ({ ...prev, addCategorySuccessCallback: callback })); 
+            setModalOpen('isAddCategoryModalOpen', true); 
+        },
         handleOpenCreateTeamModal: (onSaveOverride?: (data: any) => void) => { setModalData({ teamSaveOverride: onSaveOverride, teamToEdit: null }); setModalOpen('isCreateTeamModalOpen', true) },
         handleOpenAddGoalModal: () => setModalOpen('isAddGoalModalOpen', true),
         setModalDataField,

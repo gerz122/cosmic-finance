@@ -7,17 +7,18 @@ interface AddTransactionModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (transaction: Omit<Transaction, 'id'> | (Transaction & { receiptImage?: string })) => void;
+    onSaveOverride?: (transaction: any) => void;
     transactionToEdit: Transaction | null;
     currentUser: User;
     allUsers: User[];
     teams: Team[];
     onAddAccountClick: (contextTeamId?: string, onSuccess?: (newAccount: Account) => void) => void;
-    onAddCategory: (category: string, callback?: (newCategory: string) => void) => void;
+    onAddCategory: (callback?: (newCategory: string) => void) => void;
     defaultTeamId?: string;
     allCategories: string[];
 }
 
-export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategory, defaultTeamId, allCategories }) => {
+export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onSave, onSaveOverride, transactionToEdit, currentUser, allUsers, teams, onAddAccountClick, onAddCategory, defaultTeamId, allCategories }) => {
     const [description, setDescription] = useState('');
     const [totalAmount, setTotalAmount] = useState('');
     const [categoryInput, setCategoryInput] = useState('');
@@ -145,13 +146,17 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             receiptUrl: transactionToEdit?.receiptUrl
         };
         
-        onSave(transactionData);
+        if (onSaveOverride) {
+            onSaveOverride(transactionData);
+        } else {
+            onSave(transactionData);
+        }
         onClose();
     };
     
     const handleCategoryChange = (value: string) => {
         if (value === 'add-new') {
-            onAddCategory('', (newCategory) => { // Open modal to add new category
+            onAddCategory((newCategory) => {
                 if (newCategory) setCategoryInput(newCategory);
             });
         } else {

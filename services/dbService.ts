@@ -201,15 +201,23 @@ export const updateTransaction = (transaction: Transaction): Promise<void> => {
 
         const getAccountRef = (accountId: string) => ownerRef.collection('accounts').doc(accountId);
 
-        for (const payment of oldTransaction.paymentShares) {
-            const accountRef = getAccountRef(payment.accountId);
-            const amountToReverse = oldTransaction.type === TransactionType.INCOME ? -payment.amount : payment.amount;
-            t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
+        // Defensively check for paymentShares on old data
+        if (oldTransaction.paymentShares && Array.isArray(oldTransaction.paymentShares)) {
+            for (const payment of oldTransaction.paymentShares) {
+                const accountRef = getAccountRef(payment.accountId);
+                const amountToReverse = oldTransaction.type === TransactionType.INCOME ? -payment.amount : payment.amount;
+                // Check if account exists before trying to update
+                const accountDoc = await t.get(accountRef);
+                if (accountDoc.exists) {
+                    t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
+                }
+            }
         }
 
         for (const payment of transaction.paymentShares) {
             const accountRef = getAccountRef(payment.accountId);
             const amountToAdd = transaction.type === TransactionType.INCOME ? payment.amount : -payment.amount;
+            // The new account must exist, so we update it directly.
             t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToAdd) });
         }
 
@@ -220,20 +228,55 @@ export const updateTransaction = (transaction: Transaction): Promise<void> => {
 export const deleteTransaction = (transaction: Transaction): Promise<void> => {
     return db.runTransaction(async (t) => {
         const isTeamTx = !!transaction.teamId;
-        const ownerRef = isTeamTx ? getTeamDoc(transaction.teamId!) : getUserDoc(transaction.paymentShares[0].userId);
+        const ownerId = isTeamTx ? transaction.teamId! : transaction.paymentShares?.[0]?.userId;
+        if (!ownerId) throw new Error("Could not determine transaction owner for deletion.");
+        
+        const ownerRef = isTeamTx ? getTeamDoc(ownerId) : getUserDoc(ownerId);
         const transactionRef = ownerRef.collection('transactions').doc(transaction.id);
         
         const getAccountRef = (accountId: string) => ownerRef.collection('accounts').doc(accountId);
 
-        for (const payment of transaction.paymentShares) {
-            const accountRef = getAccountRef(payment.accountId);
-            const amountToReverse = transaction.type === TransactionType.INCOME ? -payment.amount : payment.amount;
-            t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
+        // Defensively check for paymentShares to handle old data
+        if (transaction.paymentShares && Array.isArray(transaction.paymentShares)) {
+            for (const payment of transaction.paymentShares) {
+                const accountRef = getAccountRef(payment.accountId);
+                const amountToReverse = transaction.type === TransactionType.INCOME ? -payment.amount : payment.amount;
+                // Check if the account exists before trying to update it.
+                const accountDoc = await t.get(accountRef);
+                if (accountDoc.exists) {
+                    t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
+                }
+            }
         }
 
         t.delete(transactionRef);
     });
 };
+
+export const resetUserProfile = async (uid: string): Promise<void> => {
+    const userRef = getUserDoc(uid);
+    const subcollections = ['transactions', 'accounts', 'assets', 'liabilities', 'budgets', 'goals'];
+
+    // Delete all documents in all subcollections
+    for (const collection of subcollections) {
+        const snapshot = await userRef.collection(collection).get();
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+    }
+    
+    // Re-initialize the user with default data
+    const user = await auth.currentUser;
+    if (!user) throw new Error("User not found for profile reset.");
+    const name = user.displayName || user.email?.split('@')[0] || 'New Player';
+    const avatar = user.photoURL || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${uid}`;
+    const initialData = createNewGenericUser(uid, name, user.email!, avatar);
+    
+    const initBatch = db.batch();
+    await createInitialDataWithSubcollections(initBatch, uid, initialData);
+    await initBatch.commit();
+};
+
 
 // --- Other Data Management ---
 

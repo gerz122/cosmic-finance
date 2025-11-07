@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../AppContext';
-import { UploadIcon } from './icons';
+import { UploadIcon, ExclamationIcon } from './icons';
 import type { Transaction } from '../types';
 
 // Helper to fetch an image and convert it to a Base64 Data URL
@@ -90,7 +90,7 @@ export const DataManagementView: React.FC = () => {
                     throw new Error("Invalid backup file format.");
                 }
 
-                await actions.importData(data);
+                await actions.handleImportData(data);
                 // The task will show success in the activity monitor
             } catch (err) {
                 alert(`Import failed: ${(err as Error).message}`);
@@ -156,6 +156,24 @@ export const DataManagementView: React.FC = () => {
                        
                     </label>
                     <input id="import-file" type="file" className="hidden" accept=".json" onChange={handleFileChange} disabled={isImporting} />
+                </div>
+            </div>
+
+            <div className="bg-red-900/20 p-6 rounded-lg border border-cosmic-danger mt-8">
+                <div className="flex items-start gap-4">
+                    <ExclamationIcon className="w-8 h-8 text-cosmic-danger flex-shrink-0" />
+                    <div>
+                        <h2 className="text-xl font-bold text-cosmic-danger">Danger Zone</h2>
+                        <p className="text-red-300 mt-2 mb-4">
+                            Resetting your profile will permanently delete all your accounts, transactions, assets, teams, and other financial data. This action cannot be undone.
+                        </p>
+                        <button
+                            onClick={actions.handleResetProfile}
+                            className="bg-cosmic-danger text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                            Reset Profile
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
