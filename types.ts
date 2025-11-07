@@ -178,3 +178,12 @@ export interface ChartSeries {
   label: string;
   color: string;
 }
+
+export interface AppTask {
+  id: string;
+  name: string;
+  status: 'processing' | 'success' | 'failed';
+  error?: string;
+  createdAt: number;
+  onRetry?: () => void;
+}

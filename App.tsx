@@ -3,7 +3,7 @@ import { AppProvider, useAppContext } from './AppContext';
 import Auth from './Auth';
 import Onboarding from './Onboarding';
 import type { View } from './types';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, HistoryIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon } from './components/icons';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, HistoryIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon, CheckCircleIcon, XCircleIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -41,6 +41,7 @@ import FreedomModal from './FreedomModal';
 import TeamReportModal from './TeamReportModal';
 import SuccessModal from './components/SuccessModal';
 import { FloatingAssistant } from './components/FloatingAssistant';
+import { ActivityMonitor } from './components/ActivityMonitor';
 
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
@@ -55,23 +56,25 @@ const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolea
     </button>
 );
 
-const Notification: React.FC<{ message: string; type: 'success' | 'error'; onClose: () => void }> = ({ message, type, onClose }) => {
-    const bgColor = type === 'success' ? 'bg-cosmic-success' : 'bg-cosmic-danger';
+const SyncStatusIndicator: React.FC = () => {
+    const { syncState } = useAppContext();
+    
+    const SYNC_CONFIG = {
+        synced: { text: 'Synced', icon: <CheckCircleIcon className="w-4 h-4 text-cosmic-success" /> },
+        syncing: { text: 'Syncing...', icon: <div className="w-4 h-4 border-2 border-cosmic-primary border-t-transparent rounded-full animate-spin"></div> },
+        offline: { text: 'Offline', icon: <XCircleIcon className="w-4 h-4 text-cosmic-danger" /> },
+    };
+
+    const current = SYNC_CONFIG[syncState];
 
     return (
-        <div 
-            className={`fixed top-5 right-5 z-[100] max-w-sm p-4 rounded-lg border border-cosmic-border shadow-lg transition-all duration-300 animate-slide-in-up ${bgColor}`}
-            role="alert"
-        >
-            <div className="flex items-center justify-between gap-4">
-                <p className="text-white font-semibold text-sm">{message}</p>
-                <button onClick={onClose} className="text-white opacity-70 hover:opacity-100 flex-shrink-0">
-                    <XIcon className="w-5 h-5" />
-                </button>
-            </div>
+        <div className="flex items-center gap-2">
+            {current.icon}
+            <span className="text-xs font-semibold text-cosmic-text-secondary">{current.text}</span>
         </div>
-    );
+    )
 };
+
 
 const AppContent: React.FC = () => {
     const context = useAppContext();
@@ -81,7 +84,6 @@ const AppContent: React.FC = () => {
         activeView, setActiveView, users, teams, activeUser, selectedTeam,
         isLoading, error, handleLogout,
         effectiveFinancialStatement, historicalData, allUserAccounts, allCategories,
-        notification,
         
         // Modals State
         modalStates,
@@ -157,7 +159,7 @@ const AppContent: React.FC = () => {
                 <img src={activeUser.avatar} alt={activeUser.name} className="w-10 h-10 rounded-full border-2 border-cosmic-primary" />
                 <div>
                     <p className="font-bold text-cosmic-text-primary">{activeUser.name}</p>
-                    <p className="text-sm text-cosmic-text-secondary">Level 5</p>
+                    <SyncStatusIndicator />
                 </div>
             </div>
             <button onClick={handleLogout} title="Log Out" className="text-cosmic-text-secondary hover:text-cosmic-primary">
@@ -169,13 +171,7 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="md:flex h-screen bg-cosmic-bg text-cosmic-text-primary font-sans">
-             {notification && (
-                <Notification 
-                    message={notification.message} 
-                    type={notification.type} 
-                    onClose={() => actions.setNotification(null)} 
-                />
-            )}
+             <ActivityMonitor />
             {isMobileNavOpen && (
                 <div className="fixed inset-0 bg-cosmic-bg bg-opacity-90 z-50 md:hidden" onClick={() => setIsMobileNavOpen(false)}>
                     <nav className="w-64 bg-cosmic-surface border-r border-cosmic-border p-4 flex flex-col h-full">

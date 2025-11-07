@@ -3,18 +3,19 @@ import { GoogleGenAI, Type, GenerateContentResponse, LiveServerMessage, Modality
 import type { FinancialStatement, CosmicEvent, Account } from '../types';
 import { AccountType, TransactionType } from '../types';
 
-let ai: GoogleGenAI | null = null;
-const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
-
-if (apiKey) {
-  try {
-    ai = new GoogleGenAI({ apiKey });
-  } catch (error) {
-    console.error("Failed to initialize GoogleGenAI:", error);
-  }
-} else {
-  console.warn("VITE_GEMINI_API_KEY not found in environment variables. AI features will be disabled.");
-}
+const getAiInstance = () => {
+    const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+        console.warn("VITE_GEMINI_API_KEY not found in environment variables. AI features will be disabled.");
+        return null;
+    }
+    try {
+        return new GoogleGenAI({ apiKey });
+    } catch (error) {
+        console.error("Failed to initialize GoogleGenAI:", error);
+        return null;
+    }
+};
 
 // --- Audio Utility Functions for Live API ---
 function encode(bytes: Uint8Array) {
@@ -95,9 +96,9 @@ function formatFinancialDataForPrompt(statement: FinancialStatement, accounts: A
 }
 
 export const getFinancialAdvice = async (prompt: string, statement: FinancialStatement, accounts: Account[]): Promise<string> => {
+    const ai = getAiInstance();
     if (!ai) {
-        console.warn("AI Coach is disabled because API key is not configured.");
-        return "The AI Coach is temporarily offline. Please ensure the API key is configured.";
+        throw new Error("AI Coach is disabled because API key is not configured.");
     }
 
     const fullPrompt = `
@@ -114,21 +115,14 @@ export const getFinancialAdvice = async (prompt: string, statement: FinancialSta
         return response.text;
     } catch (error) {
         console.error("Error getting financial advice from Gemini:", error);
-        return "Sorry, I encountered an issue while trying to generate advice. Please try again later.";
+        throw new Error("Sorry, I encountered an issue while trying to generate advice. Please try again later.");
     }
 };
 
 export const getCosmicEvent = async (statement: FinancialStatement, accounts: Account[]): Promise<CosmicEvent> => {
+    const ai = getAiInstance();
     if (!ai) {
-        console.warn("Cosmic Event generation is disabled because API key is not configured.");
-        return {
-            title: "Cosmic Interference",
-            description: "A solar flare is causing some interference with our long-range scanners. All event generation is temporarily offline.",
-            choices: [
-                { text: "Okay", outcome: { message: "You acknowledge the solar flare and continue on your journey." } },
-                { text: "Understood", outcome: { message: "You decide to wait for the interference to clear. Your finances remain unchanged." } }
-            ]
-        };
+       throw new Error("Cosmic Event generation is disabled because API key is not configured.");
     }
 
     const prompt = `
@@ -185,17 +179,12 @@ export const getCosmicEvent = async (statement: FinancialStatement, accounts: Ac
 
     } catch (error) {
         console.error("Error generating Cosmic Event:", error);
-        return {
-            title: "Transmission Error",
-            description: "We've lost the signal from the event probe! It seems a cosmic anomaly interfered with the data stream.",
-            choices: [
-                { text: "Proceed cautiously", outcome: { message: "You decide to wait for a clearer signal. Your finances are unaffected." } }
-            ]
-        };
+         throw new Error("The AI failed to generate a Cosmic Event. The transmission may have been interrupted.");
     }
 };
 
 export const parseStatementWithGemini = async (statementText: string) => {
+    const ai = getAiInstance();
     if (!ai) {
         throw new Error("AI parser is disabled because API key is not configured.");
     }
@@ -267,6 +256,7 @@ export const connectLiveAssistant = (callbacks: {
     onclose: (e: CloseEvent) => void,
 // FIX: Updated return type to use 'any' as 'LiveSession' is not an exported member.
 }, statement: FinancialStatement, accounts: Account[]): Promise<any> => {
+    const ai = getAiInstance();
     if (!ai) {
         throw new Error("AI Coach is disabled because API key is not configured.");
     }
