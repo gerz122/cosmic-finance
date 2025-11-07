@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import { auth, db, firebase } from './services/firebase';
 import type { User as FirebaseUser } from './services/firebase';
 import * as dbService from './services/dbService';
-import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal, AppTask } from './types';
+import type { View, User, Team, Transaction, CosmicEvent, EventOutcome, Asset, Account, Liability, HistoricalDataPoint, Budget, Goal, AppTask, ActivityLogEntry } from './types';
 import { TransactionType } from './types';
 import { generateHistoricalData } from './utils/financialCalculations';
 import { getCosmicEvent } from './services/geminiService';
@@ -17,6 +17,7 @@ interface AppContextType {
     error: string | null;
     syncState: 'synced' | 'syncing' | 'offline';
     activeTasks: AppTask[];
+    activityLog: ActivityLogEntry[];
     modalStates: Record<string, boolean>;
     modalData: Record<string, any>;
     effectiveFinancialStatement: any;
@@ -42,6 +43,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // New state for resilient architecture
     const [syncState, setSyncState] = useState<'synced' | 'syncing' | 'offline'>('synced');
     const [activeTasks, setActiveTasks] = useState<AppTask[]>([]);
+    const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
     
     const [modalStates, setModalStates] = useState<Record<string, boolean>>({ isFreedomModalOpen: false, isTeamReportModalOpen: false, isFabOpen: false, isSuccessModalOpen: false });
     const [modalData, setModalData] = useState<Record<string, any>>({});
@@ -51,6 +53,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setModalStates(prev => ({ ...prev, isSuccessModalOpen: true }));
     };
 
+    const logActivity = useCallback((message: string, type: ActivityLogEntry['type'], details?: string) => {
+        const newEntry: ActivityLogEntry = {
+            id: `log_${Date.now()}_${Math.random()}`,
+            timestamp: Date.now(),
+            message,
+            type,
+            details,
+        };
+        setActivityLog(prev => [newEntry, ...prev].slice(0, 200)); // Keep a reasonable history
+    }, []);
+
     const runTask = useCallback(async (name: string, taskFn: () => Promise<any>, options: { onRetry?: () => void } = {}) => {
         const taskId = `task_${Date.now()}_${Math.random()}`;
         setActiveTasks(prev => [...prev, { id: taskId, name, status: 'processing', createdAt: Date.now(), onRetry: options.onRetry }]);
@@ -58,13 +71,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const result = await taskFn();
             setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'success' } : t));
             setTimeout(() => setActiveTasks(prev => prev.filter(t => t.id !== taskId)), 4000);
+            logActivity(name, 'success');
             return result;
         } catch (e) {
             console.error(`Task "${name}" failed:`, e);
-            setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'failed', error: (e as Error).message } : t));
+            const errorMessage = (e as Error).message;
+            setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'failed', error: errorMessage } : t));
+            logActivity(name, 'error', errorMessage);
             throw e; // Re-throw to be caught by caller if needed
         }
-    }, []);
+    }, [logActivity]);
 
     const refreshData = useCallback(async (uid: string) => {
         setSyncState('syncing');
@@ -154,12 +170,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const setModalOpen = (modal: string, isOpen: boolean) => setModalStates(prev => ({ ...prev, [modal]: isOpen }));
     const setModalDataField = (field: string, value: any) => setModalData(p => ({...p, [field]: value}));
     
-    const logErrorTask = (error: Error, errorInfo: ErrorInfo) => {
+    const logErrorTask = useCallback((error: Error, errorInfo: ErrorInfo) => {
         const taskId = `error_${Date.now()}`;
         const name = `UI Error: ${error.message}`;
         const errorDetails = `Component Stack:\n${errorInfo.componentStack}`;
         setActiveTasks(prev => [...prev, { id: taskId, name, status: 'failed', error: errorDetails, createdAt: Date.now() }]);
-    };
+        logActivity(name, 'error', errorDetails);
+    }, [logActivity]);
 
     const handleCreateTeam = (name: string, invitedEmails: string[], initialGoal: string, initialAccountName: string) => {
         if (!activeUser) return;
@@ -496,7 +513,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     return (
         <AppContext.Provider value={{
-            activeView, users, teams, activeUser, selectedTeam, isLoading, error, syncState, activeTasks,
+            activeView, users, teams, activeUser, selectedTeam, isLoading, error, syncState, activeTasks, activityLog,
             modalStates, modalData, effectiveFinancialStatement, historicalData, allUserAccounts, allCategories,
             setActiveView, handleLogout, actions
         }}>

@@ -16,7 +16,7 @@ interface EmbeddedStockChartProps {
 const EmbeddedStockChart: React.FC<EmbeddedStockChartProps> = ({ ticker, height = '400px', takeProfit, stopLoss }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetRef = useRef<any>(null); // To hold the widget instance
-    const containerId = `tv-advanced-chart-container-${ticker}`; // Use a stable ID
+    const containerId = `tv-advanced-chart-container-${ticker.replace(/[^a-zA-Z0-9]/g, '')}`; // Use a stable ID
 
     useEffect(() => {
         const createWidget = () => {

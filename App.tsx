@@ -3,7 +3,7 @@ import { AppProvider, useAppContext } from './AppContext';
 import Auth from './Auth';
 import Onboarding from './Onboarding';
 import type { View } from './types';
-import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, HistoryIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon, CheckCircleIcon, XCircleIcon, DataIcon } from './components/icons';
+import { DashboardIcon, StatementIcon, PortfolioIcon, TeamsIcon, CoachIcon, StarIcon, CreditCardIcon, BudgetIcon, GoalIcon, AnalysisIcon, TrophyIcon, UploadIcon, LogOutIcon, XIcon, CheckCircleIcon, XCircleIcon, DataIcon, ClipboardListIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { FinancialStatement as FinancialStatementComponent } from './components/FinancialStatement';
 import { AICoach } from './components/AICoach';
@@ -44,6 +44,8 @@ import { FloatingAssistant } from './components/FloatingAssistant';
 import { ActivityMonitor } from './components/ActivityMonitor';
 import { DataManagementView } from './components/DataManagementView';
 import ErrorBoundary from './components/ErrorBoundary';
+import { HistoryView } from './components/HistoryView';
+import { AddCategoryModal } from './components/AddCategoryModal';
 
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; isSub?: boolean }> = ({ icon, label, isActive, onClick, isSub }) => (
@@ -116,7 +118,7 @@ const AppContent: React.FC = () => {
         switch (activeView) {
             case 'dashboard': return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick} onShowFreedomModal={() => actions.setModalOpen('isFreedomModalOpen', true)} />;
             case 'statement': return <FinancialStatementComponent statement={effectiveFinancialStatement} user={activeUser} allUsers={users} teams={teams} onEditTransaction={actions.handleOpenEditTransactionModal} onDeleteTransaction={actions.handleDeleteTransaction} onViewReceipt={actions.handleViewReceipt} onViewSplitDetails={actions.handleViewSplitDetails}/>;
-            case 'importer': return <StatementImporter user={activeUser} teams={teams} onImport={actions.handleImportTransactions} allCategories={allCategories} onAddCategory={actions.handleAddCategory} actions={actions} />;
+            case 'importer': return <StatementImporter user={activeUser} teams={teams} onImport={actions.handleImportFromAI} allCategories={allCategories} onAddCategory={actions.handleAddCategory} actions={actions} />;
             case 'accounts': return <AccountsView accounts={activeUser.accounts} onAddAccount={() => actions.handleOpenAddAccountModal()} onOpenAccountTransactions={actions.handleOpenAccountTransactionsModal} onEditAccount={actions.handleOpenEditAccountModal} />;
             case 'coach': return <AICoach user={activeUser} actions={actions} />;
             case 'portfolio': return <Portfolio user={activeUser} onAddStock={() => actions.handleOpenAddStockModal()} onAddAsset={() => actions.handleOpenAddAssetLiabilityModal('asset')} onAddLiability={() => actions.handleOpenAddAssetLiabilityModal('liability')} onEditStock={actions.handleOpenEditStockModal} onDeleteStock={actions.handleDeleteStock} onLogDividend={actions.handleOpenLogDividendModal} onOpenLargeChart={actions.openLargeChartModal} teams={teams} onEditAsset={actions.handleOpenEditAssetLiabilityModal} onEditLiability={actions.handleOpenEditAssetLiabilityModal} />;
@@ -125,9 +127,10 @@ const AppContent: React.FC = () => {
             case 'balances': return <Balances currentUser={activeUser} allUsers={users} teams={teams} onSettleUp={() => actions.setModalOpen('isTransferModalOpen', true)} />;
             case 'budget': return <BudgetView user={activeUser} onSaveBudget={actions.handleSaveBudget} onOpenBudgetModal={() => actions.setModalOpen('isAddBudgetModalOpen', true)} />;
             case 'goals': return <GoalsView user={activeUser} onAddGoal={() => actions.handleOpenAddGoalModal()} onDeleteGoal={actions.handleDeleteGoal} onContribute={actions.handleOpenContributeToGoalModal} />;
-            case 'history': return <HistoricalPerformance data={historicalData} />;
+            case 'analysis': return <HistoricalPerformance data={historicalData} />;
             case 'achievements': return <Achievements user={activeUser} />;
             case 'data': return <DataManagementView />;
+            case 'history': return <HistoryView />;
             default: return <Dashboard user={activeUser} teams={teams} effectiveStatement={effectiveFinancialStatement} historicalData={historicalData} onAddTransactionClick={() => actions.handleOpenAddTransactionModal()} onTransferClick={() => actions.setModalOpen('isTransferModalOpen', true)} onDrawCosmicCard={actions.handleDrawCosmicCard} onCategoryClick={actions.handleCategoryClick} onTransactionClick={actions.handleTransactionClick} onStatCardClick={actions.handleStatCardClick} onShowFreedomModal={() => actions.setModalOpen('isFreedomModalOpen', true)} />;
         }
     };
@@ -140,7 +143,8 @@ const AppContent: React.FC = () => {
         </div>
         <div className="space-y-2">
             <NavItem icon={<DashboardIcon className="w-6 h-6" />} label="Dashboard" isActive={activeView === 'dashboard'} onClick={() => handleViewChange('dashboard')} />
-            <NavItem icon={<HistoryIcon className="w-6 h-6" />} label="History" isActive={activeView === 'history'} onClick={() => handleViewChange('history')} />
+            <NavItem icon={<AnalysisIcon className="w-6 h-6" />} label="Analysis" isActive={activeView === 'analysis'} onClick={() => handleViewChange('analysis')} />
+            <NavItem icon={<ClipboardListIcon className="w-6 h-6" />} label="History" isActive={activeView === 'history'} onClick={() => handleViewChange('history')} />
             <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Balances" isActive={activeView === 'balances'} onClick={() => handleViewChange('balances')} />
             <NavItem icon={<StatementIcon className="w-6 h-6" />} label="Statement" isActive={activeView === 'statement'} onClick={() => handleViewChange('statement')} />
             <NavItem icon={<UploadIcon className="w-6 h-6" />} label="Import" isActive={activeView === 'importer'} onClick={() => handleViewChange('importer')} />
@@ -238,6 +242,7 @@ const AppContent: React.FC = () => {
             <FreedomModal isOpen={modalStates.isFreedomModalOpen} onClose={() => actions.setModalOpen('isFreedomModalOpen', false)} />
             <TeamReportModal isOpen={modalStates.isTeamReportModalOpen} onClose={() => actions.setModalOpen('isTeamReportModalOpen', false)} team={selectedTeam} />
             <SuccessModal isOpen={modalStates.isSuccessModalOpen} message={modalData.successModalMessage} onClose={() => actions.setModalOpen('isSuccessModalOpen', false)} />
+            <AddCategoryModal isOpen={modalStates.isAddCategoryModalOpen} onClose={() => actions.setModalOpen('isAddCategoryModalOpen', false)} onAddCategory={modalData.addCategorySuccessCallback} />
         </div>
     );
 };

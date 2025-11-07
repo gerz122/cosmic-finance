@@ -216,69 +216,83 @@ export const getCosmicEvent = async (statement: FinancialStatement, accounts: Ac
     }
 };
 
-export const parseStatementWithGemini = async (statementText: string) => {
+const analysisTools: FunctionDeclaration[] = [
+    {
+        name: 'add_transaction',
+        description: 'Records a single financial transaction (income or expense).',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                date: { type: Type.STRING, description: 'Date of the transaction in YYYY-MM-DD format.' },
+                description: { type: Type.STRING, description: 'A brief, clear summary of the transaction.' },
+                amount: { type: Type.NUMBER, description: 'The transaction amount as a positive number.' },
+                type: { type: Type.STRING, description: 'Either "INCOME" or "EXPENSE".' },
+                category: { type: Type.STRING, description: 'A suitable budget category (e.g., Food, Housing, Job).' },
+                is_passive: { type: Type.BOOLEAN, description: 'For income, is it from passive sources?' },
+                account_name: { type: Type.STRING, description: 'The name of the account the transaction belongs to, e.g., "Checking", "Credit Card".' }
+            },
+            required: ['date', 'description', 'amount', 'type', 'category', 'account_name']
+        }
+    },
+    {
+        name: 'create_account',
+        description: 'Proposes the creation of a new bank account, credit card, etc.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING, description: 'The name for the new account, e.g., "Emergency Fund Savings".' },
+                type: { type: Type.STRING, description: `The account type. Must be one of: ${Object.values(AccountType).join(', ')}.` },
+                initial_balance: { type: Type.NUMBER, description: 'The starting balance of the account.' },
+            },
+            required: ['name', 'type', 'initial_balance']
+        }
+    },
+    {
+        name: 'create_team',
+        description: 'Proposes the creation of a new team for a project or business.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING, description: 'The name for the new team or project.' }
+            },
+            required: ['name']
+        }
+    }
+];
+
+export const analyzeTextWithTools = async (textToAnalyze: string): Promise<GenerateContentResponse> => {
     const ai = getAiInstance();
     if (!ai) {
         throw new Error("AI parser is disabled because API key is not configured.");
     }
-
     const prompt = `
-        Analyze the following bank statement text and extract all transactions.
-        For each transaction, determine the date, a clean description, the amount, and whether it's an income or an expense.
-        Also, determine if an income is 'isPassive' (like dividends, rent) and if a transaction is a 'isTransfer' between accounts.
-        The date should be in YYYY-MM-DD format. Today's date is ${new Date().toLocaleDateString()}.
-        If a year is not specified, assume the current year.
+        Analyze the following text. Identify and extract all financial actions such as creating accounts, logging transactions, or creating teams.
+        The current date is ${new Date().toLocaleDateString()}. If a year is not specified for a transaction, assume the current year.
+        Use the available tools to structure the output for each action you identify.
+        You can call the tools multiple times if you find multiple actions.
+        For transactions, try to infer the account name (e.g., "Checking", "Visa", "Amex"). If not specified, use a sensible default like "Checking".
+        
         Text to analyze:
         ---
-        ${statementText}
+        ${textToAnalyze}
         ---
     `;
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        transactions: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    date: { type: Type.STRING, description: "Date in YYYY-MM-DD format." },
-                                    description: { type: Type.STRING, description: "Cleaned-up transaction description." },
-                                    amount: { type: Type.NUMBER, description: "The transaction amount as a positive number." },
-                                    type: { type: Type.STRING, description: "Either 'income' or 'expense'." },
-                                    isPassive: { type: Type.BOOLEAN, description: "True if the income is from passive sources like dividends or rent." },
-                                    isTransfer: { type: Type.BOOLEAN, description: "True if this is likely a transfer between accounts." }
-                                },
-                                required: ['date', 'description', 'amount', 'type']
-                            }
-                        }
-                    },
-                    required: ['transactions']
-                }
+                tools: [{ functionDeclarations: analysisTools }]
             }
         });
-
-        const jsonText = response.text.trim();
-        const parsedData = JSON.parse(jsonText);
-        
-        if (parsedData.transactions && Array.isArray(parsedData.transactions)) {
-            // Add a temporary ID for client-side rendering
-            return parsedData.transactions.map((tx: any, index: number) => ({ ...tx, id: Date.now() + index }));
-        }
-        
-        throw new Error("AI response did not contain a valid 'transactions' array.");
-
+        return response;
     } catch (error) {
-        console.error("Error parsing statement with Gemini:", error);
-        throw new Error("The AI failed to parse the statement. The text might be in an unsupported format.");
+        console.error("Error analyzing text with Gemini tools:", error);
+        throw new Error("The AI failed to analyze the text. The format might be unsupported.");
     }
 };
+
 
 // --- Live Assistant Service ---
 

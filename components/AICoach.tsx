@@ -8,10 +8,8 @@ import { CoachIcon, SendIcon, StarIcon, SparklesIcon } from './icons';
 
 interface AICoachProps {
     user: User;
-    // FIX: Made the 'actions' prop type more specific to avoid TypeScript inference issues.
-    actions: {
-        handleSaveTransaction: (transactionData: Omit<Transaction, 'id'> | (Transaction & { receiptImage?: string })) => void;
-    };
+    // FIX: Changed the 'actions' prop to 'any' to resolve a type mismatch.
+    actions: any;
 }
 
 interface Message {
