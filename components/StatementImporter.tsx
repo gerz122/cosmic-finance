@@ -72,7 +72,7 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
                 ...transactionRecord,
                 type: transactionRecord.isTransfer ? 'transfer' : transactionRecord.type,
                 category: '',
-                accountId: '',
+                accountId: user.accounts.length > 0 ? user.accounts[0].id : '', // Default to first account
                 fromAccountId: '',
                 toAccountId: '',
                 teamId: '',
@@ -87,7 +87,19 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
     
     const handleTransactionUpdate = (id: number, field: keyof ParsedTransactionForReview, value: string | number | boolean) => {
         setParsedTransactions(current => 
-            current.map(tx => tx.id === id ? { ...tx, [field]: value } : tx)
+            current.map(tx => {
+                if (tx.id === id) {
+                    const updatedTx = { ...tx, [field]: value };
+                    // If team changes, reset account to the first one of that team
+                    if (field === 'teamId') {
+                        const newScope = (value as string) || 'personal';
+                        const accountsForNewScope = availableAccounts[newScope] || [];
+                        updatedTx.accountId = accountsForNewScope.length > 0 ? accountsForNewScope[0].id : '';
+                    }
+                    return updatedTx;
+                }
+                return tx;
+            })
         );
     };
 
@@ -210,12 +222,10 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
                                         <td className="p-2 space-y-1">
                                             {tx.type === 'transfer' ? (
                                                 <>
-                                                    {/* FIX: Removed invalid 'placeholder' attribute from select element. The first option acts as a placeholder. */}
                                                     <select value={tx.fromAccountId} onChange={(e) => handleTransactionUpdate(tx.id, 'fromAccountId', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
                                                         <option value="">From Account...</option>
                                                         {accountsForScope.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
                                                     </select>
-                                                    {/* FIX: Removed invalid 'placeholder' attribute from select element. The first option acts as a placeholder. */}
                                                     <select value={tx.toAccountId} onChange={(e) => handleTransactionUpdate(tx.id, 'toAccountId', e.target.value)} className="w-full bg-cosmic-bg border border-cosmic-border rounded p-1">
                                                         <option value="">To Account...</option>
                                                         {accountsForScope.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}

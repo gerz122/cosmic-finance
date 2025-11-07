@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import type { User, Transaction, FinancialStatement, HistoricalDataPoint, Team } from '../types';
 import { TransactionType, AssetType } from '../types';
 import { StarIcon, PlusIcon, SparklesIcon } from './icons';
@@ -46,21 +46,16 @@ const ProgressBar: React.FC<{ value: number; max: number; }> = ({ value, max }) 
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStatement, historicalData, onAddTransactionClick, onTransferClick, onDrawCosmicCard, onCategoryClick, onTransactionClick, onStatCardClick, onShowFreedomModal }) => {
+    const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
 
     const { passiveIncome, totalExpenses, netWorth, monthlyCashflow, recentTransactions, stocks, expenseBreakdown } = useMemo(() => {
-        // DEFINITIVE FIX: This guard is now extremely robust. It checks not only for the existence
-        // of the necessary data structures but also ensures that any property that will be looped over
-        // (like '.transactions' or '.assets') is actually an array. This completely prevents the
-        // race condition where the component tries to render before sub-collections are loaded.
         if (
             !user?.financialStatement ||
             !effectiveStatement ||
             !Array.isArray(effectiveStatement.transactions) ||
             !Array.isArray(effectiveStatement.assets) ||
-            !Array.isArray(effectiveStatement.liabilities) ||
-            !Array.isArray(user.financialStatement.assets)
+            !Array.isArray(effectiveStatement.liabilities)
         ) {
-            // Return a default, safe state if data is not fully hydrated.
             return { 
                 passiveIncome: 0, 
                 totalExpenses: 0, 
@@ -80,15 +75,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
         let calculatedTotalIncome = 0;
         const calculatedExpenseBreakdown: Record<string, number> = {};
 
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        const filteredTransactions = statement.transactions.filter(tx => tx.date.startsWith(currentMonth));
 
-        statement.transactions.forEach(transactionRecord => {
-            if (!transactionRecord.date.startsWith(currentMonth)) return;
-        
-            const userExpenseShare = transactionRecord.expenseShares?.find(shareDetail => shareDetail.userId === user.id)?.amount;
-            const userIncomeShare = transactionRecord.paymentShares?.find(paymentShareDetail => paymentShareDetail.userId === user.id)?.amount;
-        
+        filteredTransactions.forEach(transactionRecord => {
             if (transactionRecord.type === TransactionType.INCOME) {
+                const userIncomeShare = transactionRecord.paymentShares?.find(paymentShareDetail => paymentShareDetail.userId === user.id)?.amount;
                 if (userIncomeShare !== undefined) {
                     calculatedTotalIncome += userIncomeShare;
                     if (transactionRecord.isPassive) {
@@ -96,16 +87,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
                     }
                 }
             } else { // EXPENSE
+                const userExpenseShare = transactionRecord.expenseShares?.find(shareDetail => shareDetail.userId === user.id)?.amount;
                 if (userExpenseShare !== undefined) {
                     calculatedTotalExpenses += userExpenseShare;
                     calculatedExpenseBreakdown[transactionRecord.category] = (calculatedExpenseBreakdown[transactionRecord.category] || 0) + userExpenseShare;
-                } else if (transactionRecord.teamId && (!transactionRecord.expenseShares || transactionRecord.expenseShares.length === 0)) {
-                    const teamData = teams.find(teamMember => teamMember.id === transactionRecord.teamId);
-                    if (teamData && teamData.memberIds.includes(user.id)) {
-                        const equalShare = transactionRecord.amount / teamData.memberIds.length;
-                        calculatedTotalExpenses += equalShare;
-                        calculatedExpenseBreakdown[transactionRecord.category] = (calculatedExpenseBreakdown[transactionRecord.category] || 0) + equalShare;
-                    }
                 }
             }
         });
@@ -148,7 +133,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
             stocks, 
             expenseBreakdown: calculatedExpenseBreakdown
         };
-    }, [user, teams, effectiveStatement]);
+    }, [user, teams, effectiveStatement, currentMonth]);
     
     // Check for financial freedom
     useEffect(() => {
@@ -174,18 +159,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
 
     return (
         <div className="animate-fade-in space-y-8">
-            <div className="flex justify-between items-center flex-wrap gap-4">
+            <div className="flex justify-between items-start flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-cosmic-text-primary">Welcome back, {user.name}!</h1>
-                    <p className="text-cosmic-text-secondary">Here's your "Cosmic Tournament" summary.</p>
+                    <p className="text-cosmic-text-secondary">Here's your summary for {new Date(currentMonth + '-02').toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
                 </div>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
+                    <input 
+                        type="month"
+                        value={currentMonth}
+                        onChange={e => setCurrentMonth(e.target.value)}
+                        className="bg-cosmic-surface border border-cosmic-border rounded-md p-2 text-cosmic-text-primary date-input"
+                    />
                     <button onClick={onDrawCosmicCard} className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg hover:shadow-indigo-500/50 transition-shadow">
                         <SparklesIcon className="w-5 h-5" />
                         Explore Cosmos
-                    </button>
-                    <button onClick={onTransferClick} className="flex items-center gap-2 bg-cosmic-surface text-cosmic-primary font-bold py-2 px-4 rounded-lg border border-cosmic-primary hover:bg-cosmic-border transition-colors">
-                        Transfer Money
                     </button>
                 </div>
             </div>
@@ -268,6 +256,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, teams, effectiveStat
                     )}
                 </div>
             </div>
+            <style>{`.date-input::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; }`}</style>
         </div>
     );
 };

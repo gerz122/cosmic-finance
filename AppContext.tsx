@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
-// FIX: Import `db` and `firebase` to resolve undefined errors in the transaction import handler.
 import { auth, db, firebase } from './services/firebase';
 import type { User as FirebaseUser } from './services/firebase';
 import * as dbService from './services/dbService';
@@ -147,7 +146,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const allCategories = useMemo(() => {
         const categories = new Set(effectiveFinancialStatement.transactions.map((tx: Transaction) => tx.category));
-        return [...Array.from(categories)].sort();
+        return ['Housing', 'Food', 'Transportation', 'Entertainment', 'Utilities', 'Shopping', 'Business Expense', 'Maintenance', 'Other', 'Goals', 'Job', 'Investment', 'Loan', 'Team Contribution', 'Transfer', 'Cosmic Event', 'Initial Balance', 'Rental', 'Mortgage', 'Business Income', ...Array.from(categories)].filter((v, i, a) => a.indexOf(v) === i).sort();
     }, [effectiveFinancialStatement.transactions]);
 
     const historicalData = useMemo(() => activeUser ? generateHistoricalData(activeUser, teams) : [], [activeUser, teams]);
@@ -165,7 +164,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (user) memberIds.push(user.id);
             }
             const newTeam = await dbService.createTeam(name, [...new Set(memberIds)]);
-            await Promise.all(newTeam.memberIds.map(memberId => dbService.addMemberToTeam(newTeam.id, newTeam.id)));
+            await Promise.all(newTeam.memberIds.map(memberId => dbService.addMemberToTeam(newTeam.id, memberId)));
             await refreshData(activeUser.id);
             showSuccessModal('Team Created!');
         };
@@ -289,18 +288,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const handleDeleteGoal = async (goalId: string) => {
         if (!activeUser) return;
+        if (!window.confirm("Are you sure you want to delete this goal?")) return;
         await dbService.deleteGoal(activeUser.id, goalId);
         await refreshData(activeUser.id);
     };
     
     const handleContributeToGoal = async (goal: Goal, amount: number, fromAccountId: string) => {
         if (!activeUser) return;
-        const fromAccount = activeUser.accounts.find(a => a.id === fromAccountId);
-        if (!fromAccount || fromAccount.balance < amount) return;
-        const updatedGoal = { ...goal, currentAmount: goal.currentAmount + amount };
-        await dbService.updateGoal(activeUser.id, updatedGoal);
-        await dbService.updateAccount(activeUser.id, {...fromAccount, balance: fromAccount.balance - amount});
-        await refreshData(activeUser.id);
+        runTask('Contributing to Goal', async () => {
+            await dbService.contributeToGoal(activeUser.id, goal, amount, fromAccountId);
+            await refreshData(activeUser.id);
+            showSuccessModal(`$${amount} added to ${goal.name}!`);
+        }, { onRetry: () => handleContributeToGoal(goal, amount, fromAccountId) });
     };
     
     const handleSaveStock = (stockData: Partial<Asset>, teamId?: string) => {
@@ -371,7 +370,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     
     const handleAddCategory = (category: string) => {
-        // Client-side only
+        // This is a client-side only action now, handled by allCategories memo
     };
     
     const handleImportData = (data: { user: User, teams: Team[] }) => {
@@ -439,9 +438,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         paymentShares: [{ userId: activeUser.id, accountId: ptx.accountId, amount: ptx.amount }],
                         expenseShares: [{ userId: activeUser.id, amount: ptx.amount }]
                     };
-                    batch.set(db.collection(txCollectionPath).doc(), txData);
+                    const txRef = db.collection(txCollectionPath).doc();
+                    batch.set(txRef, {...txData, id: txRef.id});
                     const increment = txData.type === TransactionType.INCOME ? ptx.amount : -ptx.amount;
-                    // FIX: The object-based update was causing a type error. Switched to the explicit field-value pair version of update, which resolves the ambiguity.
                     const accountRef = db.collection(accCollectionPath).doc(ptx.accountId);
                     batch.update(accountRef, 'balance', firebase.firestore.FieldValue.increment(increment));
                 }

@@ -38,17 +38,30 @@ const createInitialDataWithSubcollections = async (batch: firebase.firestore.Wri
     for (const transaction of financialStatement.transactions) {
         const transactionRef = userRef.collection('transactions').doc();
         batch.set(transactionRef, { ...transaction, id: transactionRef.id });
-
-        for (const payment of transaction.paymentShares) {
-            const accountRef = userRef.collection('accounts').doc(payment.accountId);
-            const amount = transaction.type === TransactionType.INCOME ? transaction.amount : -transaction.amount;
-            const doc = await accountRef.get();
-            if (doc.exists) { // Only update if account exists in batch/db
-                 batch.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amount) });
-            }
-        }
     }
 };
+
+const createNewGenericUser = (uid: string, name: string, email: string, avatar: string): User => {
+    const checkingId = 'initial-checking';
+    const savingsId = 'initial-savings';
+    return {
+        id: uid, name, email, avatar, teamIds: [], onboardingCompleted: false,
+        accounts: [
+            { id: checkingId, name: 'Checking', type: AccountType.CHECKING, balance: 1500, ownerIds: [uid] },
+            { id: savingsId, name: 'Savings', type: AccountType.SAVINGS, balance: 5000, ownerIds: [uid] },
+        ],
+        financialStatement: {
+            transactions: [
+                { id: crypto.randomUUID(), description: 'Initial Balance', amount: 1500, type: TransactionType.INCOME, category: 'Initial Balance', date: new Date().toISOString().split('T')[0], paymentShares: [{ userId: uid, accountId: checkingId, amount: 1500 }] },
+                { id: crypto.randomUUID(), description: 'Initial Balance', amount: 5000, type: TransactionType.INCOME, category: 'Initial Balance', date: new Date().toISOString().split('T')[0], paymentShares: [{ userId: uid, accountId: savingsId, amount: 5000 }] },
+            ] as Transaction[],
+            assets: [],
+            liabilities: []
+        },
+        budgets: [], goals: [], achievements: []
+    };
+};
+
 
 export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User> => {
     const userRef = getUserDoc(firebaseUser.uid);
@@ -79,20 +92,18 @@ export const getOrCreateUser = async (firebaseUser: FirebaseUser): Promise<User>
 
         const isGerman = email === 'german@example.com';
         const isValeria = email === 'valeria@example.com';
+        
         const initialData = isGerman
             ? initialDataForGerman(uid, name, avatar, email!)
             : isValeria
             ? initialDataForValeria(uid, name, avatar, email!)
-            : {
-                id: uid, name, email: email!, avatar, teamIds: [], onboardingCompleted: false, accounts: [{id: 'initial-checking', name: 'Checking', type: AccountType.CHECKING, balance: 1000, ownerIds: [uid]}],
-                financialStatement: { transactions: [], assets: [], liabilities: [] },
-                budgets: [], goals: [], achievements: []
-            };
+            : createNewGenericUser(uid, name, email!, avatar);
 
         const batch = db.batch();
         await createInitialDataWithSubcollections(batch, uid, initialData);
 
         if (isGerman || isValeria) {
+            // This logic is for demo purposes to pre-populate a shared team
             const germanUser = isGerman ? { id: uid } : await findUserByEmail('german@example.com');
             const valeriaUser = isValeria ? { id: uid } : await findUserByEmail('valeria@example.com');
 
@@ -160,28 +171,24 @@ export const addTeamTransaction = (transactionData: Transaction): Promise<void> 
 export const updateTransaction = (transaction: Transaction): Promise<void> => {
     return db.runTransaction(async (t) => {
         const isTeamTx = !!transaction.teamId;
-        const ownerId = isTeamTx ? transaction.teamId : transaction.paymentShares[0].userId;
-        const collectionPath = isTeamTx ? `teams/${ownerId}` : `users/${ownerId}`;
+        const ownerRef = isTeamTx ? getTeamDoc(transaction.teamId!) : getUserDoc(transaction.paymentShares[0].userId);
         
-        const transactionRef = db.collection(`${collectionPath}/transactions`).doc(transaction.id);
+        const transactionRef = ownerRef.collection('transactions').doc(transaction.id);
         const oldTransactionDoc = await t.get(transactionRef);
 
         if (!oldTransactionDoc.exists) throw new Error("Transaction does not exist!");
         const oldTransaction = oldTransactionDoc.data() as Transaction;
 
-        const getAccountRef = (accountId: string, userId: string) => {
-             const path = isTeamTx ? `teams/${ownerId}/accounts` : `users/${userId}/accounts`;
-             return db.collection(path).doc(accountId);
-        }
+        const getAccountRef = (accountId: string) => ownerRef.collection('accounts').doc(accountId);
 
         for (const payment of oldTransaction.paymentShares) {
-            const accountRef = getAccountRef(payment.accountId, payment.userId);
+            const accountRef = getAccountRef(payment.accountId);
             const amountToReverse = oldTransaction.type === TransactionType.INCOME ? -payment.amount : payment.amount;
             t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
         }
 
         for (const payment of transaction.paymentShares) {
-            const accountRef = getAccountRef(payment.accountId, payment.userId);
+            const accountRef = getAccountRef(payment.accountId);
             const amountToAdd = transaction.type === TransactionType.INCOME ? payment.amount : -payment.amount;
             t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToAdd) });
         }
@@ -193,17 +200,13 @@ export const updateTransaction = (transaction: Transaction): Promise<void> => {
 export const deleteTransaction = (transaction: Transaction): Promise<void> => {
     return db.runTransaction(async (t) => {
         const isTeamTx = !!transaction.teamId;
-        const ownerId = isTeamTx ? transaction.teamId : transaction.paymentShares[0].userId;
-        const collectionPath = isTeamTx ? `teams/${ownerId}` : `users/${ownerId}`;
-        const transactionRef = db.collection(`${collectionPath}/transactions`).doc(transaction.id);
+        const ownerRef = isTeamTx ? getTeamDoc(transaction.teamId!) : getUserDoc(transaction.paymentShares[0].userId);
+        const transactionRef = ownerRef.collection('transactions').doc(transaction.id);
         
-        const getAccountRef = (accountId: string, userId: string) => {
-             const path = isTeamTx ? `teams/${ownerId}/accounts` : `users/${userId}/accounts`;
-             return db.collection(path).doc(accountId);
-        }
+        const getAccountRef = (accountId: string) => ownerRef.collection('accounts').doc(accountId);
 
         for (const payment of transaction.paymentShares) {
-            const accountRef = getAccountRef(payment.accountId, payment.userId);
+            const accountRef = getAccountRef(payment.accountId);
             const amountToReverse = transaction.type === TransactionType.INCOME ? -payment.amount : payment.amount;
             t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
         }
@@ -215,7 +218,7 @@ export const deleteTransaction = (transaction: Transaction): Promise<void> => {
 // --- Other Data Management ---
 
 export const uploadReceipt = async (base64Image: string, uid: string): Promise<string> => {
-    const receiptId = Date.now().toString();
+    const receiptId = crypto.randomUUID();
     const ref = storage.ref(`receipts/${uid}/${receiptId}`);
     const snapshot = await ref.putString(base64Image, 'data_url');
     return snapshot.ref.getDownloadURL();
@@ -242,27 +245,28 @@ export const applyEventOutcome = async (uid: string, outcome: EventOutcome): Pro
     }
 };
 
-export const addAccount = (uid: string, newAccount: Account): Promise<any> => {
-    const accountRef = getUserDoc(uid).collection('accounts').doc(newAccount.id);
+export const addAccount = (uid: string, newAccount: Omit<Account, 'id' | 'ownerIds'>): Promise<any> => {
+    const accountRef = getUserDoc(uid).collection('accounts').doc();
+    const fullAccount = { ...newAccount, id: accountRef.id, ownerIds: [uid] };
 
     // If there's an initial balance, create a transaction for it
-    if (newAccount.balance > 0) {
+    if (fullAccount.balance > 0) {
         const transaction: Transaction = {
             id: crypto.randomUUID(),
             description: 'Initial Balance',
-            amount: newAccount.balance,
+            amount: fullAccount.balance,
             type: TransactionType.INCOME,
             category: 'Initial Balance',
             date: new Date().toISOString().split('T')[0],
-            paymentShares: [{ userId: uid, accountId: newAccount.id, amount: newAccount.balance }],
+            paymentShares: [{ userId: uid, accountId: fullAccount.id, amount: fullAccount.balance }],
         };
         const transactionRef = getUserDoc(uid).collection('transactions').doc(transaction.id);
         const batch = db.batch();
-        batch.set(accountRef, newAccount);
+        batch.set(accountRef, fullAccount);
         batch.set(transactionRef, transaction);
         return batch.commit();
     } else {
-        return accountRef.set(newAccount);
+        return accountRef.set(fullAccount);
     }
 };
 
@@ -285,6 +289,30 @@ export const updateGoal = (uid: string, goal: Goal): Promise<void> => {
 
 export const deleteGoal = (uid: string, goalId: string): Promise<void> => {
     return getUserDoc(uid).collection('goals').doc(goalId).delete();
+};
+
+export const contributeToGoal = (uid: string, goal: Goal, amount: number, fromAccountId: string): Promise<void> => {
+    const userRef = getUserDoc(uid);
+    const goalRef = userRef.collection('goals').doc(goal.id);
+    const accountRef = userRef.collection('accounts').doc(fromAccountId);
+    const transactionRef = userRef.collection('transactions').doc();
+    
+    const transactionData: Omit<Transaction, 'id'> = {
+        description: `Contribution to goal: ${goal.name}`,
+        amount: amount,
+        type: TransactionType.EXPENSE,
+        category: 'Goals',
+        date: new Date().toISOString().split('T')[0],
+        paymentShares: [{ userId: uid, accountId: fromAccountId, amount }],
+        expenseShares: [{ userId: uid, amount }],
+    };
+
+    const batch = db.batch();
+    batch.update(goalRef, { currentAmount: firebase.firestore.FieldValue.increment(amount) });
+    batch.update(accountRef, { balance: firebase.firestore.FieldValue.increment(-amount) });
+    batch.set(transactionRef, { ...transactionData, id: transactionRef.id });
+
+    return batch.commit();
 };
 
 export const logDividend = async (uid: string, stock: Asset, amount: number, accountId: string): Promise<void> => {

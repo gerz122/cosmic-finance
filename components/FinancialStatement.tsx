@@ -167,6 +167,35 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
             liabilities: statement.liabilities,
         };
     }, [filteredTransactions, statement, user.id, team, teams, dateRange, categoryFilter]);
+    
+    const handleExport = () => {
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Date,Description,Category,Type,Is Passive,Amount,Paid By,Expense For\n";
+
+        filteredTransactions.forEach(tx => {
+            const paidBy = tx.paymentShares.map(p => `${allUsers.find(u => u.id === p.userId)?.name}: ${p.amount.toFixed(2)}`).join('; ');
+            const expenseFor = (tx.expenseShares || []).map(e => `${allUsers.find(u => u.id === e.userId)?.name}: ${e.amount.toFixed(2)}`).join('; ');
+            const row = [
+                tx.date,
+                `"${tx.description.replace(/"/g, '""')}"`,
+                tx.category,
+                tx.type,
+                tx.isPassive ? 'Yes' : 'No',
+                tx.amount.toFixed(2),
+                `"${paidBy}"`,
+                `"${expenseFor}"`,
+            ].join(',');
+            csvContent += row + "\r\n";
+        });
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "financial_statement.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const incomeTransactions = filteredTransactions.filter(transactionRecord => transactionRecord.type === TransactionType.INCOME);
     const expenseTransactions = filteredTransactions.filter(transactionRecord => transactionRecord.type === TransactionType.EXPENSE);
@@ -191,6 +220,7 @@ export const FinancialStatement: React.FC<FinancialStatementProps> = ({ statemen
                          {transactionCategories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All Categories' : cat}</option>)}
                     </select>
                 </div>
+                <button onClick={handleExport} className="ml-auto bg-cosmic-primary text-white text-xs font-semibold px-3 py-2 rounded-md hover:bg-blue-400">Export to CSV</button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
