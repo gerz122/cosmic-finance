@@ -379,8 +379,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         runTask('Importing Data', async () => {
             const batch = db.batch();
             
-            // NOTE: This is a simplified merge. A real-world scenario might need more complex logic.
-            // We use .set with merge:true to be non-destructive.
+            // --- Helper for processing transactions with embedded receipts ---
+            const processTransactions = async (transactions: any[], ownerId: string, isTeam: boolean) => {
+                const collectionPath = isTeam ? `teams/${ownerId}/transactions` : `users/${ownerId}/transactions`;
+                for (let t of transactions) {
+                    if (t.receiptDataUrl) {
+                        // Re-upload receipt and get new URL
+                        t.receiptUrl = await dbService.uploadReceipt(t.receiptDataUrl, activeUser.id);
+                        delete t.receiptDataUrl; // Don't save base64 to Firestore
+                    }
+                    batch.set(db.collection(collectionPath).doc(t.id), t, { merge: true });
+                }
+            };
 
             // User data
             const { financialStatement, accounts, budgets, goals, ...mainUser } = data.user;
@@ -390,7 +400,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             goals.forEach(g => batch.set(db.collection('users').doc(mainUser.id).collection('goals').doc(g.id), g, { merge: true }));
             financialStatement.assets.forEach(a => batch.set(db.collection('users').doc(mainUser.id).collection('assets').doc(a.id), a, { merge: true }));
             financialStatement.liabilities.forEach(l => batch.set(db.collection('users').doc(mainUser.id).collection('liabilities').doc(l.id), l, { merge: true }));
-            financialStatement.transactions.forEach(t => batch.set(db.collection('users').doc(mainUser.id).collection('transactions').doc(t.id), t, { merge: true }));
+            await processTransactions(financialStatement.transactions, mainUser.id, false);
 
             // Team data
             for (const team of data.teams) {
@@ -399,7 +409,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 ta.forEach(a => batch.set(db.collection('teams').doc(mainTeam.id).collection('accounts').doc(a.id), a, { merge: true }));
                 tf.assets.forEach(a => batch.set(db.collection('teams').doc(mainTeam.id).collection('assets').doc(a.id), a, { merge: true }));
                 tf.liabilities.forEach(l => batch.set(db.collection('teams').doc(mainTeam.id).collection('liabilities').doc(l.id), l, { merge: true }));
-                tf.transactions.forEach(t => batch.set(db.collection('teams').doc(mainTeam.id).collection('transactions').doc(t.id), t, { merge: true }));
+                await processTransactions(tf.transactions, mainTeam.id, true);
             }
             
             await batch.commit();

@@ -1,26 +1,75 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../AppContext';
 import { UploadIcon } from './icons';
+import type { Transaction } from '../types';
+
+// Helper to fetch an image and convert it to a Base64 Data URL
+const fetchImageAsBase64 = async (url: string): Promise<string> => {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error(`Could not convert image from ${url}`, error);
+        return ''; // Return empty string on failure
+    }
+};
 
 export const DataManagementView: React.FC = () => {
     const { activeUser, teams, actions } = useAppContext();
     const [isImporting, setIsImporting] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [fileName, setFileName] = useState('');
 
-    const handleExport = () => {
+    const handleExport = async () => {
         if (!activeUser) return;
+        setIsExporting(true);
 
-        const dataToExport = {
-            user: activeUser,
-            teams: teams.filter(t => t.memberIds.includes(activeUser.id)),
-            exportDate: new Date().toISOString(),
-        };
+        try {
+            // Deep clone the data to avoid mutating state
+            const userClone = JSON.parse(JSON.stringify(activeUser));
+            const teamsClone = JSON.parse(JSON.stringify(teams.filter(t => t.memberIds.includes(activeUser.id))));
+            
+            const allTransactions: Transaction[] = [
+                ...userClone.financialStatement.transactions,
+                ...teamsClone.flatMap((t: any) => t.financialStatement.transactions)
+            ];
 
-        const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(dataToExport, null, 2))}`;
-        const link = document.createElement('a');
-        link.href = jsonString;
-        link.download = `cosmic_cashflow_backup_${new Date().toISOString().split('T')[0]}.json`;
-        link.click();
+            const receiptPromises = allTransactions
+                .filter(tx => tx.receiptUrl)
+                .map(async (tx) => {
+                    const base64 = await fetchImageAsBase64(tx.receiptUrl!);
+                    if (base64) {
+                        (tx as any).receiptDataUrl = base64;
+                    }
+                });
+
+            await Promise.all(receiptPromises);
+
+            const dataToExport = {
+                user: userClone,
+                teams: teamsClone,
+                exportDate: new Date().toISOString(),
+            };
+
+            const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(dataToExport, null, 2))}`;
+            const link = document.createElement('a');
+            link.href = jsonString;
+            link.download = `cosmic_cashflow_backup_${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+
+        } catch (error) {
+            console.error("Export failed:", error);
+            alert("An error occurred while preparing the export.");
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,13 +116,19 @@ export const DataManagementView: React.FC = () => {
                 <div className="bg-cosmic-surface p-6 rounded-lg border border-cosmic-border">
                     <h2 className="text-xl font-bold text-cosmic-text-primary">Export Data</h2>
                     <p className="text-cosmic-text-secondary mt-2 mb-4">
-                        Download a complete backup of all your personal and team data. Keep this file in a safe place.
+                        Download a complete backup of all your personal and team data, including receipt images. Keep this file in a safe place.
                     </p>
                     <button
                         onClick={handleExport}
-                        className="w-full bg-cosmic-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-400 transition-colors"
+                        disabled={isExporting}
+                        className="w-full flex items-center justify-center gap-2 bg-cosmic-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-400 transition-colors disabled:bg-cosmic-border"
                     >
-                        Export All Data as JSON
+                         {isExporting ? (
+                             <>
+                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <span>Exporting...</span>
+                             </>
+                        ) : "Export All Data as JSON"}
                     </button>
                 </div>
 
