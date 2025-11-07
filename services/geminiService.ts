@@ -119,7 +119,7 @@ export const getFinancialAdvice = async (prompt: string, statement: FinancialSta
     }
 };
 
-export const getAgentResponse = async (prompt: string, statement: FinancialStatement, accounts: Account[], tools: FunctionDeclaration[]): Promise<GenerateContentResponse> => {
+export const getAgentResponse = async (prompt: string, statement: FinancialStatement, accounts: Account[], tools: FunctionDeclaration[], useGoogleSearch: boolean): Promise<GenerateContentResponse> => {
     const ai = getAiInstance();
     if (!ai) {
         throw new Error("AI Coach is disabled because API key is not configured.");
@@ -130,14 +130,19 @@ export const getAgentResponse = async (prompt: string, statement: FinancialState
         The current date is ${new Date().toLocaleDateString()}.
         User request: "${prompt}"
     `;
+    
+    const config: any = {};
+    if (useGoogleSearch) {
+        config.tools = [{ googleSearch: {} }];
+    } else if (tools.length > 0) {
+        config.tools = [{ functionDeclarations: tools }];
+    }
 
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: fullPrompt,
-            config: {
-                tools: [{ functionDeclarations: tools }],
-            },
+            config,
         });
         return response;
     } catch (error) {

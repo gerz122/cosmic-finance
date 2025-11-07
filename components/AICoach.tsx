@@ -4,7 +4,7 @@ import { Type } from "@google/genai";
 import type { FunctionDeclaration } from "@google/genai";
 import type { User, Transaction } from '../types';
 import { TransactionType } from '../types';
-import { CoachIcon, SendIcon, StarIcon } from './icons';
+import { CoachIcon, SendIcon, StarIcon, SparklesIcon } from './icons';
 
 interface AICoachProps {
     user: User;
@@ -14,6 +14,7 @@ interface AICoachProps {
 interface Message {
     sender: 'user' | 'ai';
     text: string;
+    sources?: { web: { uri: string; title: string } }[];
 }
 
 const tools: FunctionDeclaration[] = [
@@ -40,6 +41,7 @@ export const AICoach: React.FC<AICoachProps> = ({ user, actions }) => {
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [useGoogleSearch, setUseGoogleSearch] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -57,7 +59,7 @@ export const AICoach: React.FC<AICoachProps> = ({ user, actions }) => {
         setIsLoading(true);
 
         try {
-            const response = await getAgentResponse(input, user.financialStatement, user.accounts, tools);
+            const response = await getAgentResponse(input, user.financialStatement, user.accounts, tools, useGoogleSearch);
             
             if (response.functionCalls && response.functionCalls.length > 0) {
                 for (const fc of response.functionCalls) {
@@ -94,8 +96,18 @@ export const AICoach: React.FC<AICoachProps> = ({ user, actions }) => {
                     }
                 }
             } else {
-                 const aiMessage: Message = { sender: 'ai', text: response.text };
-                 setMessages(prev => [...prev, aiMessage]);
+                // FIX: Safely filter for grounding chunks with a web URI and map them to the required type, providing a fallback for the title.
+                const sources =
+                    response.candidates?.[0]?.groundingMetadata?.groundingChunks
+                        ?.filter(chunk => chunk.web?.uri)
+                        .map(chunk => ({
+                            web: {
+                                uri: chunk.web!.uri!,
+                                title: chunk.web!.title || chunk.web!.uri!,
+                            },
+                        })) || [];
+                const aiMessage: Message = { sender: 'ai', text: response.text, sources };
+                setMessages(prev => [...prev, aiMessage]);
             }
 
         } catch (error) {
@@ -139,6 +151,18 @@ export const AICoach: React.FC<AICoachProps> = ({ user, actions }) => {
                         {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-cosmic-primary flex items-center justify-center flex-shrink-0"><StarIcon className="w-5 h-5 text-white"/></div>}
                         <div className={`max-w-lg p-3 rounded-lg ${msg.sender === 'ai' ? 'bg-cosmic-surface text-cosmic-text-primary' : 'bg-cosmic-primary text-white'}`}>
                             <p className="whitespace-pre-wrap">{msg.text}</p>
+                            {msg.sources && msg.sources.length > 0 && (
+                                <div className="mt-3 pt-2 border-t border-cosmic-border/50">
+                                    <p className="text-xs font-semibold mb-1">Sources:</p>
+                                    <div className="flex flex-col items-start gap-1">
+                                        {msg.sources.map((source, i) => (
+                                            <a href={source.web.uri} target="_blank" rel="noopener noreferrer" key={i} className="text-xs hover:underline truncate">
+                                                {i + 1}. {source.web.title || source.web.uri}
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -174,6 +198,16 @@ export const AICoach: React.FC<AICoachProps> = ({ user, actions }) => {
             )}
 
             <div className="p-4 border-t border-cosmic-border mt-auto">
+                 <label className="flex items-center gap-2 text-xs text-cosmic-text-secondary mb-2 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={useGoogleSearch}
+                        onChange={(e) => setUseGoogleSearch(e.target.checked)}
+                        className="rounded text-cosmic-primary bg-cosmic-bg border-cosmic-border focus:ring-cosmic-primary"
+                    />
+                     <SparklesIcon className="w-4 h-4 text-cosmic-primary" />
+                    Enhance with Google Search
+                </label>
                 <div className="flex items-center gap-3 bg-cosmic-surface rounded-lg border border-cosmic-border focus-within:border-cosmic-primary transition-colors">
                     <input
                         type="text"
