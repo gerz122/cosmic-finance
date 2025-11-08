@@ -46,9 +46,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [modalStates, setModalStates] = useState<Record<string, boolean>>({ isFreedomModalOpen: false, isTeamReportModalOpen: false, isFabOpen: false, isSuccessModalOpen: false });
     const [modalData, setModalData] = useState<Record<string, any>>({});
 
-    const showSuccessModal = (message: string) => {
+    const showSuccessModal = (message: string, result?: any) => {
         setModalData(prev => ({ ...prev, successModalMessage: message }));
         setModalStates(prev => ({ ...prev, isSuccessModalOpen: true }));
+
+        // Check if there's an undo action possible
+        if (result?.batchId) {
+            setModalData(prev => ({ ...prev, lastImportBatchId: result.batchId }));
+        }
     };
 
     const runTask = useCallback(async (name: string, taskFn: () => Promise<any>, options: { onRetry?: () => void } = {}) => {
@@ -56,7 +61,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setActiveTasks(prev => [...prev, { id: taskId, name, status: 'processing', createdAt: Date.now(), onRetry: options.onRetry }]);
         try {
             const result = await taskFn();
-            setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'success' } : t));
+            setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'success', result } : t));
             return result;
         } catch (e) {
             console.error(`Task "${name}" failed:`, e);
@@ -253,15 +258,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, { onRetry: () => handleCosmicEventResolution(outcome) });
     };
     
-    const handleAddAccount = (accountData: Omit<Account, 'id' | 'ownerIds'>, teamId?: string): Promise<Account | void> => {
+    const handleAddAccount = (accountData: Omit<Account, 'id' | 'ownerIds'>, teamId?: string, importBatchId?: string): Promise<Account | void> => {
         if (!activeUser) return Promise.resolve();
         const team = teams.find(t => t.id === teamId);
         const task = async () => {
             let newAccount: Account;
             if (teamId && team) {
-                newAccount = await dbService.addTeamAccount(teamId, team.memberIds, accountData);
+                newAccount = await dbService.addTeamAccount(teamId, team.memberIds, accountData, importBatchId);
             } else {
-                newAccount = await dbService.addAccount(activeUser.id, accountData);
+                newAccount = await dbService.addAccount(activeUser.id, accountData, importBatchId);
             }
             await refreshData(activeUser.id);
             showSuccessModal('Account Added!');
@@ -436,7 +441,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const handleImportFromAI = (proposedActions: any[]) => {
         if (!activeUser) return;
-        runTask(`Importing ${proposedActions.length} AI actions`, async () => {
+        const batchId = crypto.randomUUID();
+        const task = async () => {
             for (const action of proposedActions) {
                 const { name, args } = action;
                 switch (name) {
@@ -445,18 +451,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         let account = allAccounts.find(a => a.name.toLowerCase() === args.account_name.toLowerCase());
                         if (!account) { // Create if not exists
                            const newAccData = { name: args.account_name, type: 'Checking' as any, balance: 0 };
-                           account = await dbService.addAccount(activeUser.id, newAccData);
+                           account = await dbService.addAccount(activeUser.id, newAccData, batchId);
                         }
-                        const txData = {
-                             description: args.description, amount: args.amount, type: args.type, category: args.category, date: args.date, isPassive: args.is_passive,
+                        const txData: Omit<Transaction, 'id'> = {
+                             description: args.description, amount: args.amount, type: args.type, category: args.category, date: args.date, isPassive: args.is_passive || false,
                              paymentShares: [{ userId: activeUser.id, accountId: account.id, amount: args.amount }],
-                             expenseShares: args.type === 'EXPENSE' ? [{ userId: activeUser.id, amount: args.amount }] : []
+                             expenseShares: args.type === 'EXPENSE' ? [{ userId: activeUser.id, amount: args.amount }] : [],
+                             importBatchId: batchId
                         };
                         await handleSaveTransaction(txData);
                         break;
                     }
                     case 'create_account': {
-                        await handleAddAccount({ name: args.name, type: args.type, balance: args.initial_balance });
+                        await handleAddAccount({ name: args.name, type: args.type, balance: args.initial_balance }, undefined, batchId);
                         break;
                     }
                     case 'create_team': {
@@ -466,7 +473,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
             }
             await refreshData(activeUser.id);
-        });
+            return { batchId }; // Return batchId for undo
+        };
+        runTask(`Importing ${proposedActions.length} AI actions`, task)
+            .then(result => showSuccessModal(`${proposedActions.length} actions imported!`, result))
+            .catch(console.error);
     };
     
     const handleResetProfile = async () => {
@@ -481,8 +492,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, {onRetry: handleResetProfile});
     };
     
+    const handleUndoLastImport = () => {
+        if (!activeUser || !modalData.lastImportBatchId) return;
+        runTask('Undoing Import', async () => {
+            await dbService.undoImportBatch(activeUser.id, modalData.lastImportBatchId);
+            await refreshData(activeUser.id);
+            setModalData(prev => ({ ...prev, lastImportBatchId: null }));
+            showSuccessModal('Import has been reverted.');
+        }, { onRetry: handleUndoLastImport });
+    };
+
     const actions = {
-        setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding, logErrorTask, handleResetProfile,
+        setSelectedTeamId, setModalOpen, handleCreateTeam, handleCompleteOnboarding, logErrorTask, handleResetProfile, handleUndoLastImport,
         handleTeamClick: (teamId: string) => { setActiveView('team-detail'); setSelectedTeamId(teamId); },
         handleBackToTeams: () => { setActiveView('teams'); setSelectedTeamId(null); },
         handleOpenAddTransactionModal: (teamId?: string, onSaveOverride?: (data: any) => void) => { setModalData({ transactionToEdit: null, modalDefaultTeamId: teamId, transactionSaveOverride: onSaveOverride }); setModalOpen('isAddTransactionModalOpen', true); },

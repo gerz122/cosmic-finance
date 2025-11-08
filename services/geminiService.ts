@@ -270,6 +270,7 @@ export const analyzeTextWithTools = async (textToAnalyze: string): Promise<Gener
         The current date is ${new Date().toLocaleDateString()}. If a year is not specified for a transaction, assume the current year.
         Use the available tools to structure the output for each action you identify.
         You can call the tools multiple times if you find multiple actions.
+        IMPORTANT: If multiple transactions clearly belong to the same new account (e.g. a list of credit card charges), only call 'create_account' ONCE for that new account.
         For transactions, try to infer the account name (e.g., "Checking", "Visa", "Amex"). If not specified, use a sensible default like "Checking".
         
         Text to analyze:

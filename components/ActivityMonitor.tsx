@@ -22,13 +22,23 @@ const TaskItem: React.FC<{ task: AppTask }> = ({ task }) => {
             <div className="mt-1 flex-shrink-0">
                 {renderStatusIcon()}
             </div>
-            <div className="flex-grow">
-                <p className={`font-semibold text-sm ${task.status === 'failed' ? 'text-cosmic-danger' : 'text-cosmic-text-primary'}`}>{task.name}</p>
+            <div className="flex-grow min-w-0">
+                <p className={`font-semibold text-sm ${task.status === 'failed' ? 'text-cosmic-danger' : 'text-cosmic-text-primary'} truncate`}>{task.name}</p>
                 <p className="text-xs text-cosmic-text-secondary">{new Date(task.createdAt).toLocaleTimeString()}</p>
                 {task.error && (
                      <pre className="mt-2 text-xs text-cosmic-text-secondary bg-cosmic-surface border border-cosmic-border p-2 rounded-md whitespace-pre-wrap font-mono max-h-24 overflow-y-auto">
                         {task.error}
                     </pre>
+                )}
+                {task.status === 'success' && task.result?.batchId && (
+                    <div className="mt-2">
+                        <button 
+                            onClick={() => actions.handleUndoLastImport()} 
+                            className="text-xs font-semibold text-cosmic-primary hover:underline"
+                        >
+                            Undo Import
+                        </button>
+                    </div>
                 )}
             </div>
             <div className="flex-shrink-0 flex items-center gap-2">

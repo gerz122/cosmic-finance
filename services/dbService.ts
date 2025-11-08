@@ -277,6 +277,39 @@ export const resetUserProfile = async (uid: string): Promise<void> => {
     await initBatch.commit();
 };
 
+export const undoImportBatch = async (uid: string, batchId: string): Promise<void> => {
+    const userRef = getUserDoc(uid);
+    
+    // Find all items with this batchId
+    const txSnapshot = await userRef.collection('transactions').where('importBatchId', '==', batchId).get();
+    const accSnapshot = await userRef.collection('accounts').where('importBatchId', '==', batchId).get();
+    
+    // Use a transaction to ensure atomicity
+    return db.runTransaction(async (t) => {
+        // Process transactions
+        for (const doc of txSnapshot.docs) {
+            const tx = doc.data() as Transaction;
+            // Revert balance changes
+            if (tx.paymentShares && Array.isArray(tx.paymentShares)) {
+                for (const payment of tx.paymentShares) {
+                    const accountRef = userRef.collection('accounts').doc(payment.accountId);
+                    const amountToReverse = tx.type === TransactionType.INCOME ? -payment.amount : payment.amount;
+                    const accountDoc = await t.get(accountRef);
+                    if (accountDoc.exists) {
+                        t.update(accountRef, { balance: firebase.firestore.FieldValue.increment(amountToReverse) });
+                    }
+                }
+            }
+            t.delete(doc.ref); // Delete the transaction
+        }
+
+        // Process newly created accounts
+        for (const doc of accSnapshot.docs) {
+            t.delete(doc.ref); // Delete the account
+        }
+    });
+};
+
 
 // --- Other Data Management ---
 
@@ -308,10 +341,10 @@ export const applyEventOutcome = async (uid: string, outcome: EventOutcome): Pro
     }
 };
 
-export const addAccount = async (uid: string, newAccount: Omit<Account, 'id' | 'ownerIds'>): Promise<Account> => {
+export const addAccount = async (uid: string, newAccount: Omit<Account, 'id' | 'ownerIds'>, importBatchId?: string): Promise<Account> => {
     const userRef = getUserDoc(uid);
     const accountRef = userRef.collection('accounts').doc();
-    const fullAccount: Account = { ...newAccount, id: accountRef.id, ownerIds: [uid] };
+    const fullAccount: Account = { ...newAccount, id: accountRef.id, ownerIds: [uid], ...(importBatchId && { importBatchId }) };
 
     const batch = db.batch();
     batch.set(accountRef, cleanDataForFirestore(fullAccount));
@@ -325,6 +358,7 @@ export const addAccount = async (uid: string, newAccount: Omit<Account, 'id' | '
             category: 'Initial Balance',
             date: new Date().toISOString().split('T')[0],
             paymentShares: [{ userId: uid, accountId: fullAccount.id, amount: fullAccount.balance }],
+            ...(importBatchId && { importBatchId })
         };
         const transactionRef = getUserDoc(uid).collection('transactions').doc(transaction.id);
         batch.set(transactionRef, cleanDataForFirestore(transaction));
@@ -334,10 +368,10 @@ export const addAccount = async (uid: string, newAccount: Omit<Account, 'id' | '
     return fullAccount;
 };
 
-export const addTeamAccount = async (teamId: string, memberIds: string[], newAccount: Omit<Account, 'id' | 'ownerIds' | 'teamId'>): Promise<Account> => {
+export const addTeamAccount = async (teamId: string, memberIds: string[], newAccount: Omit<Account, 'id' | 'ownerIds' | 'teamId'>, importBatchId?: string): Promise<Account> => {
     const teamRef = getTeamDoc(teamId);
     const accountRef = teamRef.collection('accounts').doc();
-    const fullAccount: Account = { ...newAccount, id: accountRef.id, ownerIds: memberIds, teamId };
+    const fullAccount: Account = { ...newAccount, id: accountRef.id, ownerIds: memberIds, teamId, ...(importBatchId && { importBatchId }) };
 
     const batch = db.batch();
     batch.set(accountRef, cleanDataForFirestore(fullAccount));
@@ -353,6 +387,7 @@ export const addTeamAccount = async (teamId: string, memberIds: string[], newAcc
             date: new Date().toISOString().split('T')[0],
             teamId,
             paymentShares: memberIds.map(id => ({ userId: id, accountId: fullAccount.id, amount: fullAccount.balance })),
+            ...(importBatchId && { importBatchId })
         };
         batch.set(teamRef.collection('transactions').doc(txId), cleanDataForFirestore(transactionData));
     }

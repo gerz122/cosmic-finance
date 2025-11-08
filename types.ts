@@ -23,6 +23,7 @@ export interface Account {
   teamId?: string;
   sharedWith?: string[];
   shares?: Share[];
+  importBatchId?: string;
 }
 
 export interface Share {
@@ -56,6 +57,7 @@ export interface Transaction {
   paymentShares: PaymentShare[];
   expenseShares?: ExpenseShare[];
   isTaxDeductible?: boolean;
+  importBatchId?: string;
 }
 
 export enum AssetType {
@@ -186,4 +188,5 @@ export interface AppTask {
   error?: string;
   createdAt: number;
   onRetry?: () => void;
+  result?: any;
 }

@@ -64,6 +64,7 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClos
             name,
             type,
             balance: parseFloat(balance) || 0,
+            ...(scope === 'team' && { teamId })
         };
         
         if (onSaveOverride) {

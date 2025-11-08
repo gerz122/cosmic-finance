@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { SparklesIcon, UploadIcon, PlusIcon, CheckCircleIcon, CreditCardIcon, TeamsIcon } from './icons';
 import { analyzeTextWithTools } from '../services/geminiService';
 import type { User, Team, Account } from '../types';
@@ -55,6 +55,10 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
             setIsAnalyzing(false);
         }
     };
+    
+    const handleDiscardAll = () => {
+        setProposedActions([]);
+    };
 
     const handleImportClick = () => {
         onImport(proposedActions);
@@ -67,38 +71,57 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
         const onSaveOverride = (editedData: any) => {
             setProposedActions(prev => prev.map(p => {
                 if (p.id === actionToEdit.id) {
-                    // When editing, we receive the full object, but only need to update the `args` part.
                     const newArgs = { ...p.args, ...editedData };
+                    // If balance is edited in account, it's the initial_balance
+                    if ('balance' in editedData) {
+                        newArgs.initial_balance = editedData.balance;
+                    }
                     return { ...p, args: newArgs };
                 }
                 return p;
             }));
-            // Close all modals, a bit of a brute force but effective
-            Object.keys(actions.modalStates).forEach(key => actions.setModalOpen(key, false));
+            // Close all modals
+             Object.keys(modalStates).forEach(key => setModalOpen(key, false));
         };
+
+        const { setModalOpen, modalStates, ...restActions } = actions;
         
         switch (actionToEdit.name) {
             case 'add_transaction':
-                 actions.handleOpenEditTransactionModal({ ...actionToEdit.args, id: actionToEdit.id }, (editedTx: any) => {
+                 restActions.handleOpenEditTransactionModal({ ...actionToEdit.args, id: actionToEdit.id }, (editedTx: any) => {
                     const { id, paymentShares, expenseShares, receiptImage, receiptUrl, ...rest } = editedTx;
                     onSaveOverride(rest);
                 });
                 break;
             case 'create_account':
-                 actions.setModalDataField('accountToEdit', actionToEdit.args);
-                 actions.handleOpenAddAccountModal(undefined, undefined, (editedAcc: any) => {
-                    onSaveOverride({name: editedAcc.name, type: editedAcc.type, initial_balance: editedAcc.balance });
-                 });
+                 restActions.setModalDataField('accountToEdit', { ...actionToEdit.args, balance: actionToEdit.args.initial_balance });
+                 restActions.setModalOpen('isAddAccountModalOpen', true);
+                 restActions.setModalDataField('accountSaveOverride', onSaveOverride);
                  break;
             case 'create_team':
-                 actions.setModalDataField('teamToEdit', actionToEdit.args);
-                 actions.handleOpenCreateTeamModal((editedTeam: any) => {
-                    onSaveOverride({ name: editedTeam.name });
-                 });
+                 restActions.setModalDataField('teamToEdit', actionToEdit.args);
+                 restActions.setModalOpen('isCreateTeamModalOpen', true);
+                 restActions.setModalDataField('teamSaveOverride', onSaveOverride);
                  break;
         }
     };
+    
+    const newlyProposedAccounts = useMemo(() => {
+        return proposedActions
+            .filter(p => p.name === 'create_account')
+            .map(p => ({ id: p.id, name: p.args.name }));
+    }, [proposedActions]);
 
+
+    const updateTransactionAccount = (txId: string, accountIdentifier: string) => {
+        setProposedActions(prev => prev.map(p => {
+            if (p.id === txId && p.name === 'add_transaction') {
+                return { ...p, args: { ...p.args, account_name: accountIdentifier } };
+            }
+            return p;
+        }));
+    };
+    
     const renderAction = (action: any) => {
         const { name, args } = action;
         switch (name) {
@@ -108,7 +131,22 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
                     <div className="flex justify-between items-center">
                         <div>
                             <p className="font-semibold text-cosmic-text-primary">{args.description}</p>
-                            <p className="text-xs text-cosmic-text-secondary">{args.date} &bull; {args.category} &bull; to "{args.account_name}"</p>
+                            <p className="text-xs text-cosmic-text-secondary">{args.date} &bull; {args.category}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-cosmic-text-secondary">Account:</span>
+                                 <select 
+                                    value={args.account_name} 
+                                    onChange={(e) => updateTransactionAccount(action.id, e.target.value)}
+                                    className="bg-cosmic-surface border border-cosmic-border rounded text-xs p-1"
+                                 >
+                                    <optgroup label="New Accounts">
+                                        {newlyProposedAccounts.map(acc => <option key={acc.id} value={acc.name}>{acc.name}</option>)}
+                                    </optgroup>
+                                    <optgroup label="Existing Accounts">
+                                        {user.accounts.map(acc => <option key={acc.id} value={acc.name}>{acc.name}</option>)}
+                                    </optgroup>
+                                </select>
+                            </div>
                         </div>
                         <p className={`font-bold ${isIncome ? 'text-cosmic-success' : 'text-cosmic-danger'}`}>
                             {isIncome ? '+' : '-'}${args.amount.toFixed(2)}
@@ -207,7 +245,10 @@ export const StatementImporter: React.FC<StatementImporterProps> = ({ user, team
                         ))}
                     </div>
 
-                    <div className="flex justify-end mt-6">
+                    <div className="flex justify-between items-center mt-6">
+                         <button onClick={handleDiscardAll} className="text-sm font-semibold text-cosmic-danger hover:underline">
+                            Discard All
+                        </button>
                         <button onClick={handleImportClick} className="flex items-center gap-2 bg-cosmic-success text-white font-bold py-2 px-6 rounded-lg hover:bg-green-600 transition-colors">
                             <CheckCircleIcon className="w-5 h-5" />
                             Approve & Import All
